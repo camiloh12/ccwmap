@@ -17,7 +17,7 @@ This implementation plan provides a detailed, iterative roadmap for building the
 
 ## Progress Tracking
 
-- [ ] **Iteration 1**: Project Setup & Basic Map Display
+- [x] **Iteration 1**: Project Setup & Basic Map Display ✓
 - [ ] **Iteration 2**: Location Services
 - [ ] **Iteration 3**: Domain Models & Local Database
 - [ ] **Iteration 4**: Display Static Pins on Map
@@ -42,53 +42,53 @@ This implementation plan provides a detailed, iterative roadmap for building the
 ### Tasks
 
 #### 1.1 Initialize Flutter Project
-- [ ] Run `flutter create ccwmap` with proper parameters
-- [ ] Configure package name: `com.ccwmap.app`
-- [ ] Set up project description and metadata in `pubspec.yaml`
-- [ ] Verify project runs on both Android and iOS simulators/emulators
-- [ ] Initialize git repository (if not already done)
-- [ ] Create `.gitignore` file with Flutter defaults
+- [x] Run `flutter create ccwmap` with proper parameters
+- [x] Configure package name: `com.ccwmap.app`
+- [x] Set up project description and metadata in `pubspec.yaml`
+- [x] Verify project runs on both Android and iOS simulators/emulators
+- [x] Initialize git repository (if not already done)
+- [x] Create `.gitignore` file with Flutter defaults
 
 #### 1.2 Set Up Project Structure
-- [ ] Create `lib/domain/` directory
-  - [ ] Create `lib/domain/models/` subdirectory
-  - [ ] Create `lib/domain/repositories/` subdirectory
-- [ ] Create `lib/data/` directory
-  - [ ] Create `lib/data/repositories/` subdirectory
-  - [ ] Create `lib/data/datasources/` subdirectory
-  - [ ] Create `lib/data/models/` subdirectory
-- [ ] Create `lib/presentation/` directory
-  - [ ] Create `lib/presentation/screens/` subdirectory
-  - [ ] Create `lib/presentation/widgets/` subdirectory
-  - [ ] Create `lib/presentation/viewmodels/` subdirectory
-- [ ] Create `assets/` directory for images/icons
-- [ ] Create `.env.example` file for configuration template
+- [x] Create `lib/domain/` directory
+  - [x] Create `lib/domain/models/` subdirectory
+  - [x] Create `lib/domain/repositories/` subdirectory
+- [x] Create `lib/data/` directory
+  - [x] Create `lib/data/repositories/` subdirectory
+  - [x] Create `lib/data/datasources/` subdirectory
+  - [x] Create `lib/data/models/` subdirectory
+- [x] Create `lib/presentation/` directory
+  - [x] Create `lib/presentation/screens/` subdirectory
+  - [x] Create `lib/presentation/widgets/` subdirectory
+  - [x] Create `lib/presentation/viewmodels/` subdirectory
+- [x] Create `assets/` directory for images/icons
+- [x] Create `.env.example` file for configuration template
 
 #### 1.3 Configure Platform-Specific Files
 
 **Android Configuration:**
-- [ ] Update `android/app/build.gradle`:
-  - [ ] Set `minSdkVersion` to 21
-  - [ ] Set `targetSdkVersion` to 34
-  - [ ] Set `applicationId` to "com.ccwmap.app"
-- [ ] Update `android/app/src/main/AndroidManifest.xml`:
-  - [ ] Add INTERNET permission
-  - [ ] Add ACCESS_FINE_LOCATION permission
-  - [ ] Add ACCESS_COARSE_LOCATION permission
-  - [ ] Add ACCESS_NETWORK_STATE permission
-  - [ ] Configure deep link intent filters for auth callback
-  - [ ] Set application name to "CCW Map"
+- [x] Update `android/app/build.gradle`:
+  - [x] Set `minSdkVersion` to 21
+  - [x] Set `targetSdkVersion` to 34
+  - [x] Set `applicationId` to "com.ccwmap.app"
+- [x] Update `android/app/src/main/AndroidManifest.xml`:
+  - [x] Add INTERNET permission
+  - [x] Add ACCESS_FINE_LOCATION permission
+  - [x] Add ACCESS_COARSE_LOCATION permission
+  - [x] Add ACCESS_NETWORK_STATE permission
+  - [x] Configure deep link intent filters for auth callback
+  - [x] Set application name to "CCW Map"
 
 **iOS Configuration:**
-- [ ] Update `ios/Runner/Info.plist`:
-  - [ ] Add NSLocationWhenInUseUsageDescription
-  - [ ] Add CFBundleURLTypes for deep linking
-  - [ ] Add FlutterDeepLinkingEnabled
-  - [ ] Set CFBundleDisplayName to "CCW Map"
-- [ ] Update `ios/Runner.xcodeproj/project.pbxproj` if needed
+- [x] Update `ios/Runner/Info.plist`:
+  - [x] Add NSLocationWhenInUseUsageDescription
+  - [x] Add CFBundleURLTypes for deep linking
+  - [x] Add FlutterDeepLinkingEnabled
+  - [x] Set CFBundleDisplayName to "CCW Map"
+- [x] Update `ios/Runner.xcodeproj/project.pbxproj` if needed
 
 #### 1.4 Add Initial Dependencies
-- [ ] Add to `pubspec.yaml`:
+- [x] Add to `pubspec.yaml`:
   ```yaml
   dependencies:
     flutter:
@@ -96,59 +96,59 @@ This implementation plan provides a detailed, iterative roadmap for building the
     maplibre_gl: ^0.20.0
     flutter_dotenv: ^5.1.0
   ```
-- [ ] Run `flutter pub get`
-- [ ] Verify dependencies resolve correctly
+- [x] Run `flutter pub get`
+- [x] Verify dependencies resolve correctly
 
 #### 1.5 Integrate MapLibre GL
-- [ ] Create `lib/presentation/screens/map_screen.dart`
-- [ ] Import `maplibre_gl` package
-- [ ] Create `MapScreen` StatefulWidget
-- [ ] Initialize `MapLibreMapController`
-- [ ] Set up map widget in build method
-- [ ] Configure initial camera position (center of US)
-  - [ ] Latitude: 39.8283, Longitude: -98.5795, Zoom: 4.0
-- [ ] Use demo tiles (no API key required initially)
-  - [ ] Style URL: `https://demotiles.maplibre.org/style.json`
-- [ ] Implement `onMapCreated` callback
-- [ ] Test pan gesture
-- [ ] Test zoom gesture (pinch)
-- [ ] Test rotate gesture (two-finger rotation)
+- [x] Create `lib/presentation/screens/map_screen.dart`
+- [x] Import `maplibre_gl` package
+- [x] Create `MapScreen` StatefulWidget
+- [x] Initialize `MapLibreMapController`
+- [x] Set up map widget in build method
+- [x] Configure initial camera position (center of US)
+  - [x] Latitude: 39.8283, Longitude: -98.5795, Zoom: 4.0
+- [x] Use demo tiles (no API key required initially)
+  - [x] Style URL: `https://demotiles.maplibre.org/style.json`
+- [x] Implement `onMapCreated` callback
+- [x] Test pan gesture
+- [x] Test zoom gesture (pinch)
+- [x] Test rotate gesture (two-finger rotation)
 
 #### 1.6 Add Basic UI Chrome
-- [ ] Create overlaid title bar (not AppBar)
-  - [ ] Position "CCW Map" text in top-left
-  - [ ] Style: Dark text, semi-transparent background
-  - [ ] Add padding: 16px horizontal, 12px vertical
-- [ ] Add exit/sign out icon placeholder in top-right
-  - [ ] Use `Icons.exit_to_app` or similar
-  - [ ] Position with `Positioned` widget
-  - [ ] Add tap handler (show dialog for now)
-- [ ] Add re-center FAB in bottom-right
-  - [ ] Use `FloatingActionButton`
-  - [ ] Icon: `Icons.my_location`
-  - [ ] Background: Light purple/lavender (`Color(0xFFE8DEF8)`)
-  - [ ] Position: 16px from bottom, 16px from right
-  - [ ] Add tap handler (placeholder for now)
+- [x] Create overlaid title bar (not AppBar)
+  - [x] Position "CCW Map" text in top-left
+  - [x] Style: Dark text, semi-transparent background
+  - [x] Add padding: 16px horizontal, 12px vertical
+- [x] Add exit/sign out icon placeholder in top-right
+  - [x] Use `Icons.exit_to_app` or similar
+  - [x] Position with `Positioned` widget
+  - [x] Add tap handler (show dialog for now)
+- [x] Add re-center FAB in bottom-right
+  - [x] Use `FloatingActionButton`
+  - [x] Icon: `Icons.my_location`
+  - [x] Background: Light purple/lavender (`Color(0xFFE8DEF8)`)
+  - [x] Position: 16px from bottom, 16px from right
+  - [x] Add tap handler (placeholder for now)
 
 #### 1.7 Test on Both Platforms
-- [ ] Run app on Android emulator
-  - [ ] Verify map loads
-  - [ ] Test all gestures
-  - [ ] Check UI overlay positioning
-- [ ] Run app on iOS simulator
-  - [ ] Verify map loads
-  - [ ] Test all gestures
-  - [ ] Check UI overlay positioning
-- [ ] Fix any platform-specific issues
+- [x] Run app on Android emulator
+  - [x] Verify map loads
+  - [x] Test all gestures
+  - [x] Check UI overlay positioning
+- [x] Run app on iOS simulator
+  - [x] Verify map loads
+  - [x] Test all gestures
+  - [x] Check UI overlay positioning
+- [x] Fix any platform-specific issues
 
 #### 1.8 Update Main.dart
-- [ ] Create `MaterialApp` with proper theme
-- [ ] Set `MapScreen` as home
-- [ ] Configure app title: "CCW Map"
-- [ ] Add basic theme colors (purple primary)
-- [ ] Test app launches correctly
+- [x] Create `MaterialApp` with proper theme
+- [x] Set `MapScreen` as home
+- [x] Configure app title: "CCW Map"
+- [x] Add basic theme colors (purple primary)
+- [x] Test app launches correctly
 
-**Iteration 1 Complete** ✓
+**Iteration 1 Complete** ✓ ✓ ✓
 
 ---
 
