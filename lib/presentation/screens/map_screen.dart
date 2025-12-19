@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 
 class MapScreen extends StatefulWidget {
@@ -194,6 +195,16 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  /// Get the map style URL with API key
+  String _getMapStyleUrl() {
+    final apiKey = dotenv.env['MAPTILER_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      debugPrint('MapTiler API key not found, using demo tiles');
+      return 'https://demotiles.maplibre.org/style.json';
+    }
+    return 'https://api.maptiler.com/maps/streets-v4/style.json?key=$apiKey';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -201,7 +212,7 @@ class _MapScreenState extends State<MapScreen> {
         children: [
           // MapLibre map widget
           MapLibreMap(
-            styleString: 'https://demotiles.maplibre.org/style.json',
+            styleString: _getMapStyleUrl(),
             initialCameraPosition: const CameraPosition(
               target: LatLng(_initialLatitude, _initialLongitude),
               zoom: _initialZoom,
