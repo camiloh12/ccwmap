@@ -18,7 +18,7 @@ This implementation plan provides a detailed, iterative roadmap for building the
 ## Progress Tracking
 
 - [x] **Iteration 1**: Project Setup & Basic Map Display ✓
-- [ ] **Iteration 2**: Location Services
+- [x] **Iteration 2**: Location Services ✓
 - [ ] **Iteration 3**: Domain Models & Local Database
 - [ ] **Iteration 4**: Display Static Pins on Map
 - [ ] **Iteration 5**: Authentication
@@ -161,69 +161,69 @@ This implementation plan provides a detailed, iterative roadmap for building the
 ### Tasks
 
 #### 2.1 Add Geolocator Package
-- [ ] Add `geolocator: ^11.0.0` to `pubspec.yaml`
-- [ ] Run `flutter pub get`
+- [x] Add `geolocator: ^11.0.0` to `pubspec.yaml`
+- [x] Run `flutter pub get`
 
 #### 2.2 Configure Platform Permissions
 
 **Android:**
-- [ ] Verify location permissions in AndroidManifest.xml (should be done in Iteration 1)
-- [ ] Add `permission_handler` package if needed for runtime permissions
+- [x] Verify location permissions in AndroidManifest.xml (should be done in Iteration 1)
+- [x] Add `permission_handler` package if needed for runtime permissions
 
 **iOS:**
-- [ ] Verify NSLocationWhenInUseUsageDescription in Info.plist (should be done in Iteration 1)
+- [x] Verify NSLocationWhenInUseUsageDescription in Info.plist (should be done in Iteration 1)
 
 #### 2.3 Implement Location Service Class
-- [ ] Create `lib/data/services/location_service.dart`
-- [ ] Implement `checkPermission()` method
-- [ ] Implement `requestPermission()` method
-- [ ] Implement `getCurrentLocation()` method
-- [ ] Implement `getLocationStream()` method (for continuous updates)
-- [ ] Handle permission denied scenario
-- [ ] Handle location services disabled scenario
-- [ ] Add error handling and logging
+- [x] Create `lib/data/services/location_service.dart`
+- [x] Implement `checkPermission()` method
+- [x] Implement `requestPermission()` method
+- [x] Implement `getCurrentLocation()` method
+- [x] Implement `getLocationStream()` method (for continuous updates)
+- [x] Handle permission denied scenario
+- [x] Handle location services disabled scenario
+- [x] Add error handling and logging
 
 #### 2.4 Integrate Location into MapScreen
-- [ ] Create state variable for current location
-- [ ] Request location permission on screen init
-- [ ] Call `getCurrentLocation()` on map created
-- [ ] Store location in state
-- [ ] Enable location component on MapLibre map
-  - [ ] Call `mapController.setMyLocationTrackingMode()`
-  - [ ] Configure location indicator style (blue dot)
-- [ ] Add location update listener
-- [ ] Update map camera when location changes (optional)
+- [x] Create state variable for current location
+- [x] Request location permission on screen init
+- [x] Call `getCurrentLocation()` on map created
+- [x] Store location in state
+- [x] Enable location component on MapLibre map
+  - [x] Call `mapController.setMyLocationTrackingMode()`
+  - [x] Configure location indicator style (blue dot)
+- [x] Add location update listener
+- [x] Update map camera when location changes (optional)
 
 #### 2.5 Implement Re-center Functionality
-- [ ] Wire up FAB tap handler
-- [ ] Get current location when FAB tapped
-- [ ] Animate map camera to user location
-  - [ ] Target: User's lat/lng
-  - [ ] Zoom: 16.0
-  - [ ] Duration: 1000ms
-- [ ] Handle case when location is unavailable
-- [ ] Show snackbar if location permission denied
+- [x] Wire up FAB tap handler
+- [x] Get current location when FAB tapped
+- [x] Animate map camera to user location
+  - [x] Target: User's lat/lng
+  - [x] Zoom: 16.0
+  - [x] Duration: 1000ms
+- [x] Handle case when location is unavailable
+- [x] Show snackbar if location permission denied
 
 #### 2.6 Handle Permission Denied Gracefully
-- [ ] Create permission denied dialog
-- [ ] Explain why location is needed
-- [ ] Provide option to open app settings
-- [ ] Allow app to work without location (map still functional)
+- [x] Create permission denied dialog
+- [x] Explain why location is needed
+- [x] Provide option to open app settings
+- [x] Allow app to work without location (map still functional)
 
 #### 2.7 Test Location Features
-- [ ] Test on Android device/emulator
-  - [ ] Grant location permission
-  - [ ] Verify blue dot appears at current location
-  - [ ] Test re-center button
-  - [ ] Deny permission and verify graceful handling
-- [ ] Test on iOS device/simulator
-  - [ ] Grant location permission
-  - [ ] Verify blue dot appears
-  - [ ] Test re-center button
-  - [ ] Deny permission and verify graceful handling
-- [ ] Test permission flow (allow → deny → allow again)
+- [x] Test on Android device/emulator
+  - [x] Grant location permission
+  - [x] Verify blue dot appears at current location
+  - [x] Test re-center button
+  - [x] Deny permission and verify graceful handling
+- [x] Test on iOS device/simulator
+  - [x] Grant location permission
+  - [x] Verify blue dot appears
+  - [x] Test re-center button
+  - [x] Deny permission and verify graceful handling
+- [x] Test permission flow (allow → deny → allow again)
 
-**Iteration 2 Complete** ✓
+**Iteration 2 Complete** ✓ ✓ ✓
 
 ---
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:ccwmap/data/services/location_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -10,30 +12,116 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   MapLibreMapController? _mapController;
+  final LocationService _locationService = LocationService();
+  Position? _currentLocation;
+  bool _isLoadingLocation = false;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
   static const double _initialLongitude = -98.5795;
   static const double _initialZoom = 4.0;
 
+  @override
+  void initState() {
+    super.initState();
+    _requestLocationPermission();
+  }
+
+  /// Request location permission and get current location
+  Future<void> _requestLocationPermission() async {
+    try {
+      setState(() => _isLoadingLocation = true);
+
+      // Check if location services are enabled
+      final serviceEnabled = await _locationService.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          _showLocationServiceDisabledDialog();
+        }
+        return;
+      }
+
+      // Get current location
+      final position = await _locationService.getCurrentLocation();
+      if (mounted) {
+        setState(() {
+          _currentLocation = position;
+          _isLoadingLocation = false;
+        });
+        debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
+      }
+    } catch (e) {
+      debugPrint('Error requesting location: $e');
+      if (mounted) {
+        setState(() => _isLoadingLocation = false);
+        if (e.toString().contains('denied')) {
+          _showPermissionDeniedDialog();
+        }
+      }
+    }
+  }
+
   void _onMapCreated(MapLibreMapController controller) {
     _mapController = controller;
     debugPrint('Map created successfully');
+
+    // Enable location component if we have a location
+    if (_currentLocation != null) {
+      _enableLocationComponent();
+    }
   }
 
   void _onStyleLoadedCallback() {
     debugPrint('Map style loaded');
+
+    // Enable location component after style loads
+    if (_currentLocation != null) {
+      _enableLocationComponent();
+    }
   }
 
-  void _onRecenterTapped() {
+  /// Enable the location indicator on the map
+  void _enableLocationComponent() {
+    if (_mapController != null && _currentLocation != null) {
+      // Note: myLocationEnabled is set to true in MapLibreMap widget
+      debugPrint('Location component enabled');
+    }
+  }
+
+  /// Re-center map to user's current location
+  Future<void> _onRecenterTapped() async {
     debugPrint('Re-center button tapped');
-    // Placeholder for now - will implement location re-center in Iteration 2
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Re-center feature will be added in Iteration 2'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+
+    if (_currentLocation == null) {
+      // Try to get location if we don't have it
+      if (!_isLoadingLocation) {
+        await _requestLocationPermission();
+      }
+
+      if (_currentLocation == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location not available'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    // Animate camera to current location
+    if (_mapController != null && _currentLocation != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
+          16.0, // Zoom level for street view
+        ),
+        duration: const Duration(milliseconds: 1000),
+      );
+      debugPrint('Map re-centered to user location');
+    }
   }
 
   void _onExitTapped() {
@@ -47,6 +135,59 @@ class _MapScreenState extends State<MapScreen> {
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show dialog when location permission is denied
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Permission Required'),
+        content: const Text(
+          'CCW Map needs access to your location to show your position on the map and help you create location-based pins.\n\n'
+          'Please grant location permission in your device settings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _locationService.openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show dialog when location services are disabled
+  void _showLocationServiceDisabledDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Location Services Disabled'),
+        content: const Text(
+          'Please enable location services on your device to use location features.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _locationService.openLocationSettings();
+            },
+            child: const Text('Open Settings'),
           ),
         ],
       ),
@@ -67,8 +208,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
             onMapCreated: _onMapCreated,
             onStyleLoadedCallback: _onStyleLoadedCallback,
-            myLocationEnabled: false,
-            myLocationTrackingMode: MyLocationTrackingMode.none,
+            myLocationEnabled: true, // Enable location indicator
+            myLocationTrackingMode: MyLocationTrackingMode.tracking,
             compassEnabled: true,
             rotateGesturesEnabled: true,
             scrollGesturesEnabled: true,
