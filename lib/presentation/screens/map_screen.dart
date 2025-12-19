@@ -208,9 +208,9 @@ class _MapScreenState extends State<MapScreen> {
             ),
             onMapCreated: _onMapCreated,
             onStyleLoadedCallback: _onStyleLoadedCallback,
-            myLocationEnabled: true, // Enable location indicator
-            myLocationTrackingMode: MyLocationTrackingMode.tracking,
-            compassEnabled: true,
+            myLocationEnabled: true, // Show location dot
+            myLocationTrackingMode: MyLocationTrackingMode.none, // But no auto-tracking
+            compassEnabled: false,
             rotateGesturesEnabled: true,
             scrollGesturesEnabled: true,
             tiltGesturesEnabled: true,
@@ -268,9 +268,9 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // Re-center FAB (bottom-right)
+          // Re-center FAB (bottom-right, positioned above MapLibre controls)
           Positioned(
-            bottom: 16,
+            bottom: 96, // Moved up to avoid MapLibre's location button
             right: 16,
             child: FloatingActionButton(
               onPressed: _onRecenterTapped,
