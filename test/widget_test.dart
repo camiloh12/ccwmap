@@ -7,10 +7,20 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:ccwmap/main.dart';
 
 void main() {
+  // Initialize dotenv before running tests
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    // Load test environment variables or use empty config
+    dotenv.testLoad(fileInput: '''
+MAPTILER_API_KEY=test_key
+''');
+  });
+
   testWidgets('App launches and shows CCW Map title', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const CCWMapApp());
