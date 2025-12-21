@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
+import 'package:ccwmap/data/database/database.dart';
+
+// Global database instance
+late final AppDatabase database;
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
   // Load environment variables
   await dotenv.load(fileName: ".env");
+
+  // Initialize database
+  database = AppDatabase();
 
   runApp(const CCWMapApp());
 }

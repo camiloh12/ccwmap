@@ -1243,6 +1243,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $PinsTable pins = $PinsTable(this);
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
+  late final PinDao pinDao = PinDao(this as AppDatabase);
+  late final SyncQueueDao syncQueueDao = SyncQueueDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1851,4 +1853,11 @@ class $AppDatabaseManager {
   $$PinsTableTableManager get pins => $$PinsTableTableManager(_db, _db.pins);
   $$SyncQueueTableTableManager get syncQueue =>
       $$SyncQueueTableTableManager(_db, _db.syncQueue);
+}
+
+mixin _$PinDaoMixin on DatabaseAccessor<AppDatabase> {
+  $PinsTable get pins => attachedDatabase.pins;
+}
+mixin _$SyncQueueDaoMixin on DatabaseAccessor<AppDatabase> {
+  $SyncQueueTable get syncQueue => attachedDatabase.syncQueue;
 }

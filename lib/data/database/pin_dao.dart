@@ -1,7 +1,4 @@
-import 'package:drift/drift.dart';
-import 'database.dart';
-
-part 'pin_dao.g.dart';
+part of 'database.dart';
 
 @DriftAccessor(tables: [Pins])
 class PinDao extends DatabaseAccessor<AppDatabase> with _$PinDaoMixin {

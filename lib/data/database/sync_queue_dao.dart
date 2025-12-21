@@ -1,7 +1,4 @@
-import 'package:drift/drift.dart';
-import 'database.dart';
-
-part 'sync_queue_dao.g.dart';
+part of 'database.dart';
 
 @DriftAccessor(tables: [SyncQueue])
 class SyncQueueDao extends DatabaseAccessor<AppDatabase> with _$SyncQueueDaoMixin {
