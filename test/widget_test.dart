@@ -8,8 +8,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:drift/native.dart';
 
 import 'package:ccwmap/main.dart';
+import 'package:ccwmap/data/database/database.dart';
+import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
+import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 
 void main() {
   // Initialize dotenv before running tests
@@ -22,8 +26,15 @@ MAPTILER_API_KEY=test_key
   });
 
   testWidgets('App launches and shows CCW Map title', (WidgetTester tester) async {
+    // Create in-memory database for testing
+    final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+
+    // Create repository and ViewModel
+    final repository = PinRepositoryImpl(testDatabase.pinDao);
+    final viewModel = MapViewModel(repository);
+
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const CCWMapApp());
+    await tester.pumpWidget(CCWMapApp(mapViewModel: viewModel));
 
     // Verify that the CCW Map title is displayed
     expect(find.text('CCW Map'), findsOneWidget);
@@ -33,5 +44,8 @@ MAPTILER_API_KEY=test_key
 
     // Verify that the re-center FAB is present
     expect(find.byIcon(Icons.my_location), findsOneWidget);
+
+    // Clean up
+    await testDatabase.close();
   });
 }
