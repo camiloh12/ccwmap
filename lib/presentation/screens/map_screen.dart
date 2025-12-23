@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
+import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 
 class MapScreen extends StatefulWidget {
@@ -303,21 +304,32 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _onExitTapped() {
+  Future<void> _onExitTapped() async {
     debugPrint('Exit button tapped');
-    showDialog(
+
+    final shouldSignOut = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Sign Out'),
-        content: const Text('Sign out functionality will be added in Iteration 5'),
+        content: const Text('Are you sure you want to sign out?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Sign Out'),
           ),
         ],
       ),
     );
+
+    if (shouldSignOut == true && mounted) {
+      final authViewModel = context.read<AuthViewModel>();
+      await authViewModel.signOut();
+      // AuthGate will automatically navigate to LoginScreen
+    }
   }
 
   /// Show dialog when location permission is denied

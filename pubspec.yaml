@@ -56,6 +56,10 @@ dependencies:
   # State management
   provider: ^6.1.0
 
+  # Supabase for authentication and backend
+  supabase_flutter: ^2.3.0
+  flutter_secure_storage: ^10.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

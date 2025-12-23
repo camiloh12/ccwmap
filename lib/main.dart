@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
+import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
+import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
+import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 // Global database instance
 late final AppDatabase database;
@@ -15,25 +19,48 @@ Future<void> main() async {
   // Load environment variables
   await dotenv.load(fileName: ".env");
 
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
+
   // Initialize database
   database = AppDatabase();
 
-  // Create repository and ViewModel
+  // Create repositories
   final pinRepository = PinRepositoryImpl(database.pinDao);
-  final mapViewModel = MapViewModel(pinRepository);
+  final authRepository = SupabaseAuthRepository(Supabase.instance.client);
 
-  runApp(CCWMapApp(mapViewModel: mapViewModel));
+  // Create ViewModels
+  final mapViewModel = MapViewModel(pinRepository);
+  final authViewModel = AuthViewModel(authRepository);
+
+  runApp(
+    CCWMapApp(
+      mapViewModel: mapViewModel,
+      authViewModel: authViewModel,
+    ),
+  );
 }
 
 class CCWMapApp extends StatelessWidget {
   final MapViewModel mapViewModel;
+  final AuthViewModel authViewModel;
 
-  const CCWMapApp({super.key, required this.mapViewModel});
+  const CCWMapApp({
+    super.key,
+    required this.mapViewModel,
+    required this.authViewModel,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: mapViewModel,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: mapViewModel),
+        ChangeNotifierProvider.value(value: authViewModel),
+      ],
       child: MaterialApp(
         title: 'CCW Map',
         debugShowCheckedModeBanner: false,
@@ -48,8 +75,52 @@ class CCWMapApp extends StatelessWidget {
             elevation: 0,
           ),
         ),
-        home: const MapScreen(),
+        home: const AuthGate(),
       ),
+    );
+  }
+}
+
+/// Gate that shows LoginScreen or MapScreen based on authentication state
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize AuthViewModel after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authViewModel = context.read<AuthViewModel>();
+      authViewModel.initialize();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthViewModel>(
+      builder: (context, authViewModel, child) {
+        // Show loading while initializing
+        if (authViewModel.currentUser == null && authViewModel.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // Show MapScreen if authenticated, LoginScreen otherwise
+        if (authViewModel.isAuthenticated) {
+          return const MapScreen();
+        } else {
+          return const LoginScreen();
+        }
+      },
     );
   }
 }

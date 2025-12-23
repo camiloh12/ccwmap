@@ -14,6 +14,9 @@ import 'package:ccwmap/main.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
+import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ccwmap/domain/models/user.dart';
+import 'fakes/fake_auth_repository.dart';
 
 void main() {
   // Initialize dotenv before running tests
@@ -25,18 +28,36 @@ MAPTILER_API_KEY=test_key
 ''');
   });
 
-  testWidgets('App launches and shows CCW Map title', (WidgetTester tester) async {
+  testWidgets('App launches and shows CCW Map title when authenticated',
+      (WidgetTester tester) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
 
-    // Create repository and ViewModel
-    final repository = PinRepositoryImpl(testDatabase.pinDao);
-    final viewModel = MapViewModel(repository);
+    // Create repositories
+    final pinRepository = PinRepositoryImpl(testDatabase.pinDao);
+    final authRepository = FakeAuthRepository();
+
+    // Create ViewModels
+    final mapViewModel = MapViewModel(pinRepository);
+    final authViewModel = AuthViewModel(authRepository);
+
+    // Simulate authenticated user
+    authRepository.setCurrentUser(
+      User(id: 'test-user-id', email: 'test@example.com'),
+    );
 
     // Build our app and trigger a frame.
-    await tester.pumpWidget(CCWMapApp(mapViewModel: viewModel));
+    await tester.pumpWidget(
+      CCWMapApp(
+        mapViewModel: mapViewModel,
+        authViewModel: authViewModel,
+      ),
+    );
 
-    // Verify that the CCW Map title is displayed
+    // Wait for AuthGate to initialize
+    await tester.pumpAndSettle();
+
+    // Verify that the CCW Map title is displayed (shows MapScreen)
     expect(find.text('CCW Map'), findsOneWidget);
 
     // Verify that the exit/sign out icon is present
@@ -46,6 +67,51 @@ MAPTILER_API_KEY=test_key
     expect(find.byIcon(Icons.my_location), findsOneWidget);
 
     // Clean up
+    authRepository.dispose();
+    await testDatabase.close();
+  });
+
+  testWidgets('App shows login screen when not authenticated',
+      (WidgetTester tester) async {
+    // Create in-memory database for testing
+    final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+
+    // Create repositories
+    final pinRepository = PinRepositoryImpl(testDatabase.pinDao);
+    final authRepository = FakeAuthRepository();
+
+    // Create ViewModels
+    final mapViewModel = MapViewModel(pinRepository);
+    final authViewModel = AuthViewModel(authRepository);
+
+    // User is NOT authenticated (default state)
+
+    // Build our app and trigger a frame.
+    await tester.pumpWidget(
+      CCWMapApp(
+        mapViewModel: mapViewModel,
+        authViewModel: authViewModel,
+      ),
+    );
+
+    // Wait for AuthGate to initialize
+    await tester.pumpAndSettle();
+
+    // Verify that the Login screen is displayed
+    // Note: "Sign In" appears in both AppBar and button, so check for button specifically
+    expect(find.widgetWithText(ElevatedButton, 'Sign In'), findsOneWidget);
+
+    // Verify that email and password fields are present
+    expect(find.byType(TextFormField), findsNWidgets(2));
+
+    // Verify that Create Account button is present
+    expect(find.widgetWithText(OutlinedButton, 'Create Account'), findsOneWidget);
+
+    // Verify that app logo/title is present
+    expect(find.text('CCW Map'), findsOneWidget);
+
+    // Clean up
+    authRepository.dispose();
     await testDatabase.close();
   });
 }
