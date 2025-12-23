@@ -7,7 +7,10 @@ import 'package:provider/provider.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
 import 'package:ccwmap/domain/models/pin.dart';
+import 'package:ccwmap/domain/models/pin_status.dart';
+import 'package:ccwmap/domain/models/restriction_tag.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -226,31 +229,112 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       if (features.isNotEmpty) {
-        // User clicked on a pin
+        // User clicked on a pin - show edit dialog
         final feature = features.first;
         final properties = feature['properties'] as Map<String, dynamic>?;
 
-        if (properties != null) {
-          final pinId = properties['id'] as String?;
-          final pinName = properties['name'] as String?;
-          final status = properties['status'] as int?;
+        if (properties != null && mounted) {
+          final pinName = properties['name'] as String? ?? 'Unknown Location';
+          final statusCode = properties['status'] as int?;
+          final restrictionTagStr = properties['restriction_tag'] as String?;
+          final hasSecurityScreening = properties['has_security_screening'] as bool? ?? false;
+          final hasPostedSignage = properties['has_posted_signage'] as bool? ?? false;
 
-          debugPrint('Pin tapped:');
-          debugPrint('  ID: $pinId');
-          debugPrint('  Name: $pinName');
-          debugPrint('  Status: ${_getStatusName(status)}');
-          debugPrint('  Location: ${coordinates.latitude}, ${coordinates.longitude}');
+          // Parse status and restriction tag
+          final status = statusCode != null
+              ? PinStatus.fromColorCode(statusCode)
+              : PinStatus.ALLOWED;
+          final restrictionTag = restrictionTagStr != null
+              ? RestrictionTag.fromString(restrictionTagStr)
+              : null;
 
-          // TODO: Show pin details dialog in future iteration
+          debugPrint('Opening edit dialog for pin: $pinName');
+
+          _showPinDialog(
+            isEditMode: true,
+            poiName: pinName,
+            initialStatus: status,
+            initialRestrictionTag: restrictionTag,
+            initialHasSecurityScreening: hasSecurityScreening,
+            initialHasPostedSignage: hasPostedSignage,
+          );
         }
       } else {
-        // User clicked on empty map area
-        debugPrint('Map clicked at: ${coordinates.latitude}, ${coordinates.longitude}');
-        // TODO: Show create pin dialog in future iteration
+        // User clicked on empty map area - show create dialog
+        if (mounted) {
+          debugPrint('Opening create dialog at: ${coordinates.latitude}, ${coordinates.longitude}');
+
+          _showPinDialog(
+            isEditMode: false,
+            poiName: 'Location at ${coordinates.latitude.toStringAsFixed(4)}, ${coordinates.longitude.toStringAsFixed(4)}',
+            initialStatus: null,
+            initialRestrictionTag: null,
+            initialHasSecurityScreening: false,
+            initialHasPostedSignage: false,
+          );
+        }
       }
     } catch (e) {
       debugPrint('Error handling map click: $e');
     }
+  }
+
+  void _showPinDialog({
+    required bool isEditMode,
+    required String poiName,
+    required PinStatus? initialStatus,
+    required RestrictionTag? initialRestrictionTag,
+    required bool initialHasSecurityScreening,
+    required bool initialHasPostedSignage,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => PinDialog(
+        isEditMode: isEditMode,
+        poiName: poiName,
+        initialStatus: initialStatus,
+        initialRestrictionTag: initialRestrictionTag,
+        initialHasSecurityScreening: initialHasSecurityScreening,
+        initialHasPostedSignage: initialHasPostedSignage,
+        onConfirm: (result) {
+          debugPrint('Pin dialog confirmed:');
+          debugPrint('  Status: ${result.status.displayName}');
+          debugPrint('  Restriction: ${result.restrictionTag?.displayName ?? 'None'}');
+          debugPrint('  Security Screening: ${result.hasSecurityScreening}');
+          debugPrint('  Posted Signage: ${result.hasPostedSignage}');
+
+          Navigator.of(context).pop();
+
+          // TODO: In Iteration 7, actually save the pin
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isEditMode
+                    ? 'Pin updated (UI only - not saved yet)'
+                    : 'Pin created (UI only - not saved yet)',
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        },
+        onDelete: isEditMode ? () {
+          debugPrint('Pin delete requested');
+          Navigator.of(context).pop();
+
+          // TODO: In Iteration 7, actually delete the pin
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pin deleted (UI only - not saved yet)'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } : null,
+        onCancel: () {
+          debugPrint('Pin dialog cancelled');
+          Navigator.of(context).pop();
+        },
+      ),
+    );
   }
 
   /// Get status name from color code
