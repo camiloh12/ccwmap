@@ -28,6 +28,8 @@ class _MapScreenState extends State<MapScreen> {
   // ViewModel and pins
   MapViewModel? _viewModel;
   List<Pin> _pins = [];
+  bool _isDialogOpen = false;
+  DateTime? _lastDialogCloseTime;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -220,6 +222,21 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _onMapClick(Point<double> point, LatLng coordinates) async {
     if (_mapController == null) return;
 
+    // Prevent opening multiple dialogs
+    if (_isDialogOpen) {
+      debugPrint('Dialog already open, ignoring map click');
+      return;
+    }
+
+    // Add cooldown period after dialog close to prevent click propagation
+    if (_lastDialogCloseTime != null) {
+      final timeSinceClose = DateTime.now().difference(_lastDialogCloseTime!);
+      if (timeSinceClose.inMilliseconds < 300) {
+        debugPrint('Cooldown period active (${timeSinceClose.inMilliseconds}ms), ignoring map click');
+        return;
+      }
+    }
+
     try {
       // Query features at clicked point
       final features = await _mapController!.queryRenderedFeatures(
@@ -279,17 +296,21 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _showPinDialog({
+  Future<void> _showPinDialog({
     required bool isEditMode,
     required String poiName,
     required PinStatus? initialStatus,
     required RestrictionTag? initialRestrictionTag,
     required bool initialHasSecurityScreening,
     required bool initialHasPostedSignage,
-  }) {
-    showDialog(
+  }) async {
+    // Set flag to prevent multiple dialogs
+    _isDialogOpen = true;
+
+    await showDialog<void>(
       context: context,
-      builder: (context) => PinDialog(
+      barrierDismissible: false,
+      builder: (dialogContext) => PinDialog(
         isEditMode: isEditMode,
         poiName: poiName,
         initialStatus: initialStatus,
@@ -303,38 +324,52 @@ class _MapScreenState extends State<MapScreen> {
           debugPrint('  Security Screening: ${result.hasSecurityScreening}');
           debugPrint('  Posted Signage: ${result.hasPostedSignage}');
 
-          Navigator.of(context).pop();
+          Navigator.of(dialogContext, rootNavigator: true).pop();
 
           // TODO: In Iteration 7, actually save the pin
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isEditMode
-                    ? 'Pin updated (UI only - not saved yet)'
-                    : 'Pin created (UI only - not saved yet)',
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  isEditMode
+                      ? 'Pin updated (UI only - not saved yet)'
+                      : 'Pin created (UI only - not saved yet)',
+                ),
+                duration: const Duration(seconds: 2),
               ),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+            );
+          }
         },
         onDelete: isEditMode ? () {
           debugPrint('Pin delete requested');
-          Navigator.of(context).pop();
+          Navigator.of(dialogContext, rootNavigator: true).pop();
 
           // TODO: In Iteration 7, actually delete the pin
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pin deleted (UI only - not saved yet)'),
-              duration: Duration(seconds: 2),
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Pin deleted (UI only - not saved yet)'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
         } : null,
         onCancel: () {
           debugPrint('Pin dialog cancelled');
-          Navigator.of(context).pop();
+          try {
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+            debugPrint('Dialog closed successfully');
+          } catch (e) {
+            debugPrint('Error closing dialog: $e');
+          }
         },
       ),
     );
+
+    // Reset flag after dialog closes
+    _isDialogOpen = false;
+    _lastDialogCloseTime = DateTime.now();
+    debugPrint('Dialog closed, cooldown period started');
   }
 
   /// Get status name from color code
