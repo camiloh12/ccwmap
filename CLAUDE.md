@@ -6,9 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.
 
-**Current Status:** Planning/specification phase - implementation not yet started
+**Current Status:** Iteration 7 Complete - Local CRUD operations fully functional
 **Target Platforms:** Android and iOS (production), Web (development/testing)
 **Backend:** Supabase (PostgreSQL + Auth + Realtime)
+
+### What's Implemented (Iterations 1-7)
+- ✅ Clean Architecture setup (Domain, Data, Presentation layers)
+- ✅ Local SQLite database with Drift ORM (native) + in-memory (web)
+- ✅ MapLibre integration with circle-based pin markers
+- ✅ Location services and user positioning
+- ✅ Supabase authentication (email/password) with secure session storage
+- ✅ Deep linking support for email confirmation
+- ✅ Complete Pin CRUD operations (Create, Read, Update, Delete)
+- ✅ US boundary validation
+- ✅ Pin dialogs with color-coded status and restriction tags
+- ✅ Web pin click detection (dual-detection system)
+- ✅ 74/74 tests passing (100% success rate)
 
 ## Architecture
 
@@ -104,6 +117,11 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 - Open-source, no API key required
 - Tile source: MapTiler (optional) or demo tiles
 - Features: Pan/zoom, location component, symbol layers, feature queries
+
+**Web-Specific Behavior:**
+- Circle/symbol layers block `onMapClick` events on web platform
+- Solution: Dual-detection system using `onFeatureTapped` (direct clicks) + geographic distance (nearby clicks)
+- See `BUILD_STATUS.md` section 2 for detailed technical explanation
 
 ### Supabase (Backend)
 - **Auth:** Email/password, session persistence, deep links

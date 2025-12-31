@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../domain/models/pin.dart';
 import '../../domain/repositories/pin_repository.dart';
+import '../../domain/validators/location_validator.dart';
 import '../../data/sample_data.dart';
 
 /// ViewModel for the MapScreen
@@ -77,8 +78,20 @@ class MapViewModel extends ChangeNotifier {
   }
 
   /// Add a new pin
+  /// Validates that the pin location is within US bounds before adding
   Future<void> addPin(Pin pin) async {
     try {
+      // Validate location is within US bounds
+      if (!LocationValidator.isWithinUSBounds(
+        pin.location.latitude,
+        pin.location.longitude,
+      )) {
+        throw Exception(
+          'Pin location is outside continental US bounds. '
+          'Please select a location within the United States.',
+        );
+      }
+
       await _repository.addPin(pin);
       _clearError();
     } catch (e) {

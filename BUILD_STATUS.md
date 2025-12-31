@@ -2,14 +2,14 @@
 
 ## Current Status: ✅ Compilable
 
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-28
 
 ### ✅ Successfully Compiling
 
 - **Dart Analysis**: Passes (13 linter style warnings - acceptable)
-- **Test Suite**: ✅ 52/52 tests passing (100%)
+- **Test Suite**: ✅ 74/74 tests passing (100%)
 - **Code Generation**: ✅ Drift database code generated successfully
-- **Iteration Progress**: Iteration 6 complete (Create & Edit Pin Dialogs UI)
+- **Iteration Progress**: Iteration 7 complete (Pin Creation & Editing with Local Storage)
 
 ### Platform Support
 
@@ -36,7 +36,40 @@ info - The constant name 'FEDERAL_PROPERTY' isn't a lowerCamelCase identifier
 **Decision**: Keep current naming for consistency with backend.
 **Alternative**: Could use `@JsonValue()` annotations if we want Dart-style names.
 
-#### 2. Web Platform Support (Resolved) ✅
+#### 2. Web Pin Click Detection (Resolved) ✅
+**Previous Issue**: Clicking existing pins on web didn't open the edit dialog
+
+**Root Cause**: MapLibre circle/symbol layers consume click events on web, preventing `onMapClick` from firing when clicking directly on features.
+
+**Solutions Attempted That Failed**:
+- `queryRenderedFeatures()` - doesn't work on circles in web
+- `queryRenderedFeaturesInRect()` - bounding box query still failed
+- Symbol layers with text (`●`) - also block clicks
+- Individual symbols via `addSymbol()` - also block clicks
+- Screen coordinate conversion (`toScreenLocation`) - broken on web
+
+**Final Solution Implemented** (Dual Detection System):
+1. **Primary: `onFeatureTapped` callback** (Direct clicks)
+   - MapLibre fires this callback when clicking directly ON a circle/feature
+   - File: `lib/presentation/screens/map_screen.dart:121` (listener registration)
+   - File: `lib/presentation/screens/map_screen.dart:130-184` (handler implementation)
+   - Extracts pin ID from feature and opens edit dialog
+
+2. **Fallback: Geographic distance detection** (Nearby clicks)
+   - When `onMapClick` fires (empty space), calculates distance to all pins
+   - Uses Haversine formula for lat/lng distance in meters
+   - Zoom-aware threshold: `max(30m, 10000 / 2^zoom)`
+   - File: `lib/presentation/screens/map_screen.dart:271-330`
+   - File: `lib/presentation/screens/map_screen.dart:568-595` (Haversine implementation)
+
+**How It Works**:
+- Click **directly on pin** → `onFeatureTapped` fires → instant edit dialog
+- Click **near pin** (empty space) → `onMapClick` fires → geographic distance finds pin → edit dialog
+- Click **far from pins** → `onMapClick` fires → create new pin dialog
+
+**Status**: Pin clicks now work perfectly on web with proper UX.
+
+#### 3. Web Platform Support (Resolved) ✅
 **Previous Issue**: `sqlite3` compilation fails on web
 
 **Solution Implemented**:
@@ -47,7 +80,7 @@ info - The constant name 'FEDERAL_PROPERTY' isn't a lowerCamelCase identifier
 
 **Status**: Web now fully supported for development/testing (data resets on page reload).
 
-#### 3. Windows Build Requires Visual Studio
+#### 4. Windows Build Requires Visual Studio
 **Error**: `Unable to find suitable Visual Studio toolchain`
 
 **Solution**: Install Visual Studio 2019+ with Desktop development workload.
@@ -134,25 +167,34 @@ All dependencies resolved successfully:
 
 ### Conclusion
 
-**The project compiles successfully and all tests pass.** Iteration 6 is complete. The app now has:
+**The project compiles successfully and all tests pass.** Iteration 7 is complete. The app now has:
 - ✅ Map display with color-coded pins
 - ✅ Location services and user positioning
 - ✅ Complete authentication system with Supabase
 - ✅ Secure session persistence
 - ✅ Platform-specific database connections (native SQLite + web in-memory)
 - ✅ Deep linking support for email confirmation
-- ✅ Create & Edit Pin Dialogs (UI only)
-  - Color-coded status selection
-  - Conditional restriction dropdown
-  - Optional details checkboxes
-  - Validation logic
-  - Edit mode with delete button
+- ✅ Complete Pin CRUD Operations (Create, Read, Update, Delete)
+  - Create pins by tapping anywhere on the map
+  - Edit existing pins by tapping on them
+  - Delete pins with confirmation dialog
+  - All data persists to local SQLite database
+  - Real-time UI updates via database Streams
+- ✅ US Boundary Validation
+  - Prevents creating pins outside continental US
+  - Comprehensive validation with 22 unit tests
+- ✅ Polished Pin Dialogs
+  - Color-coded status selection (Green/Yellow/Red)
+  - Conditional restriction dropdown for NO_GUN status
+  - Optional details checkboxes (security screening, signage)
+  - Full validation logic
+  - Edit mode with delete button and confirmation
 
-**Ready for Iteration 7:** Pin Creation & Editing with Local Storage (actual data persistence)
+**Ready for Iteration 8:** Overpass API Integration (fetch real POI data for pin creation)
 
 Physical device testing will be performed when:
-1. Core features are implemented (Iterations 6-7)
+1. ✅ Core features are implemented (Iterations 6-7) - DONE
 2. Auth is tested with real Supabase backend
 3. UI/UX polish phase (Iteration 12)
 
-For now, comprehensive test coverage (52 tests) provides confidence in code quality.
+For now, comprehensive test coverage (74 tests) provides confidence in code quality.

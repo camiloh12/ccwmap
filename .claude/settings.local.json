@@ -19,7 +19,9 @@
       "Bash(test:*)",
       "mcp__supabase__list_tables",
       "mcp__supabase__list_migrations",
-      "Bash(flutter pub run build_runner build:*)"
+      "Bash(flutter pub run build_runner build:*)",
+      "Bash(flutter pub:*)",
+      "Bash(nc:*)"
     ],
     "deny": [],
     "ask": []

@@ -1,4 +1,5 @@
 import 'dart:math' show Point;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
@@ -11,6 +12,9 @@ import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
+import 'package:ccwmap/domain/models/location.dart';
+import 'package:ccwmap/domain/models/pin_metadata.dart';
+import 'package:uuid/uuid.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -30,6 +34,9 @@ class _MapScreenState extends State<MapScreen> {
   List<Pin> _pins = [];
   bool _isDialogOpen = false;
   DateTime? _lastDialogCloseTime;
+
+  // Track added symbols for removal
+  final List<Symbol> _addedSymbols = [];
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -110,9 +117,83 @@ class _MapScreenState extends State<MapScreen> {
     _mapController = controller;
     debugPrint('Map created successfully');
 
+    // CRITICAL FOR WEB: Listen for direct taps on features (circles)
+    // onMapClick doesn't fire when clicking directly on circles/symbols on web
+    // onFeatureTapped is the only way to detect direct clicks on features
+    controller.onFeatureTapped.add(_onFeatureTapped);
+
     // Enable location component if we have a location
     if (_currentLocation != null) {
       _enableLocationComponent();
+    }
+  }
+
+  /// Called when a feature (circle) is directly tapped
+  ///
+  /// This is the PRIMARY method for detecting pin clicks on web.
+  /// On web, clicking directly on a circle layer does NOT trigger onMapClick,
+  /// but it DOES trigger onFeatureTapped. This gives us proper UX where users
+  /// can click directly on pins.
+  ///
+  /// Parameters:
+  /// - point: Screen coordinates of the tap
+  /// - coordinates: Geographic lat/lng of the tap
+  /// - id: Feature ID (should match pin.id from our GeoJSON)
+  /// - layerId: Layer ID (should be 'pins-layer')
+  /// - annotation: Additional annotation data (unused)
+  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) {
+    debugPrint('=== FEATURE TAPPED ===');
+    debugPrint('Feature ID: $id');
+    debugPrint('Layer ID: $layerId');
+    debugPrint('Point: ${point.x}, ${point.y}');
+    debugPrint('Coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
+
+    // Only handle taps on our pins layer
+    if (layerId != 'pins-layer') {
+      debugPrint('Not our layer, ignoring');
+      return;
+    }
+
+    // Prevent opening multiple dialogs
+    if (_isDialogOpen) {
+      debugPrint('Dialog already open, ignoring feature tap');
+      return;
+    }
+
+    // Find the pin by ID
+    Pin? pin;
+    try {
+      pin = _pins.firstWhere((p) => p.id == id);
+    } catch (e) {
+      debugPrint('Pin not found by ID, using geographic fallback');
+      // Fallback: find nearest pin by coordinates
+      for (final p in _pins) {
+        final distance = _calculateGeographicDistance(
+          coordinates.latitude,
+          coordinates.longitude,
+          p.location.latitude,
+          p.location.longitude,
+        );
+        if (distance < 100) { // Within 100 meters
+          pin = p;
+          break;
+        }
+      }
+    }
+
+    if (pin != null) {
+      debugPrint('Found pin: ${pin.name}');
+      _showPinDialog(
+        isEditMode: true,
+        poiName: pin.name,
+        initialStatus: pin.status,
+        initialRestrictionTag: pin.restrictionTag,
+        initialHasSecurityScreening: pin.hasSecurityScreening,
+        initialHasPostedSignage: pin.hasPostedSignage,
+        pinId: pin.id,
+      );
+    } else {
+      debugPrint('Could not find matching pin');
     }
   }
 
@@ -128,10 +209,12 @@ class _MapScreenState extends State<MapScreen> {
     _updatePinsLayer();
   }
 
-  /// Update pins layer on the map
+  /// Update pins on the map using circle layers
+  /// Note: Circles will block clicks on web, but we use geographic distance
+  /// detection to find clicked pins, so this works fine
   Future<void> _updatePinsLayer() async {
     if (_mapController == null) {
-      debugPrint('MapScreen: Cannot update pins layer - map controller is null');
+      debugPrint('MapScreen: Cannot update pins - map controller is null');
       return;
     }
 
@@ -140,28 +223,25 @@ class _MapScreenState extends State<MapScreen> {
 
       // Build GeoJSON from pins
       final geojson = _buildPinsGeoJson();
-      debugPrint('MapScreen: Built GeoJSON with ${geojson['features'].length} features');
 
       // Remove existing source/layer if present
       try {
         await _mapController!.removeLayer('pins-layer');
         await _mapController!.removeSource('pins-source');
-        debugPrint('MapScreen: Removed existing pins layer/source');
       } catch (e) {
         // Layer/source doesn't exist yet, that's ok
-        debugPrint('MapScreen: No existing pins layer to remove (expected on first load)');
       }
 
       // Add GeoJSON source
       await _mapController!.addGeoJsonSource('pins-source', geojson);
-      debugPrint('MapScreen: Added GeoJSON source');
 
-      // Add circle layer for pins
+      // Add circle layer - even though it blocks clicks, our geographic distance
+      // detection will find the closest pin
       await _mapController!.addCircleLayer(
         'pins-source',
         'pins-layer',
-        const CircleLayerProperties(
-          circleRadius: 8.0,
+        CircleLayerProperties(
+          circleRadius: 12.0,
           circleColor: [
             'match',
             ['get', 'status'],
@@ -172,12 +252,25 @@ class _MapScreenState extends State<MapScreen> {
           ],
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
+          circleOpacity: 0.8,
         ),
       );
 
-      debugPrint('MapScreen: Pins layer updated successfully with ${_pins.length} pins');
+      debugPrint('MapScreen: Pins layer updated successfully');
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
+    }
+  }
+
+  /// Get hex color string for pin status
+  String _getColorForStatus(PinStatus status) {
+    switch (status) {
+      case PinStatus.ALLOWED:
+        return '#4CAF50'; // Green
+      case PinStatus.UNCERTAIN:
+        return '#FFC107'; // Yellow
+      case PinStatus.NO_GUN:
+        return '#F44336'; // Red
     }
   }
 
@@ -220,7 +313,14 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Handle map click - detect if user tapped on a pin
   Future<void> _onMapClick(Point<double> point, LatLng coordinates) async {
-    if (_mapController == null) return;
+    debugPrint('=== MAP CLICK DEBUG ===');
+    debugPrint('Click at: ${coordinates.latitude}, ${coordinates.longitude}');
+    debugPrint('Screen point: ${point.x}, ${point.y}');
+
+    if (_mapController == null) {
+      debugPrint('Map controller is null, returning');
+      return;
+    }
 
     // Prevent opening multiple dialogs
     if (_isDialogOpen) {
@@ -238,24 +338,64 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     try {
-      // Query features at clicked point
-      final features = await _mapController!.queryRenderedFeatures(
-        point,
-        ['pins-layer'],
-        null,
-      );
+      debugPrint('Querying features at point...');
+      debugPrint('Number of pins in _pins list: ${_pins.length}');
+      debugPrint('Click coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
 
-      if (features.isNotEmpty) {
-        // User clicked on a pin - show edit dialog
-        final feature = features.first;
-        final properties = feature['properties'] as Map<String, dynamic>?;
+      // Get current zoom level to calculate appropriate threshold
+      final cameraPosition = _mapController!.cameraPosition;
+      final zoomLevel = cameraPosition?.zoom ?? 10.0;
 
-        if (properties != null && mounted) {
+      // Calculate threshold based on zoom level
+      // At zoom 15 (city level): ~30 meters
+      // At zoom 10 (state level): ~600 meters
+      // At zoom 18 (street level): ~30 meters (capped minimum)
+      // Formula: threshold decreases as zoom increases, with 30m minimum
+      final clickThresholdMeters = math.max(30.0, 10000.0 / math.pow(2, zoomLevel));
+
+      debugPrint('Zoom level: ${zoomLevel.toStringAsFixed(1)}, Threshold: ${clickThresholdMeters.toStringAsFixed(0)}m');
+
+      // Find pin by checking geographic distance from click point
+      Pin? clickedPin;
+      double minDistance = double.infinity;
+
+      for (final pin in _pins) {
+        // Calculate geographic distance in meters
+        final distanceMeters = _calculateGeographicDistance(
+          coordinates.latitude,
+          coordinates.longitude,
+          pin.location.latitude,
+          pin.location.longitude,
+        );
+
+        debugPrint('Pin ${pin.name}: ${distanceMeters.toStringAsFixed(0)}m away');
+
+        if (distanceMeters < clickThresholdMeters && distanceMeters < minDistance) {
+          minDistance = distanceMeters;
+          clickedPin = pin;
+        }
+      }
+
+      if (clickedPin != null) {
+        debugPrint('Found clicked pin: ${clickedPin.name} (${minDistance.toStringAsFixed(0)}m away)');
+        debugPrint('Opening edit dialog for manually detected pin: ${clickedPin.name}');
+        final Pin pin = clickedPin;
+        final properties = {
+          'id': pin.id,
+          'name': pin.name,
+          'status': pin.status.colorCode,
+          'restrictionTag': pin.restrictionTag?.name,
+          'hasSecurityScreening': pin.hasSecurityScreening,
+          'hasPostedSignage': pin.hasPostedSignage,
+        };
+
+        if (mounted) {
+          final pinId = properties['id'] as String?;
           final pinName = properties['name'] as String? ?? 'Unknown Location';
           final statusCode = properties['status'] as int?;
-          final restrictionTagStr = properties['restriction_tag'] as String?;
-          final hasSecurityScreening = properties['has_security_screening'] as bool? ?? false;
-          final hasPostedSignage = properties['has_posted_signage'] as bool? ?? false;
+          final restrictionTagStr = properties['restrictionTag'] as String?;
+          final hasSecurityScreening = properties['hasSecurityScreening'] as bool? ?? false;
+          final hasPostedSignage = properties['hasPostedSignage'] as bool? ?? false;
 
           // Parse status and restriction tag
           final status = statusCode != null
@@ -265,7 +405,7 @@ class _MapScreenState extends State<MapScreen> {
               ? RestrictionTag.fromString(restrictionTagStr)
               : null;
 
-          debugPrint('Opening edit dialog for pin: $pinName');
+          debugPrint('Opening edit dialog for pin: $pinName (ID: $pinId)');
 
           _showPinDialog(
             isEditMode: true,
@@ -274,10 +414,12 @@ class _MapScreenState extends State<MapScreen> {
             initialRestrictionTag: restrictionTag,
             initialHasSecurityScreening: hasSecurityScreening,
             initialHasPostedSignage: hasPostedSignage,
+            pinId: pinId,
           );
         }
       } else {
         // User clicked on empty map area - show create dialog
+        debugPrint('No features found, showing create dialog');
         if (mounted) {
           debugPrint('Opening create dialog at: ${coordinates.latitude}, ${coordinates.longitude}');
 
@@ -288,6 +430,7 @@ class _MapScreenState extends State<MapScreen> {
             initialRestrictionTag: null,
             initialHasSecurityScreening: false,
             initialHasPostedSignage: false,
+            coordinates: coordinates,
           );
         }
       }
@@ -303,6 +446,8 @@ class _MapScreenState extends State<MapScreen> {
     required RestrictionTag? initialRestrictionTag,
     required bool initialHasSecurityScreening,
     required bool initialHasPostedSignage,
+    String? pinId,  // For edit mode
+    LatLng? coordinates,  // For create mode
   }) async {
     // Set flag to prevent multiple dialogs
     _isDialogOpen = true;
@@ -317,7 +462,7 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: initialRestrictionTag,
         initialHasSecurityScreening: initialHasSecurityScreening,
         initialHasPostedSignage: initialHasPostedSignage,
-        onConfirm: (result) {
+        onConfirm: (result) async {
           debugPrint('Pin dialog confirmed:');
           debugPrint('  Status: ${result.status.displayName}');
           debugPrint('  Restriction: ${result.restrictionTag?.displayName ?? 'None'}');
@@ -326,32 +471,138 @@ class _MapScreenState extends State<MapScreen> {
 
           Navigator.of(dialogContext, rootNavigator: true).pop();
 
-          // TODO: In Iteration 7, actually save the pin
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isEditMode
-                      ? 'Pin updated (UI only - not saved yet)'
-                      : 'Pin created (UI only - not saved yet)',
+          try {
+            if (isEditMode && pinId != null) {
+              // Edit existing pin
+              final existingPin = await _viewModel?.getPinById(pinId);
+              if (existingPin != null) {
+                final updatedPin = existingPin.copyWith(
+                  status: result.status,
+                  restrictionTag: result.restrictionTag,
+                  hasSecurityScreening: result.hasSecurityScreening,
+                  hasPostedSignage: result.hasPostedSignage,
+                  metadata: existingPin.metadata.copyWith(
+                    lastModified: DateTime.now(),
+                  ),
+                );
+                await _viewModel?.updatePin(updatedPin);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pin updated successfully'),
+                      duration: Duration(seconds: 2),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              }
+            } else if (!isEditMode && coordinates != null) {
+              // Create new pin
+              final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+              final currentUser = authViewModel.currentUser;
+
+              final newPin = Pin(
+                id: const Uuid().v4(),
+                name: poiName,
+                location: Location.fromLatLng(
+                  coordinates.latitude,
+                  coordinates.longitude,
                 ),
-                duration: const Duration(seconds: 2),
-              ),
-            );
+                status: result.status,
+                restrictionTag: result.restrictionTag,
+                hasSecurityScreening: result.hasSecurityScreening,
+                hasPostedSignage: result.hasPostedSignage,
+                metadata: PinMetadata(
+                  createdBy: currentUser?.id ?? 'anonymous',
+                  createdAt: DateTime.now(),
+                  lastModified: DateTime.now(),
+                ),
+              );
+
+              await _viewModel?.addPin(newPin);
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Pin created successfully'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            }
+          } catch (e) {
+            debugPrint('Error saving pin: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error: ${e.toString()}'),
+                  duration: const Duration(seconds: 3),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           }
         },
-        onDelete: isEditMode ? () {
-          debugPrint('Pin delete requested');
-          Navigator.of(dialogContext, rootNavigator: true).pop();
+        onDelete: isEditMode && pinId != null ? () async {
+          debugPrint('Pin delete requested for ID: $pinId');
 
-          // TODO: In Iteration 7, actually delete the pin
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Pin deleted (UI only - not saved yet)'),
-                duration: Duration(seconds: 2),
+          // Show confirmation dialog
+          final confirmed = await showDialog<bool>(
+            context: dialogContext,
+            builder: (confirmContext) => AlertDialog(
+              title: const Text('Delete Pin?'),
+              content: const Text(
+                'Are you sure you want to delete this pin? This action cannot be undone.',
               ),
-            );
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(confirmContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(confirmContext).pop(true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          if (confirmed == true) {
+            // User confirmed deletion
+            Navigator.of(dialogContext, rootNavigator: true).pop();
+
+            try {
+              await _viewModel?.deletePin(pinId);
+
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Pin deleted successfully'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint('Error deleting pin: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error deleting pin: ${e.toString()}'),
+                    duration: const Duration(seconds: 3),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
           }
         } : null,
         onCancel: () {
@@ -370,6 +621,35 @@ class _MapScreenState extends State<MapScreen> {
     _isDialogOpen = false;
     _lastDialogCloseTime = DateTime.now();
     debugPrint('Dialog closed, cooldown period started');
+  }
+
+  /// Calculate geographic distance between two points using Haversine formula
+  /// Returns distance in meters
+  double _calculateGeographicDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
+    const earthRadiusMeters = 6371000.0; // Earth's radius in meters
+
+    final dLat = _degreesToRadians(lat2 - lat1);
+    final dLon = _degreesToRadians(lon2 - lon1);
+
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) *
+            math.cos(_degreesToRadians(lat2)) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+
+    return earthRadiusMeters * c;
+  }
+
+  /// Convert degrees to radians
+  double _degreesToRadians(double degrees) {
+    return degrees * math.pi / 180.0;
   }
 
   /// Get status name from color code
@@ -611,6 +891,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _viewModel?.removeListener(_onPinsChanged);
+    _mapController?.onFeatureTapped.remove(_onFeatureTapped);
     _mapController?.dispose();
     super.dispose();
   }
