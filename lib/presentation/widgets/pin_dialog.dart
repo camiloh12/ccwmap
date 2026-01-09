@@ -4,12 +4,14 @@ import 'package:ccwmap/domain/models/restriction_tag.dart';
 
 /// Result object returned when dialog is confirmed
 class PinDialogResult {
+  final String name;
   final PinStatus status;
   final RestrictionTag? restrictionTag;
   final bool hasSecurityScreening;
   final bool hasPostedSignage;
 
   PinDialogResult({
+    required this.name,
     required this.status,
     this.restrictionTag,
     required this.hasSecurityScreening,
@@ -51,6 +53,7 @@ class _PinDialogState extends State<PinDialog> {
   RestrictionTag? _selectedRestrictionTag;
   late bool _hasSecurityScreening;
   late bool _hasPostedSignage;
+  late TextEditingController _nameController;
 
   @override
   void initState() {
@@ -59,9 +62,20 @@ class _PinDialogState extends State<PinDialog> {
     _selectedRestrictionTag = widget.initialRestrictionTag;
     _hasSecurityScreening = widget.initialHasSecurityScreening;
     _hasPostedSignage = widget.initialHasPostedSignage;
+    _nameController = TextEditingController(text: widget.poiName);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   bool get _isValid {
+    // Name must not be empty
+    if (_nameController.text.trim().isEmpty) {
+      return false;
+    }
     // If NO_GUN status, must have a restriction tag
     if (_selectedStatus == PinStatus.NO_GUN) {
       return _selectedRestrictionTag != null;
@@ -74,6 +88,7 @@ class _PinDialogState extends State<PinDialog> {
 
     widget.onConfirm(
       PinDialogResult(
+        name: _nameController.text.trim(),
         status: _selectedStatus,
         restrictionTag: _selectedRestrictionTag,
         hasSecurityScreening: _hasSecurityScreening,
@@ -103,18 +118,34 @@ class _PinDialogState extends State<PinDialog> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 24),
 
-              // POI Name
+              // Name Text Field
               Text(
-                widget.poiName,
+                'Location name:',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.primary,
+                  fontSize: 16,
+                  color: Colors.grey[700],
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  hintText: 'Enter a name for this location',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                style: const TextStyle(fontSize: 16),
+                maxLength: 100,
+                onChanged: (_) => setState(() {}), // Update validation state
+              ),
+              const SizedBox(height: 16),
 
               // Status Selection
               Text(

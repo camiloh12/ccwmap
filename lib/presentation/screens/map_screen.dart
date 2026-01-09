@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
@@ -15,11 +17,6 @@ import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
 import 'package:ccwmap/domain/models/location.dart';
 import 'package:ccwmap/domain/models/pin_metadata.dart';
-import 'package:ccwmap/domain/models/poi.dart';
-import 'package:ccwmap/domain/repositories/poi_repository.dart';
-import 'package:ccwmap/data/repositories/poi_repository_impl.dart';
-import 'package:ccwmap/data/datasources/overpass_api_client.dart';
-import 'package:ccwmap/data/datasources/poi_cache.dart';
 import 'package:uuid/uuid.dart';
 
 class MapScreen extends StatefulWidget {
@@ -40,17 +37,11 @@ class _MapScreenState extends State<MapScreen> {
   List<Pin> _pins = [];
   bool _isDialogOpen = false;
   DateTime? _lastDialogCloseTime;
+  bool _isUpdatingLayers = false;
+  bool _pendingLayerUpdate = false;
 
   // Track added symbols for removal
   final List<Symbol> _addedSymbols = [];
-
-  // POI Integration
-  late final PoiRepository _poiRepository;
-  List<Poi> _pois = [];
-  Timer? _cameraDebounceTimer;
-  bool _isLoadingPois = false;
-  static const Duration _cameraDebounceDelay = Duration(milliseconds: 500);
-  static const double _minZoomForPois = 12.0; // Only fetch POIs at zoom level 12+
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -60,12 +51,6 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-
-    // Initialize POI repository
-    _poiRepository = PoiRepositoryImpl(
-      apiClient: OverpassApiClient(),
-      cache: PoiCache(),
-    );
 
     _requestLocationPermission();
 
@@ -88,15 +73,24 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Called when pins change in ViewModel
   void _onPinsChanged() {
-    if (!mounted) return;
+    debugPrint('=== PINS CHANGED ===');
+    debugPrint('ViewModel has ${_viewModel?.pins.length ?? 0} pins');
+    if (!mounted) {
+      debugPrint('Widget not mounted, skipping update');
+      return;
+    }
 
     setState(() {
       _pins = _viewModel!.pins;
     });
+    debugPrint('Local _pins list updated to ${_pins.length} pins');
 
     // Update pins layer if map is ready
     if (_mapController != null) {
+      debugPrint('Map controller ready, updating pins layer');
       _updatePinsLayer();
+    } else {
+      debugPrint('Map controller is null, skipping layer update');
     }
   }
 
@@ -239,18 +233,42 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // Prevent concurrent layer updates - queue if busy
+    if (_isUpdatingLayers) {
+      debugPrint('MapScreen: Layer update already in progress, queuing update');
+      _pendingLayerUpdate = true;
+      return;
+    }
+
+    _isUpdatingLayers = true;
+    _pendingLayerUpdate = false;
     try {
       debugPrint('MapScreen: Updating pins layer with ${_pins.length} pins');
 
       // Build GeoJSON from pins
       final geojson = _buildPinsGeoJson();
 
-      // Remove existing source/layer if present
+      // Remove existing source/layers if present (in correct order)
+      // Must remove layers before source, and in reverse order of creation
+      try {
+        await _mapController!.removeLayer('pins-labels-layer');
+      } catch (e) {
+        // Layer doesn't exist yet, that's ok
+        debugPrint('  Note: pins-labels-layer does not exist (expected on first render)');
+      }
+
       try {
         await _mapController!.removeLayer('pins-layer');
+      } catch (e) {
+        // Layer doesn't exist yet, that's ok
+        debugPrint('  Note: pins-layer does not exist (expected on first render)');
+      }
+
+      try {
         await _mapController!.removeSource('pins-source');
       } catch (e) {
-        // Layer/source doesn't exist yet, that's ok
+        // Source doesn't exist yet, that's ok
+        debugPrint('  Note: pins-source does not exist (expected on first render)');
       }
 
       // Add GeoJSON source
@@ -277,9 +295,39 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
 
-      debugPrint('MapScreen: Pins layer updated successfully');
+      // Add symbol layer for pin name labels
+      await _mapController!.addSymbolLayer(
+        'pins-source',
+        'pins-labels-layer',
+        SymbolLayerProperties(
+          textField: ['get', 'name'],
+          textSize: 13.0,
+          textColor: '#000000',
+          textHaloColor: '#FFFFFF',
+          textHaloWidth: 2.5,
+          textHaloBlur: 1.0,
+          textOffset: [
+            Expressions.literal,
+            [0, 1.5], // Offset below the pin circle
+          ],
+          textAnchor: 'top',
+          textMaxWidth: 10.0, // Wrap text at 10em
+          textAllowOverlap: false,
+          textIgnorePlacement: false,
+        ),
+      );
+
+      debugPrint('MapScreen: Pins layer and labels updated successfully');
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
+    } finally {
+      _isUpdatingLayers = false;
+      // Process any pending update that was queued while we were busy
+      if (_pendingLayerUpdate) {
+        debugPrint('MapScreen: Processing pending layer update');
+        _pendingLayerUpdate = false;
+        _updatePinsLayer();
+      }
     }
   }
 
@@ -297,7 +345,9 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Build GeoJSON FeatureCollection from pins
   Map<String, dynamic> _buildPinsGeoJson() {
+    debugPrint('Building GeoJSON for ${_pins.length} pins');
     final features = _pins.map((pin) {
+      debugPrint('  Pin: ${pin.name} at ${pin.location.latitude}, ${pin.location.longitude}');
       return {
         'type': 'Feature',
         'id': pin.id,
@@ -318,173 +368,12 @@ class _MapScreenState extends State<MapScreen> {
       };
     }).toList();
 
-    return {
+    final geojson = {
       'type': 'FeatureCollection',
       'features': features,
     };
-  }
-
-  /// Called when camera movement starts - debounce POI fetching
-  void _onCameraMove(CameraPosition? position) {
-    // Cancel existing timer
-    _cameraDebounceTimer?.cancel();
-  }
-
-  /// Called when camera movement ends - fetch POIs after debounce delay
-  void _onCameraIdle() {
-    // Cancel existing timer
-    _cameraDebounceTimer?.cancel();
-
-    // Start new timer for debounced POI fetching
-    _cameraDebounceTimer = Timer(_cameraDebounceDelay, () {
-      _fetchPOIsForViewport();
-    });
-  }
-
-  /// Fetch POIs for the current viewport
-  Future<void> _fetchPOIsForViewport() async {
-    if (_mapController == null || _isLoadingPois) {
-      return;
-    }
-
-    // Check zoom level - only fetch at reasonable zoom levels
-    final cameraPosition = _mapController!.cameraPosition;
-    final zoomLevel = cameraPosition?.zoom ?? 0.0;
-
-    if (zoomLevel < _minZoomForPois) {
-      debugPrint('Zoom level $zoomLevel too low for POI fetching (min: $_minZoomForPois)');
-      // Clear POIs at low zoom levels
-      if (_pois.isNotEmpty) {
-        setState(() {
-          _pois = [];
-        });
-        _updatePoisLayer();
-      }
-      return;
-    }
-
-    try {
-      setState(() {
-        _isLoadingPois = true;
-      });
-
-      // Get visible bounds
-      final bounds = await _mapController!.getVisibleRegion();
-      final overpassBounds = OverpassBounds(
-        south: math.min(bounds.southwest.latitude, bounds.northeast.latitude),
-        west: math.min(bounds.southwest.longitude, bounds.northeast.longitude),
-        north: math.max(bounds.southwest.latitude, bounds.northeast.latitude),
-        east: math.max(bounds.southwest.longitude, bounds.northeast.longitude),
-      );
-
-      debugPrint('Fetching POIs for bounds: $overpassBounds');
-
-      // Fetch POIs from repository (with caching)
-      final pois = await _poiRepository.getPOIs(overpassBounds);
-
-      if (mounted) {
-        setState(() {
-          _pois = pois;
-          _isLoadingPois = false;
-        });
-
-        // Update POI layer on map
-        _updatePoisLayer();
-
-        debugPrint('Loaded ${pois.length} POIs for current viewport');
-      }
-    } catch (e, stackTrace) {
-      debugPrint('Error fetching POIs: $e');
-      debugPrint('Stack trace: $stackTrace');
-
-      if (mounted) {
-        setState(() {
-          _isLoadingPois = false;
-        });
-      }
-    }
-  }
-
-  /// Update POI labels on the map using symbol layer
-  Future<void> _updatePoisLayer() async {
-    if (_mapController == null) {
-      debugPrint('MapScreen: Cannot update POIs - map controller is null');
-      return;
-    }
-
-    try {
-      debugPrint('MapScreen: Updating POIs layer with ${_pois.length} POIs');
-
-      // Build GeoJSON from POIs
-      final geojson = _buildPoisGeoJson();
-
-      // Remove existing source/layer if present
-      try {
-        await _mapController!.removeLayer('pois-layer');
-        await _mapController!.removeSource('pois-source');
-      } catch (e) {
-        // Layer/source doesn't exist yet, that's ok
-      }
-
-      // Only add layer if we have POIs
-      if (_pois.isNotEmpty) {
-        // Add GeoJSON source
-        await _mapController!.addGeoJsonSource('pois-source', geojson);
-
-        // Add symbol layer for POI labels
-        await _mapController!.addSymbolLayer(
-          'pois-source',
-          'pois-layer',
-          SymbolLayerProperties(
-            textField: [
-              'get',
-              'name'
-            ],
-            textSize: 12.0,
-            textColor: '#333333',
-            textHaloColor: '#FFFFFF',
-            textHaloWidth: 2.0,
-            textOffset: [
-              Expressions.literal,
-              [0, 1.5]
-            ],
-            textAnchor: 'top',
-            textAllowOverlap: false, // Prevent label clutter
-            textIgnorePlacement: false,
-          ),
-        );
-
-        debugPrint('MapScreen: POIs layer updated successfully');
-      } else {
-        debugPrint('MapScreen: No POIs to display');
-      }
-    } catch (e) {
-      debugPrint('MapScreen: Error updating POIs layer: $e');
-    }
-  }
-
-  /// Build GeoJSON FeatureCollection from POIs
-  Map<String, dynamic> _buildPoisGeoJson() {
-    final features = _pois.map((poi) {
-      return {
-        'type': 'Feature',
-        'id': poi.id,
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [poi.longitude, poi.latitude],
-        },
-        'properties': {
-          'id': poi.id,
-          'name': poi.name,
-          'type': poi.type,
-        },
-      };
-    }).toList();
-
-    return {
-      'type': 'FeatureCollection',
-      'features': features,
-    };
+    debugPrint('GeoJSON built with ${features.length} features');
+    return geojson;
   }
 
   /// Enable the location indicator on the map
@@ -524,58 +413,44 @@ class _MapScreenState extends State<MapScreen> {
     try {
       debugPrint('Querying features at point...');
       debugPrint('Number of pins in _pins list: ${_pins.length}');
-      debugPrint('Number of POIs in _pois list: ${_pois.length}');
       debugPrint('Click coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
 
-      // PRIORITY 1: Check if user tapped on a POI label
-      // POI tap should create a new pin with POI name pre-filled
-      try {
-        final poiFeatures = await _mapController!.queryRenderedFeatures(
-          point,
-          ['pois-layer'],
-          null,
-        );
+      // PRIORITY 1: Check if user tapped on a POI label (from base map OR Overpass)
+      // Query at click point and nearby points to catch offset labels
+      final poiResult = await _detectPoiAtPoint(point, coordinates);
+      if (poiResult != null) {
+        debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
 
-        if (poiFeatures.isNotEmpty) {
-          final poiFeature = poiFeatures.first;
-          debugPrint('POI tapped: ${poiFeature}');
+        final poiLat = poiResult['lat'] as double;
+        final poiLng = poiResult['lng'] as double;
+        final poiName = poiResult['name'] as String;
 
-          // Extract POI properties
-          final poiId = poiFeature['id']?.toString();
-          final poiName = poiFeature['properties']?['name']?.toString() ?? 'Unknown POI';
-
-          debugPrint('Opening create dialog for POI: $poiName');
-
-          // Validate coordinates are within US bounds
-          if (!_isWithinUSBounds(coordinates.latitude, coordinates.longitude)) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Cannot create pins outside the continental US'),
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            }
-            return;
-          }
-
-          // Show create dialog with POI name
+        // Validate coordinates are within US bounds
+        if (!_isWithinUSBounds(poiLat, poiLng)) {
           if (mounted) {
-            _showPinDialog(
-              isEditMode: false,
-              poiName: poiName,
-              initialStatus: null,
-              initialRestrictionTag: null,
-              initialHasSecurityScreening: false,
-              initialHasPostedSignage: false,
-              coordinates: coordinates,
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cannot create pins outside the continental US'),
+                duration: Duration(seconds: 3),
+              ),
             );
           }
           return;
         }
-      } catch (e) {
-        debugPrint('Error querying POI features: $e');
-        // Continue to pin detection
+
+        // Show create dialog with POI name
+        if (mounted) {
+          _showPinDialog(
+            isEditMode: false,
+            poiName: poiName,
+            initialStatus: null,
+            initialRestrictionTag: null,
+            initialHasSecurityScreening: false,
+            initialHasPostedSignage: false,
+            coordinates: LatLng(poiLat, poiLng),
+          );
+        }
+        return;
       }
 
       // Get current zoom level to calculate appropriate threshold
@@ -591,7 +466,7 @@ class _MapScreenState extends State<MapScreen> {
 
       debugPrint('Zoom level: ${zoomLevel.toStringAsFixed(1)}, Threshold: ${clickThresholdMeters.toStringAsFixed(0)}m');
 
-      // PRIORITY 2: Find pin by checking geographic distance from click point
+      // PRIORITY 3: Find existing pin by checking geographic distance from click point
       Pin? clickedPin;
       double minDistance = double.infinity;
 
@@ -654,24 +529,134 @@ class _MapScreenState extends State<MapScreen> {
           );
         }
       } else {
-        // User clicked on empty map area - show create dialog
-        debugPrint('No features found, showing create dialog');
-        if (mounted) {
-          debugPrint('Opening create dialog at: ${coordinates.latitude}, ${coordinates.longitude}');
-
-          _showPinDialog(
-            isEditMode: false,
-            poiName: 'Location at ${coordinates.latitude.toStringAsFixed(4)}, ${coordinates.longitude.toStringAsFixed(4)}',
-            initialStatus: null,
-            initialRestrictionTag: null,
-            initialHasSecurityScreening: false,
-            initialHasPostedSignage: false,
-            coordinates: coordinates,
-          );
-        }
+        // No pin or POI clicked - do nothing on single click
+        // User must long-press to create a pin at empty location
+        debugPrint('No pin or POI found at click location. Use long-press to create pin here.');
       }
     } catch (e) {
       debugPrint('Error handling map click: $e');
+    }
+  }
+
+  /// Handle long-press on map - always creates a new pin with custom name
+  Future<void> _onMapLongClick(Point<double> point, LatLng coordinates) async {
+    debugPrint('=== MAP LONG-PRESS DEBUG ===');
+    debugPrint('Long-press at: ${coordinates.latitude}, ${coordinates.longitude}');
+
+    if (_mapController == null) {
+      debugPrint('Map controller is null, returning');
+      return;
+    }
+
+    // Prevent opening multiple dialogs
+    if (_isDialogOpen) {
+      debugPrint('Dialog already open, ignoring long-press');
+      return;
+    }
+
+    // Add cooldown period after dialog close
+    if (_lastDialogCloseTime != null) {
+      final timeSinceClose = DateTime.now().difference(_lastDialogCloseTime!);
+      if (timeSinceClose.inMilliseconds < 300) {
+        debugPrint('Cooldown period active, ignoring long-press');
+        return;
+      }
+    }
+
+    try {
+      // Validate coordinates are within US bounds
+      if (!_isWithinUSBounds(coordinates.latitude, coordinates.longitude)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot create pins outside the continental US'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Always show create dialog with empty name for long-press
+      // User explicitly wants to create a custom pin (not using POI)
+      if (mounted) {
+        debugPrint('Opening create dialog for long-press with empty name');
+        _showPinDialog(
+          isEditMode: false,
+          poiName: '', // Empty name - user will enter their own
+          initialStatus: null,
+          initialRestrictionTag: null,
+          initialHasSecurityScreening: false,
+          initialHasPostedSignage: false,
+          coordinates: coordinates,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error handling long-press: $e');
+    }
+  }
+
+  /// Handle right-click on web - creates a new pin at the clicked location
+  Future<void> _handleRightClick(Offset localPosition) async {
+    debugPrint('=== RIGHT-CLICK DEBUG (Web) ===');
+    debugPrint('Local position: ${localPosition.dx}, ${localPosition.dy}');
+
+    if (_mapController == null) {
+      debugPrint('Map controller is null, returning');
+      return;
+    }
+
+    // Prevent opening multiple dialogs
+    if (_isDialogOpen) {
+      debugPrint('Dialog already open, ignoring right-click');
+      return;
+    }
+
+    // Add cooldown period after dialog close
+    if (_lastDialogCloseTime != null) {
+      final timeSinceClose = DateTime.now().difference(_lastDialogCloseTime!);
+      if (timeSinceClose.inMilliseconds < 300) {
+        debugPrint('Cooldown period active, ignoring right-click');
+        return;
+      }
+    }
+
+    try {
+      // Convert screen position to map coordinates
+      final coordinates = await _mapController!.toLatLng(
+        Point(localPosition.dx, localPosition.dy),
+      );
+
+      debugPrint('Right-click at: ${coordinates.latitude}, ${coordinates.longitude}');
+
+      // Validate coordinates are within US bounds
+      if (!_isWithinUSBounds(coordinates.latitude, coordinates.longitude)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cannot create pins outside the continental US'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Show create dialog with empty name
+      if (mounted) {
+        debugPrint('Opening create dialog for right-click');
+        _showPinDialog(
+          isEditMode: false,
+          poiName: '', // Empty name - user will enter their own
+          initialStatus: null,
+          initialRestrictionTag: null,
+          initialHasSecurityScreening: false,
+          initialHasPostedSignage: false,
+          coordinates: coordinates,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error handling right-click: $e');
     }
   }
 
@@ -713,6 +698,7 @@ class _MapScreenState extends State<MapScreen> {
               final existingPin = await _viewModel?.getPinById(pinId);
               if (existingPin != null) {
                 final updatedPin = existingPin.copyWith(
+                  name: result.name,
                   status: result.status,
                   restrictionTag: result.restrictionTag,
                   hasSecurityScreening: result.hasSecurityScreening,
@@ -740,7 +726,7 @@ class _MapScreenState extends State<MapScreen> {
 
               final newPin = Pin(
                 id: const Uuid().v4(),
-                name: poiName,
+                name: result.name,
                 location: Location.fromLatLng(
                   coordinates.latitude,
                   coordinates.longitude,
@@ -857,6 +843,131 @@ class _MapScreenState extends State<MapScreen> {
     _isDialogOpen = false;
     _lastDialogCloseTime = DateTime.now();
     debugPrint('Dialog closed, cooldown period started');
+  }
+
+  /// Detect POI at or near click point
+  /// Returns map with 'name', 'lat', 'lng' if POI found, null otherwise
+  /// Checks MapLibre base map POIs (from the map tiles)
+  Future<Map<String, dynamic>?> _detectPoiAtPoint(
+    Point<double> point,
+    LatLng coordinates,
+  ) async {
+    if (_mapController == null) return null;
+
+    // Layer IDs to query for POIs (MapLibre/OpenMapTiles base map layers)
+    const poiLayerIds = [
+      'poi',               // Common base map layer
+      'poi_label',         // MapTiler POI labels
+      'poi-label',         // Alternative naming
+      'place_label',       // Place labels
+      'place-label',       // Alternative naming
+    ];
+
+    // Screen pixel offsets to check (for catching offset labels)
+    // Labels are often offset from their anchor point
+    const offsets = [
+      [0.0, 0.0],     // Center
+      [0.0, -20.0],   // Above (labels often below point)
+      [0.0, 20.0],    // Below
+      [-20.0, 0.0],   // Left
+      [20.0, 0.0],    // Right
+      [-15.0, -15.0], // Diagonal offsets
+      [15.0, -15.0],
+      [-15.0, 15.0],
+      [15.0, 15.0],
+    ];
+
+    // Query rendered features at multiple points
+    for (final offset in offsets) {
+      final queryPoint = Point<double>(
+        point.x + offset[0],
+        point.y + offset[1],
+      );
+
+      try {
+        // First try querying specific POI layers
+        for (final layerId in poiLayerIds) {
+          try {
+            final features = await _mapController!.queryRenderedFeatures(
+              queryPoint,
+              [layerId],
+              null,
+            );
+
+            if (features.isNotEmpty) {
+              final feature = features.first;
+              final name = feature['properties']?['name']?.toString();
+
+              if (name != null && name.isNotEmpty) {
+                // Extract coordinates from feature geometry
+                final geometry = feature['geometry'];
+                double? lat, lng;
+
+                if (geometry != null && geometry['coordinates'] != null) {
+                  final coords = geometry['coordinates'];
+                  if (coords is List && coords.length >= 2) {
+                    lng = (coords[0] as num).toDouble();
+                    lat = (coords[1] as num).toDouble();
+                  }
+                }
+
+                // Fall back to click coordinates if geometry extraction fails
+                lat ??= coordinates.latitude;
+                lng ??= coordinates.longitude;
+
+                debugPrint('Found POI in layer $layerId: $name');
+                return {'name': name, 'lat': lat, 'lng': lng};
+              }
+            }
+          } catch (e) {
+            // Layer might not exist, continue to next
+          }
+        }
+
+        // Also try querying ALL layers and filter for features with names
+        try {
+          final allFeatures = await _mapController!.queryRenderedFeatures(
+            queryPoint,
+            [], // Empty list = query all layers
+            null,
+          );
+
+          for (final feature in allFeatures) {
+            final name = feature['properties']?['name']?.toString();
+            final layerId = feature['layer']?['id']?.toString() ?? '';
+
+            // Skip our pin layers
+            if (layerId.contains('pins')) continue;
+
+            if (name != null && name.isNotEmpty) {
+              final geometry = feature['geometry'];
+              double? lat, lng;
+
+              if (geometry != null && geometry['coordinates'] != null) {
+                final coords = geometry['coordinates'];
+                if (coords is List && coords.length >= 2) {
+                  lng = (coords[0] as num).toDouble();
+                  lat = (coords[1] as num).toDouble();
+                }
+              }
+
+              lat ??= coordinates.latitude;
+              lng ??= coordinates.longitude;
+
+              debugPrint('Found named feature in layer $layerId: $name');
+              return {'name': name, 'lat': lat, 'lng': lng};
+            }
+          }
+        } catch (e) {
+          debugPrint('Error querying all layers: $e');
+        }
+      } catch (e) {
+        debugPrint('Error querying at offset $offset: $e');
+      }
+    }
+
+    // No POI found at any query point
+    return null;
   }
 
   /// Calculate geographic distance between two points using Haversine formula
@@ -1048,25 +1159,32 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // MapLibre map widget
-          MapLibreMap(
-            styleString: _getMapStyleUrl(),
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(_initialLatitude, _initialLongitude),
-              zoom: _initialZoom,
+          // MapLibre map widget wrapped in Listener for right-click on web
+          Listener(
+            onPointerDown: (event) {
+              // Detect right-click (secondary button) on web for creating pins
+              if (kIsWeb && event.buttons == kSecondaryMouseButton) {
+                _handleRightClick(event.localPosition);
+              }
+            },
+            child: MapLibreMap(
+              styleString: _getMapStyleUrl(),
+              initialCameraPosition: const CameraPosition(
+                target: LatLng(_initialLatitude, _initialLongitude),
+                zoom: _initialZoom,
+              ),
+              onMapCreated: _onMapCreated,
+              onStyleLoadedCallback: _onStyleLoadedCallback,
+              onMapClick: _onMapClick,
+              onMapLongClick: _onMapLongClick,
+              myLocationEnabled: true, // Show location dot
+              myLocationTrackingMode: MyLocationTrackingMode.none, // But no auto-tracking
+              compassEnabled: false,
+              rotateGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              tiltGesturesEnabled: true,
+              zoomGesturesEnabled: true,
             ),
-            onMapCreated: _onMapCreated,
-            onStyleLoadedCallback: _onStyleLoadedCallback,
-            onMapClick: _onMapClick,
-            onCameraMove: _onCameraMove,
-            onCameraIdle: _onCameraIdle,
-            myLocationEnabled: true, // Show location dot
-            myLocationTrackingMode: MyLocationTrackingMode.none, // But no auto-tracking
-            compassEnabled: false,
-            rotateGesturesEnabled: true,
-            scrollGesturesEnabled: true,
-            tiltGesturesEnabled: true,
-            zoomGesturesEnabled: true,
           ),
 
           // Title bar overlay (top-left)
@@ -1144,7 +1262,6 @@ class _MapScreenState extends State<MapScreen> {
     _viewModel?.removeListener(_onPinsChanged);
     _mapController?.onFeatureTapped.remove(_onFeatureTapped);
     _mapController?.dispose();
-    _cameraDebounceTimer?.cancel();
     super.dispose();
   }
 }
