@@ -22,4 +22,31 @@ abstract class PinRepository {
 
   /// Delete a pin by its ID
   Future<void> deletePin(String id);
+
+  /// Synchronize pins with remote server
+  /// Downloads remote changes and uploads local changes
+  /// Returns SyncResult with upload/download counts and errors
+  Future<SyncResult> syncWithRemote();
+}
+
+/// Result of a sync operation
+class SyncResult {
+  final int uploaded;
+  final int downloaded;
+  final int errors;
+  final String? errorMessage;
+
+  const SyncResult({
+    required this.uploaded,
+    required this.downloaded,
+    required this.errors,
+    this.errorMessage,
+  });
+
+  bool get isSuccess => errors == 0;
+
+  @override
+  String toString() {
+    return 'SyncResult(uploaded: $uploaded, downloaded: $downloaded, errors: $errors)';
+  }
 }

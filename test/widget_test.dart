@@ -17,6 +17,7 @@ import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/user.dart';
 import 'fakes/fake_auth_repository.dart';
+import 'fakes/fake_supabase_remote_data_source.dart';
 
 void main() {
   // Initialize dotenv before running tests
@@ -32,9 +33,11 @@ MAPTILER_API_KEY=test_key
       (WidgetTester tester) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+    final fakeRemoteDataSource = FakeSupabaseRemoteDataSource();
 
     // Create repositories
-    final pinRepository = PinRepositoryImpl(testDatabase.pinDao);
+    final pinRepository =
+        PinRepositoryImpl(testDatabase.pinDao, fakeRemoteDataSource);
     final authRepository = FakeAuthRepository();
 
     // Create ViewModels
@@ -75,9 +78,11 @@ MAPTILER_API_KEY=test_key
       (WidgetTester tester) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+    final fakeRemoteDataSource = FakeSupabaseRemoteDataSource();
 
     // Create repositories
-    final pinRepository = PinRepositoryImpl(testDatabase.pinDao);
+    final pinRepository =
+        PinRepositoryImpl(testDatabase.pinDao, fakeRemoteDataSource);
     final authRepository = FakeAuthRepository();
 
     // Create ViewModels

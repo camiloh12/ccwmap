@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
 import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
+import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
@@ -28,9 +29,13 @@ Future<void> main() async {
   // Initialize database
   database = AppDatabase();
 
+  // Create data sources
+  final supabaseClient = Supabase.instance.client;
+  final remoteDataSource = SupabaseRemoteDataSource(supabaseClient);
+
   // Create repositories
-  final pinRepository = PinRepositoryImpl(database.pinDao);
-  final authRepository = SupabaseAuthRepository(Supabase.instance.client);
+  final pinRepository = PinRepositoryImpl(database.pinDao, remoteDataSource);
+  final authRepository = SupabaseAuthRepository(supabaseClient);
 
   // Create ViewModels
   final mapViewModel = MapViewModel(pinRepository);

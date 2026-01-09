@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../../domain/models/pin.dart';
 import '../../domain/repositories/pin_repository.dart';
 import '../../domain/validators/location_validator.dart';
-import '../../data/sample_data.dart';
 
 /// ViewModel for the MapScreen
 /// Manages pin data and exposes it to the UI
@@ -14,7 +13,8 @@ class MapViewModel extends ChangeNotifier {
   List<Pin> _pins = [];
   bool _isLoading = false;
   String? _error;
-  bool _hasLoadedSampleData = false;
+  bool _isSyncing = false;
+  DateTime? _lastSyncTime;
 
   MapViewModel(this._repository);
 
@@ -23,6 +23,8 @@ class MapViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   Stream<List<Pin>> get pinsStream => _repository.watchPins();
+  bool get isSyncing => _isSyncing;
+  DateTime? get lastSyncTime => _lastSyncTime;
 
   /// Initialize the ViewModel and load data
   Future<void> initialize() async {
@@ -42,8 +44,8 @@ class MapViewModel extends ChangeNotifier {
         },
       );
 
-      // Load sample data on first launch
-      await _loadSampleDataIfNeeded();
+      // Trigger initial sync with remote to download existing pins
+      syncWithRemote();
 
       _setLoading(false);
       print('MapViewModel: Initialization complete. Total pins: ${_pins.length}');
@@ -52,29 +54,6 @@ class MapViewModel extends ChangeNotifier {
       _setError(e.toString());
       _setLoading(false);
     }
-  }
-
-  /// Load sample pins if database is empty
-  Future<void> _loadSampleDataIfNeeded() async {
-    if (_hasLoadedSampleData) {
-      print('MapViewModel: Sample data already loaded, skipping');
-      return;
-    }
-
-    print('MapViewModel: Checking for existing pins...');
-    final existingPins = await _repository.getPins();
-    print('MapViewModel: Found ${existingPins.length} existing pins');
-
-    if (existingPins.isEmpty) {
-      print('MapViewModel: Loading sample data...');
-      final samplePins = SampleData.getSamplePins();
-      print('MapViewModel: Adding ${samplePins.length} sample pins');
-      for (final pin in samplePins) {
-        await _repository.addPin(pin);
-      }
-      print('MapViewModel: Sample data loaded successfully');
-    }
-    _hasLoadedSampleData = true;
   }
 
   /// Add a new pin
@@ -145,6 +124,40 @@ class MapViewModel extends ChangeNotifier {
   void _clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  /// Synchronize pins with remote Supabase
+  ///
+  /// Downloads remote changes and uploads local changes.
+  /// Can be called manually or automatically on app launch.
+  /// Runs in background without blocking UI.
+  Future<void> syncWithRemote() async {
+    if (_isSyncing) {
+      print('MapViewModel: Sync already in progress, skipping');
+      return;
+    }
+
+    try {
+      _isSyncing = true;
+      notifyListeners();
+
+      print('MapViewModel: Starting sync with remote...');
+      final result = await _repository.syncWithRemote();
+
+      _lastSyncTime = DateTime.now();
+      print('MapViewModel: Sync complete - $result');
+
+      if (!result.isSuccess) {
+        print('MapViewModel: Sync had errors: ${result.errorMessage}');
+        // Don't set error state - sync errors are non-blocking
+      }
+    } catch (e) {
+      print('MapViewModel: Sync failed with exception: $e');
+      // Don't set error state - sync failures are non-blocking
+    } finally {
+      _isSyncing = false;
+      notifyListeners();
+    }
   }
 
   @override

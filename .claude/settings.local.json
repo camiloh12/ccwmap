@@ -21,7 +21,10 @@
       "mcp__supabase__list_migrations",
       "Bash(flutter pub run build_runner build:*)",
       "Bash(flutter pub:*)",
-      "Bash(nc:*)"
+      "Bash(nc:*)",
+      "mcp__supabase__list_extensions",
+      "mcp__supabase__get_advisors",
+      "mcp__supabase__execute_sql"
     ],
     "deny": [],
     "ask": []
