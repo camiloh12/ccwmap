@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../data/services/network_monitor.dart';
 import '../../domain/models/pin.dart';
 import '../../domain/repositories/pin_repository.dart';
 import '../../domain/validators/location_validator.dart';
@@ -8,15 +9,18 @@ import '../../domain/validators/location_validator.dart';
 /// Manages pin data and exposes it to the UI
 class MapViewModel extends ChangeNotifier {
   final PinRepository _repository;
+  final NetworkMonitor _networkMonitor;
   StreamSubscription<List<Pin>>? _pinsSubscription;
+  StreamSubscription<bool>? _networkSubscription;
 
   List<Pin> _pins = [];
   bool _isLoading = false;
   String? _error;
   bool _isSyncing = false;
   DateTime? _lastSyncTime;
+  bool _wasOffline = false;
 
-  MapViewModel(this._repository);
+  MapViewModel(this._repository, this._networkMonitor);
 
   // Getters
   List<Pin> get pins => _pins;
@@ -44,8 +48,28 @@ class MapViewModel extends ChangeNotifier {
         },
       );
 
-      // Trigger initial sync with remote to download existing pins
-      syncWithRemote();
+      // Listen to network connectivity changes
+      _wasOffline = !_networkMonitor.isOnline;
+      _networkSubscription = _networkMonitor.isOnlineStream.listen(
+        (isOnline) {
+          print('MapViewModel: Network changed - ${isOnline ? "ONLINE" : "OFFLINE"}');
+
+          // Trigger sync when coming back online
+          if (isOnline && _wasOffline) {
+            print('MapViewModel: Device reconnected, triggering sync...');
+            syncWithRemote();
+          }
+
+          _wasOffline = !isOnline;
+        },
+      );
+
+      // Trigger initial sync with remote to download existing pins (if online)
+      if (_networkMonitor.isOnline) {
+        syncWithRemote();
+      } else {
+        print('MapViewModel: Device is offline, skipping initial sync');
+      }
 
       _setLoading(false);
       print('MapViewModel: Initialization complete. Total pins: ${_pins.length}');
@@ -163,6 +187,7 @@ class MapViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _pinsSubscription?.cancel();
+    _networkSubscription?.cancel();
     super.dispose();
   }
 }

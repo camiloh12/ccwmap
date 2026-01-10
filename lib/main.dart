@@ -8,11 +8,16 @@ import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
+import 'package:ccwmap/data/services/network_monitor.dart';
+import 'package:ccwmap/data/sync/sync_manager.dart';
+import 'package:ccwmap/data/sync/background_sync.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 // Global database instance
 late final AppDatabase database;
+// Global network monitor
+late final NetworkMonitor networkMonitor;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,16 +34,35 @@ Future<void> main() async {
   // Initialize database
   database = AppDatabase();
 
+  // Initialize network monitor
+  networkMonitor = NetworkMonitor();
+  await networkMonitor.initialize();
+
+  // Initialize background sync (Iteration 11)
+  await initializeBackgroundSync();
+
   // Create data sources
   final supabaseClient = Supabase.instance.client;
   final remoteDataSource = SupabaseRemoteDataSource(supabaseClient);
 
+  // Create sync manager
+  final syncManager = SyncManager(
+    syncQueueDao: database.syncQueueDao,
+    pinDao: database.pinDao,
+    remoteDataSource: remoteDataSource,
+    networkMonitor: networkMonitor,
+  );
+
   // Create repositories
-  final pinRepository = PinRepositoryImpl(database.pinDao, remoteDataSource);
+  final pinRepository = PinRepositoryImpl(
+    database.pinDao,
+    database.syncQueueDao,
+    syncManager: syncManager,
+  );
   final authRepository = SupabaseAuthRepository(supabaseClient);
 
   // Create ViewModels
-  final mapViewModel = MapViewModel(pinRepository);
+  final mapViewModel = MapViewModel(pinRepository, networkMonitor);
   final authViewModel = AuthViewModel(authRepository);
 
   runApp(

@@ -17,7 +17,7 @@ import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/user.dart';
 import 'fakes/fake_auth_repository.dart';
-import 'fakes/fake_supabase_remote_data_source.dart';
+import 'fakes/fake_network_monitor.dart';
 
 void main() {
   // Initialize dotenv before running tests
@@ -33,15 +33,17 @@ MAPTILER_API_KEY=test_key
       (WidgetTester tester) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
-    final fakeRemoteDataSource = FakeSupabaseRemoteDataSource();
+    final fakeNetworkMonitor = FakeNetworkMonitor();
 
     // Create repositories
-    final pinRepository =
-        PinRepositoryImpl(testDatabase.pinDao, fakeRemoteDataSource);
+    final pinRepository = PinRepositoryImpl(
+      testDatabase.pinDao,
+      testDatabase.syncQueueDao,
+    );
     final authRepository = FakeAuthRepository();
 
     // Create ViewModels
-    final mapViewModel = MapViewModel(pinRepository);
+    final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
     final authViewModel = AuthViewModel(authRepository);
 
     // Simulate authenticated user
@@ -71,6 +73,7 @@ MAPTILER_API_KEY=test_key
 
     // Clean up
     authRepository.dispose();
+    fakeNetworkMonitor.dispose();
     await testDatabase.close();
   });
 
@@ -78,15 +81,17 @@ MAPTILER_API_KEY=test_key
       (WidgetTester tester) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
-    final fakeRemoteDataSource = FakeSupabaseRemoteDataSource();
+    final fakeNetworkMonitor = FakeNetworkMonitor();
 
     // Create repositories
-    final pinRepository =
-        PinRepositoryImpl(testDatabase.pinDao, fakeRemoteDataSource);
+    final pinRepository = PinRepositoryImpl(
+      testDatabase.pinDao,
+      testDatabase.syncQueueDao,
+    );
     final authRepository = FakeAuthRepository();
 
     // Create ViewModels
-    final mapViewModel = MapViewModel(pinRepository);
+    final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
     final authViewModel = AuthViewModel(authRepository);
 
     // User is NOT authenticated (default state)
@@ -117,6 +122,7 @@ MAPTILER_API_KEY=test_key
 
     // Clean up
     authRepository.dispose();
+    fakeNetworkMonitor.dispose();
     await testDatabase.close();
   });
 }

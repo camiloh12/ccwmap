@@ -44,6 +44,12 @@ dependencies:
   # Location services
   geolocator: ^13.0.2
 
+  # Network connectivity monitoring
+  connectivity_plus: ^6.0.0
+
+  # Background task scheduling
+  workmanager: ^0.5.2
+
   # Database
   drift: ^2.16.0
   sqlite3_flutter_libs: ^0.5.0
