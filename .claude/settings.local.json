@@ -24,7 +24,8 @@
       "Bash(nc:*)",
       "mcp__supabase__list_extensions",
       "mcp__supabase__get_advisors",
-      "mcp__supabase__execute_sql"
+      "mcp__supabase__execute_sql",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

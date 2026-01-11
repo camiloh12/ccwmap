@@ -31,6 +31,7 @@ class _MapScreenState extends State<MapScreen> {
   final LocationService _locationService = LocationService();
   Position? _currentLocation;
   bool _isLoadingLocation = false;
+  bool _locationComponentEnabled = false;
 
   // ViewModel and pins
   MapViewModel? _viewModel;
@@ -116,6 +117,11 @@ class _MapScreenState extends State<MapScreen> {
           _isLoadingLocation = false;
         });
         debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
+
+        // Enable location component if map is already ready
+        if (_mapController != null) {
+          _enableLocationComponent();
+        }
       }
     } catch (e) {
       debugPrint('Error requesting location: $e');
@@ -377,10 +383,160 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Enable the location indicator on the map
-  void _enableLocationComponent() {
-    if (_mapController != null && _currentLocation != null) {
-      // Note: myLocationEnabled is set to true in MapLibreMap widget
-      debugPrint('Location component enabled');
+  Future<void> _enableLocationComponent() async {
+    if (_mapController != null && _currentLocation != null && !_locationComponentEnabled) {
+      try {
+        debugPrint('Enabling location component at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+
+        if (kIsWeb) {
+          // Web: Use custom circle layer for user location (myLocationEnabled doesn't work reliably on web)
+          await _addUserLocationMarker();
+        } else {
+          // Native: Use built-in location component
+          await _mapController!.updateMyLocationTrackingMode(
+            MyLocationTrackingMode.tracking,
+          );
+        }
+
+        // Animate to user's location on first enable
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
+            16.0,
+          ),
+          duration: const Duration(milliseconds: 1500),
+        );
+
+        if (!kIsWeb) {
+          // Native: After animation, set to none so camera doesn't auto-follow
+          await _mapController!.updateMyLocationTrackingMode(
+            MyLocationTrackingMode.none,
+          );
+        }
+
+        _locationComponentEnabled = true;
+        debugPrint('Location component enabled successfully');
+      } catch (e) {
+        debugPrint('Error enabling location component: $e');
+      }
+    }
+  }
+
+  /// Add a custom blue circle marker for user location (web platform workaround)
+  Future<void> _addUserLocationMarker() async {
+    if (_mapController == null || _currentLocation == null) return;
+
+    try {
+      // Create GeoJSON for user location
+      final userLocationGeoJson = {
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [
+                _currentLocation!.longitude,
+                _currentLocation!.latitude,
+              ],
+            },
+            'properties': {
+              'type': 'user-location',
+            },
+          },
+        ],
+      };
+
+      // Remove existing user location layer/source if present
+      try {
+        await _mapController!.removeLayer('user-location-accuracy-layer');
+      } catch (e) {
+        // Layer doesn't exist, that's ok
+      }
+      try {
+        await _mapController!.removeLayer('user-location-layer');
+      } catch (e) {
+        // Layer doesn't exist, that's ok
+      }
+      try {
+        await _mapController!.removeSource('user-location-source');
+      } catch (e) {
+        // Source doesn't exist, that's ok
+      }
+
+      // Add source for user location
+      await _mapController!.addGeoJsonSource(
+        'user-location-source',
+        userLocationGeoJson,
+      );
+
+      // Add outer circle for accuracy/glow effect
+      await _mapController!.addCircleLayer(
+        'user-location-source',
+        'user-location-accuracy-layer',
+        CircleLayerProperties(
+          circleRadius: 20.0,
+          circleColor: '#4285F4', // Google blue
+          circleOpacity: 0.2,
+          circleBlur: 0.5,
+        ),
+      );
+
+      // Add inner blue dot for precise location
+      await _mapController!.addCircleLayer(
+        'user-location-source',
+        'user-location-layer',
+        CircleLayerProperties(
+          circleRadius: 8.0,
+          circleColor: '#4285F4', // Google blue
+          circleStrokeWidth: 3.0,
+          circleStrokeColor: '#FFFFFF',
+          circleOpacity: 1.0,
+        ),
+      );
+
+      debugPrint('User location marker added successfully');
+    } catch (e) {
+      debugPrint('Error adding user location marker: $e');
+    }
+  }
+
+  /// Update user location marker position (for web platform)
+  Future<void> _updateUserLocationMarker() async {
+    if (!kIsWeb || _mapController == null || _currentLocation == null) return;
+
+    try {
+      // Update the GeoJSON source with new coordinates
+      final userLocationGeoJson = {
+        'type': 'FeatureCollection',
+        'features': [
+          {
+            'type': 'Feature',
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [
+                _currentLocation!.longitude,
+                _currentLocation!.latitude,
+              ],
+            },
+            'properties': {
+              'type': 'user-location',
+            },
+          },
+        ],
+      };
+
+      // Check if source exists before updating
+      await _mapController!.setGeoJsonSource(
+        'user-location-source',
+        userLocationGeoJson,
+      );
+
+      debugPrint('User location marker updated');
+    } catch (e) {
+      debugPrint('Error updating user location marker: $e');
+      // If update fails, try to re-add the marker
+      await _addUserLocationMarker();
     }
   }
 
@@ -1177,8 +1333,8 @@ class _MapScreenState extends State<MapScreen> {
               onStyleLoadedCallback: _onStyleLoadedCallback,
               onMapClick: _onMapClick,
               onMapLongClick: _onMapLongClick,
-              myLocationEnabled: true, // Show location dot
-              myLocationTrackingMode: MyLocationTrackingMode.none, // But no auto-tracking
+              myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
+              myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
               rotateGesturesEnabled: true,
               scrollGesturesEnabled: true,
