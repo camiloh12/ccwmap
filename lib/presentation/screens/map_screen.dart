@@ -72,24 +72,15 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Called when pins change in ViewModel
   void _onPinsChanged() {
-    debugPrint('=== PINS CHANGED ===');
-    debugPrint('ViewModel has ${_viewModel?.pins.length ?? 0} pins');
-    if (!mounted) {
-      debugPrint('Widget not mounted, skipping update');
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _pins = _viewModel!.pins;
     });
-    debugPrint('Local _pins list updated to ${_pins.length} pins');
 
     // Update pins layer if map is ready
     if (_mapController != null) {
-      debugPrint('Map controller ready, updating pins layer');
       _updatePinsLayer();
-    } else {
-      debugPrint('Map controller is null, skipping layer update');
     }
   }
 
@@ -217,8 +208,6 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onStyleLoadedCallback() {
-    debugPrint('Map style loaded');
-
     // Enable location component after style loads
     if (_currentLocation != null) {
       _enableLocationComponent();
@@ -232,14 +221,10 @@ class _MapScreenState extends State<MapScreen> {
   /// Note: Circles will block clicks on web, but we use geographic distance
   /// detection to find clicked pins, so this works fine
   Future<void> _updatePinsLayer() async {
-    if (_mapController == null) {
-      debugPrint('MapScreen: Cannot update pins - map controller is null');
-      return;
-    }
+    if (_mapController == null) return;
 
     // Prevent concurrent layer updates - queue if busy
     if (_isUpdatingLayers) {
-      debugPrint('MapScreen: Layer update already in progress, queuing update');
       _pendingLayerUpdate = true;
       return;
     }
@@ -247,8 +232,6 @@ class _MapScreenState extends State<MapScreen> {
     _isUpdatingLayers = true;
     _pendingLayerUpdate = false;
     try {
-      debugPrint('MapScreen: Updating pins layer with ${_pins.length} pins');
-
       // Build GeoJSON from pins
       final geojson = _buildPinsGeoJson();
 
@@ -258,21 +241,18 @@ class _MapScreenState extends State<MapScreen> {
         await _mapController!.removeLayer('pins-labels-layer');
       } catch (e) {
         // Layer doesn't exist yet, that's ok
-        debugPrint('  Note: pins-labels-layer does not exist (expected on first render)');
       }
 
       try {
         await _mapController!.removeLayer('pins-layer');
       } catch (e) {
         // Layer doesn't exist yet, that's ok
-        debugPrint('  Note: pins-layer does not exist (expected on first render)');
       }
 
       try {
         await _mapController!.removeSource('pins-source');
       } catch (e) {
         // Source doesn't exist yet, that's ok
-        debugPrint('  Note: pins-source does not exist (expected on first render)');
       }
 
       // Add GeoJSON source
@@ -321,14 +301,12 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
 
-      debugPrint('MapScreen: Pins layer and labels updated successfully');
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
     } finally {
       _isUpdatingLayers = false;
       // Process any pending update that was queued while we were busy
       if (_pendingLayerUpdate) {
-        debugPrint('MapScreen: Processing pending layer update');
         _pendingLayerUpdate = false;
         _updatePinsLayer();
       }
@@ -337,9 +315,7 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Build GeoJSON FeatureCollection from pins
   Map<String, dynamic> _buildPinsGeoJson() {
-    debugPrint('Building GeoJSON for ${_pins.length} pins');
     final features = _pins.map((pin) {
-      debugPrint('  Pin: ${pin.name} at ${pin.location.latitude}, ${pin.location.longitude}');
       return {
         'type': 'Feature',
         'id': pin.id,
@@ -360,12 +336,10 @@ class _MapScreenState extends State<MapScreen> {
       };
     }).toList();
 
-    final geojson = {
+    return {
       'type': 'FeatureCollection',
       'features': features,
     };
-    debugPrint('GeoJSON built with ${features.length} features');
-    return geojson;
   }
 
   /// Enable the location indicator on the map

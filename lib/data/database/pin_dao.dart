@@ -27,4 +27,24 @@ class PinDao extends DatabaseAccessor<AppDatabase> with _$PinDaoMixin {
   Future<List<PinEntity>> getAllPins() {
     return select(pins).get();
   }
+
+  /// Batch insert and update pins in a single transaction
+  ///
+  /// This triggers only one stream emission instead of one per operation,
+  /// significantly reducing UI rebuilds during sync.
+  Future<void> batchUpsertPins(
+    List<PinEntity> toInsert,
+    List<PinEntity> toUpdate,
+  ) async {
+    await batch((b) {
+      // Batch inserts using insertOrReplace for conflict handling
+      for (final pin in toInsert) {
+        b.insert(pins, pin, mode: InsertMode.insertOrReplace);
+      }
+      // Batch updates
+      for (final pin in toUpdate) {
+        b.replace(pins, pin);
+      }
+    });
+  }
 }

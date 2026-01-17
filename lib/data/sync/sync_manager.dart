@@ -53,13 +53,15 @@ class SyncManager {
       await _optimizeQueue();
 
       // Step 2: Process queue (upload pending operations)
+      // Returns deleted pin IDs so we don't re-download them
       final uploadResult = await _processQueue();
       uploaded = uploadResult.uploaded;
       errors = uploadResult.errors;
       errorMessage = uploadResult.errorMessage;
 
       // Step 3: Download and merge remote changes
-      final downloadResult = await _downloadRemoteChanges();
+      // Pass deleted pin IDs to avoid re-inserting them
+      final downloadResult = await _downloadRemoteChanges(uploadResult.deletedPinIds);
       downloaded = downloadResult.downloaded;
       errors += downloadResult.errors;
       errorMessage ??= downloadResult.errorMessage;
@@ -129,15 +131,19 @@ class SyncManager {
   }
 
   /// Process the sync queue and upload operations to remote
-  Future<SyncResult> _processQueue() async {
+  ///
+  /// Returns a result that includes IDs of successfully deleted pins,
+  /// so they won't be re-downloaded during the download phase.
+  Future<_ProcessQueueResult> _processQueue() async {
     final operations = await _syncQueueDao.getPendingOperationsSorted();
     if (operations.isEmpty) {
-      return SyncResult(uploaded: 0, downloaded: 0, errors: 0);
+      return _ProcessQueueResult(uploaded: 0, errors: 0, deletedPinIds: {});
     }
 
     int uploaded = 0;
     int errors = 0;
     String? errorMessage;
+    final Set<String> deletedPinIds = {};
 
     for (final entity in operations) {
       final operation = SyncOperationMapper.fromEntity(entity);
@@ -159,6 +165,10 @@ class SyncManager {
       try {
         await _processOperation(operation);
         uploaded++;
+        // Track successfully deleted pins
+        if (operation.operationType == SyncOperationType.delete) {
+          deletedPinIds.add(operation.pinId);
+        }
         // Remove from queue on success
         await _syncQueueDao.dequeue(operation.id);
       } catch (e) {
@@ -169,11 +179,11 @@ class SyncManager {
       }
     }
 
-    return SyncResult(
+    return _ProcessQueueResult(
       uploaded: uploaded,
-      downloaded: 0,
       errors: errors,
       errorMessage: errorMessage,
+      deletedPinIds: deletedPinIds,
     );
   }
 
@@ -252,7 +262,11 @@ class SyncManager {
   }
 
   /// Download remote changes and merge with local database
-  Future<SyncResult> _downloadRemoteChanges() async {
+  ///
+  /// Uses batched operations to minimize stream emissions and improve performance.
+  /// [recentlyDeletedPinIds] contains IDs of pins that were just deleted in
+  /// the upload phase - these should not be re-inserted.
+  Future<SyncResult> _downloadRemoteChanges(Set<String> recentlyDeletedPinIds) async {
     int downloaded = 0;
     int errors = 0;
     String? errorMessage;
@@ -260,17 +274,55 @@ class SyncManager {
     try {
       final remotePins = await _remoteDataSource.getAllPins();
 
+      // Collect pins to insert/update in batch
+      final List<PinEntity> pinsToInsert = [];
+      final List<PinEntity> pinsToUpdate = [];
+
+      // Get all pending delete operations to avoid re-inserting deleted pins
+      final allPendingOps = await _syncQueueDao.getPendingOperationsSorted();
+      final pendingDeletePinIds = allPendingOps
+          .where((op) => op.operationType == 'DELETE')
+          .map((op) => op.pinId)
+          .toSet();
+
+      // Combine pending deletes with recently deleted pins from this sync cycle
+      final allDeletedPinIds = {...pendingDeletePinIds, ...recentlyDeletedPinIds};
+
       for (final remoteDto in remotePins) {
         try {
           final remotePinDomain = SupabasePinMapper.fromDto(remoteDto);
-          final wasMerged = await _mergeRemotePin(remotePinDomain);
-          if (wasMerged) {
+
+          // Skip pins that were deleted locally (pending or just processed)
+          if (allDeletedPinIds.contains(remotePinDomain.id)) {
+            continue;
+          }
+
+          final localEntity = await _pinDao.getPinById(remotePinDomain.id);
+          final remoteEntity = PinMapper.toEntity(remotePinDomain);
+
+          if (localEntity == null) {
+            // Pin doesn't exist locally - insert it
+            pinsToInsert.add(remoteEntity);
             downloaded++;
+          } else {
+            // Pin exists locally - compare timestamps
+            final localPin = PinMapper.fromEntity(localEntity);
+            if (remotePinDomain.metadata.lastModified.isAfter(localPin.metadata.lastModified)) {
+              // Remote is newer - update local
+              pinsToUpdate.add(remoteEntity);
+              downloaded++;
+            }
+            // else: local is newer or same, keep local
           }
         } catch (e) {
           errors++;
           errorMessage ??= e.toString();
         }
+      }
+
+      // Batch execute all inserts and updates in a single transaction
+      if (pinsToInsert.isNotEmpty || pinsToUpdate.isNotEmpty) {
+        await _pinDao.batchUpsertPins(pinsToInsert, pinsToUpdate);
       }
 
       return SyncResult(
@@ -288,39 +340,19 @@ class SyncManager {
       );
     }
   }
+}
 
-  /// Merge a remote pin with local database using conflict resolution
-  ///
-  /// Returns true if the pin was inserted or updated locally.
-  /// Returns false if the local version was kept (newer or same).
-  Future<bool> _mergeRemotePin(pin) async {
-    final localEntity = await _pinDao.getPinById(pin.id);
+/// Internal result class for _processQueue that includes deleted pin IDs
+class _ProcessQueueResult {
+  final int uploaded;
+  final int errors;
+  final String? errorMessage;
+  final Set<String> deletedPinIds;
 
-    // If pin doesn't exist locally, check if there's a pending DELETE
-    if (localEntity == null) {
-      // Check for pending DELETE operation - don't re-insert deleted pins
-      final pendingOps = await _syncQueueDao.getOperationsForPin(pin.id);
-      final hasPendingDelete = pendingOps.any((op) => op.operationType == 'DELETE');
-
-      if (hasPendingDelete) {
-        // Pin was deleted locally, don't re-insert from remote
-        return false;
-      }
-
-      await _pinDao.insertPin(PinMapper.toEntity(pin));
-      return true;
-    }
-
-    // Pin exists locally - compare timestamps for conflict resolution
-    final localPin = PinMapper.fromEntity(localEntity);
-
-    // If remote is newer, update local
-    if (pin.metadata.lastModified.isAfter(localPin.metadata.lastModified)) {
-      await _pinDao.updatePin(PinMapper.toEntity(pin));
-      return true;
-    }
-
-    // Local is newer or same, keep local
-    return false;
-  }
+  _ProcessQueueResult({
+    required this.uploaded,
+    required this.errors,
+    this.errorMessage,
+    required this.deletedPinIds,
+  });
 }
