@@ -35,7 +35,6 @@ class SyncManager {
   Future<SyncResult> sync() async {
     // Check if we're online
     if (!_networkMonitor.isOnline) {
-      print('[SyncManager] Offline, skipping sync');
       return SyncResult(
         uploaded: 0,
         downloaded: 0,
@@ -50,8 +49,6 @@ class SyncManager {
     String? errorMessage;
 
     try {
-      print('[SyncManager] Starting sync...');
-
       // Step 1: Optimize queue (remove redundant operations)
       await _optimizeQueue();
 
@@ -67,8 +64,6 @@ class SyncManager {
       errors += downloadResult.errors;
       errorMessage ??= downloadResult.errorMessage;
 
-      print('[SyncManager] Sync complete: uploaded=$uploaded, downloaded=$downloaded, errors=$errors');
-
       return SyncResult(
         uploaded: uploaded,
         downloaded: downloaded,
@@ -76,7 +71,6 @@ class SyncManager {
         errorMessage: errorMessage,
       );
     } catch (e) {
-      print('[SyncManager] Sync failed: $e');
       return SyncResult(
         uploaded: uploaded,
         downloaded: downloaded,
@@ -95,8 +89,6 @@ class SyncManager {
     final allOperations = await _syncQueueDao.getPendingOperationsSorted();
     if (allOperations.isEmpty) return;
 
-    print('[SyncManager] Optimizing queue (${allOperations.length} operations)');
-
     // Group operations by pinId
     final Map<String, List<SyncQueueEntity>> operationsByPin = {};
     for (final op in allOperations) {
@@ -105,7 +97,6 @@ class SyncManager {
 
     // Process each pin's operations
     for (final entry in operationsByPin.entries) {
-      final pinId = entry.key;
       final operations = entry.value;
 
       if (operations.length <= 1) continue; // Nothing to optimize
@@ -120,7 +111,6 @@ class SyncManager {
         // Remove all operations except the DELETE
         for (final op in operations) {
           if (op.id != deleteOp.id) {
-            print('[SyncManager] Removing redundant ${op.operationType} for pin $pinId (DELETE exists)');
             await _syncQueueDao.dequeue(op.id);
           }
         }
@@ -131,7 +121,6 @@ class SyncManager {
           // Sort by timestamp, keep latest
           updates.sort((a, b) => a.timestamp.compareTo(b.timestamp));
           for (int i = 0; i < updates.length - 1; i++) {
-            print('[SyncManager] Removing redundant UPDATE for pin $pinId (newer UPDATE exists)');
             await _syncQueueDao.dequeue(updates[i].id);
           }
         }
@@ -143,11 +132,8 @@ class SyncManager {
   Future<SyncResult> _processQueue() async {
     final operations = await _syncQueueDao.getPendingOperationsSorted();
     if (operations.isEmpty) {
-      print('[SyncManager] Queue is empty');
       return SyncResult(uploaded: 0, downloaded: 0, errors: 0);
     }
-
-    print('[SyncManager] Processing ${operations.length} queued operations');
 
     int uploaded = 0;
     int errors = 0;
@@ -158,7 +144,6 @@ class SyncManager {
 
       // Check if operation has exceeded max retries
       if (operation.hasExceededMaxRetries(maxRetries: _maxRetries)) {
-        print('[SyncManager] Operation ${operation.id} exceeded max retries, removing from queue');
         await _syncQueueDao.dequeue(operation.id);
         errors++;
         errorMessage ??= 'Some operations exceeded max retries';
@@ -167,7 +152,6 @@ class SyncManager {
 
       // Check if enough time has passed for retry
       if (!operation.canRetry()) {
-        print('[SyncManager] Operation ${operation.id} not ready for retry yet');
         continue;
       }
 
@@ -177,9 +161,7 @@ class SyncManager {
         uploaded++;
         // Remove from queue on success
         await _syncQueueDao.dequeue(operation.id);
-        print('[SyncManager] Successfully synced ${operation.operationType} for pin ${operation.pinId}');
       } catch (e) {
-        print('[SyncManager] Error syncing ${operation.operationType} for pin ${operation.pinId}: $e');
         errors++;
         errorMessage ??= e.toString();
         // Increment retry count
@@ -215,7 +197,6 @@ class SyncManager {
     // Get pin from local database
     final pinEntity = await _pinDao.getPinById(pinId);
     if (pinEntity == null) {
-      print('[SyncManager] Pin $pinId not found locally, skipping CREATE');
       return; // Pin was deleted locally, operation is now obsolete
     }
 
@@ -229,8 +210,7 @@ class SyncManager {
       if (e.toString().contains('duplicate') ||
           e.toString().contains('already exists') ||
           e.toString().contains('unique')) {
-        print('[SyncManager] Pin $pinId already exists remotely (idempotent)');
-        return; // Treat as success
+        return; // Treat as success (idempotent operation)
       }
       rethrow;
     }
@@ -241,7 +221,6 @@ class SyncManager {
     // Get pin from local database
     final pinEntity = await _pinDao.getPinById(pinId);
     if (pinEntity == null) {
-      print('[SyncManager] Pin $pinId not found locally, skipping UPDATE');
       return; // Pin was deleted locally, operation is now obsolete
     }
 
@@ -253,8 +232,7 @@ class SyncManager {
     } catch (e) {
       // Check if pin doesn't exist remotely (treat as success - it was deleted remotely)
       if (e.toString().contains('not found') || e.toString().contains('no rows')) {
-        print('[SyncManager] Pin $pinId not found remotely, skipping UPDATE');
-        return; // Treat as success
+        return; // Treat as success (pin deleted remotely)
       }
       rethrow;
     }
@@ -267,8 +245,7 @@ class SyncManager {
     } catch (e) {
       // Check if pin doesn't exist remotely (idempotent operation)
       if (e.toString().contains('not found') || e.toString().contains('no rows')) {
-        print('[SyncManager] Pin $pinId not found remotely (idempotent)');
-        return; // Treat as success
+        return; // Treat as success (idempotent operation)
       }
       rethrow;
     }
@@ -282,7 +259,6 @@ class SyncManager {
 
     try {
       final remotePins = await _remoteDataSource.getAllPins();
-      print('[SyncManager] Downloaded ${remotePins.length} pins from remote');
 
       for (final remoteDto in remotePins) {
         try {
@@ -292,7 +268,6 @@ class SyncManager {
             downloaded++;
           }
         } catch (e) {
-          print('[SyncManager] Error merging remote pin ${remoteDto.id}: $e');
           errors++;
           errorMessage ??= e.toString();
         }
@@ -305,7 +280,6 @@ class SyncManager {
         errorMessage: errorMessage,
       );
     } catch (e) {
-      print('[SyncManager] Error downloading remote changes: $e');
       return SyncResult(
         uploaded: 0,
         downloaded: downloaded,
@@ -324,7 +298,6 @@ class SyncManager {
 
     // If pin doesn't exist locally, insert it
     if (localEntity == null) {
-      print('[SyncManager] Inserting new remote pin: ${pin.id}');
       await _pinDao.insertPin(PinMapper.toEntity(pin));
       return true;
     }
@@ -334,13 +307,11 @@ class SyncManager {
 
     // If remote is newer, update local
     if (pin.metadata.lastModified.isAfter(localPin.metadata.lastModified)) {
-      print('[SyncManager] Remote pin is newer, updating local: ${pin.id}');
       await _pinDao.updatePin(PinMapper.toEntity(pin));
       return true;
     }
 
     // Local is newer or same, keep local
-    print('[SyncManager] Local pin is newer or same, keeping local: ${localPin.id}');
     return false;
   }
 }

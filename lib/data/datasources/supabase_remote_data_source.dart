@@ -15,9 +15,9 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   ///
   /// Returns empty list if no pins exist.
   /// Throws exception on API error.
+  @override
   Future<List<SupabasePinDto>> getAllPins() async {
     try {
-      print('[RemoteDataSource] Fetching all pins from Supabase...');
 
       final response = await _supabase
           .from('pins')
@@ -28,10 +28,8 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
           .map((json) => SupabasePinDto.fromJson(json as Map<String, dynamic>))
           .toList();
 
-      print('[RemoteDataSource] Fetched ${pins.length} pins');
       return pins;
     } catch (e) {
-      print('[RemoteDataSource] Error fetching pins: $e');
       rethrow;
     }
   }
@@ -39,17 +37,15 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   /// Insert a new pin to Supabase
   ///
   /// Throws exception if pin already exists or on API error.
+  @override
   Future<void> insertPin(SupabasePinDto pin) async {
     try {
-      print('[RemoteDataSource] Inserting pin: ${pin.id}');
 
       await _supabase
           .from('pins')
           .insert(pin.toJson());
 
-      print('[RemoteDataSource] Pin inserted successfully');
     } catch (e) {
-      print('[RemoteDataSource] Error inserting pin: $e');
       rethrow;
     }
   }
@@ -57,18 +53,16 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   /// Update an existing pin in Supabase
   ///
   /// Throws exception if pin doesn't exist or on API error.
+  @override
   Future<void> updatePin(SupabasePinDto pin) async {
     try {
-      print('[RemoteDataSource] Updating pin: ${pin.id}');
 
       await _supabase
           .from('pins')
           .update(pin.toJson())
           .eq('id', pin.id);
 
-      print('[RemoteDataSource] Pin updated successfully');
     } catch (e) {
-      print('[RemoteDataSource] Error updating pin: $e');
       rethrow;
     }
   }
@@ -77,18 +71,16 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   ///
   /// Throws exception on API error.
   /// Idempotent - no error if pin doesn't exist.
+  @override
   Future<void> deletePin(String pinId) async {
     try {
-      print('[RemoteDataSource] Deleting pin: $pinId');
 
       await _supabase
           .from('pins')
           .delete()
           .eq('id', pinId);
 
-      print('[RemoteDataSource] Pin deleted successfully');
     } catch (e) {
-      print('[RemoteDataSource] Error deleting pin: $e');
       rethrow;
     }
   }
@@ -97,9 +89,9 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   ///
   /// Returns null if pin doesn't exist.
   /// Throws exception on API error.
+  @override
   Future<SupabasePinDto?> getPinById(String pinId) async {
     try {
-      print('[RemoteDataSource] Fetching pin by ID: $pinId');
 
       final response = await _supabase
           .from('pins')
@@ -108,15 +100,12 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
           .maybeSingle();
 
       if (response == null) {
-        print('[RemoteDataSource] Pin not found: $pinId');
         return null;
       }
 
-      final pin = SupabasePinDto.fromJson(response as Map<String, dynamic>);
-      print('[RemoteDataSource] Pin fetched successfully');
+      final pin = SupabasePinDto.fromJson(response);
       return pin;
     } catch (e) {
-      print('[RemoteDataSource] Error fetching pin: $e');
       rethrow;
     }
   }

@@ -22,7 +22,6 @@ const String syncTaskUniqueName = 'sync-pins';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
-      print('[BackgroundSync] Starting background sync task: $task');
 
       // Load environment variables
       await dotenv.load(fileName: ".env");
@@ -42,7 +41,6 @@ void callbackDispatcher() {
 
       // Check if we're online
       if (!networkMonitor.isOnline) {
-        print('[BackgroundSync] Device is offline, skipping sync');
         networkMonitor.dispose();
         await database.close();
         return Future.value(true); // Return success even if offline
@@ -63,9 +61,6 @@ void callbackDispatcher() {
       // Perform sync
       final result = await syncManager.sync();
 
-      print('[BackgroundSync] Sync complete: uploaded=${result.uploaded}, '
-          'downloaded=${result.downloaded}, errors=${result.errors}');
-
       // Cleanup
       networkMonitor.dispose();
       await database.close();
@@ -73,7 +68,6 @@ void callbackDispatcher() {
       // Return true on success, false on failure
       return Future.value(result.isSuccess);
     } catch (e) {
-      print('[BackgroundSync] Error during background sync: $e');
       return Future.value(false);
     }
   });
@@ -101,9 +95,7 @@ Future<void> initializeBackgroundSync() async {
       backoffPolicyDelay: const Duration(seconds: 10),
     );
 
-    print('[BackgroundSync] Periodic sync registered (every 15 minutes)');
   } catch (e) {
-    print('[BackgroundSync] Failed to initialize background sync: $e');
   }
 }
 
@@ -111,8 +103,6 @@ Future<void> initializeBackgroundSync() async {
 Future<void> cancelBackgroundSync() async {
   try {
     await Workmanager().cancelByUniqueName(syncTaskUniqueName);
-    print('[BackgroundSync] Background sync cancelled');
   } catch (e) {
-    print('[BackgroundSync] Failed to cancel background sync: $e');
   }
 }

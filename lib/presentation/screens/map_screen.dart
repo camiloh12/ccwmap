@@ -12,6 +12,7 @@ import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/utils/error_messages.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
@@ -40,9 +41,6 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastDialogCloseTime;
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
-
-  // Track added symbols for removal
-  final List<Symbol> _addedSymbols = [];
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -337,18 +335,6 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Get hex color string for pin status
-  String _getColorForStatus(PinStatus status) {
-    switch (status) {
-      case PinStatus.ALLOWED:
-        return '#4CAF50'; // Green
-      case PinStatus.UNCERTAIN:
-        return '#FFC107'; // Yellow
-      case PinStatus.NO_GUN:
-        return '#F44336'; // Red
-    }
-  }
-
   /// Build GeoJSON FeatureCollection from pins
   Map<String, dynamic> _buildPinsGeoJson() {
     debugPrint('Building GeoJSON for ${_pins.length} pins');
@@ -498,45 +484,6 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('User location marker added successfully');
     } catch (e) {
       debugPrint('Error adding user location marker: $e');
-    }
-  }
-
-  /// Update user location marker position (for web platform)
-  Future<void> _updateUserLocationMarker() async {
-    if (!kIsWeb || _mapController == null || _currentLocation == null) return;
-
-    try {
-      // Update the GeoJSON source with new coordinates
-      final userLocationGeoJson = {
-        'type': 'FeatureCollection',
-        'features': [
-          {
-            'type': 'Feature',
-            'geometry': {
-              'type': 'Point',
-              'coordinates': [
-                _currentLocation!.longitude,
-                _currentLocation!.latitude,
-              ],
-            },
-            'properties': {
-              'type': 'user-location',
-            },
-          },
-        ],
-      };
-
-      // Check if source exists before updating
-      await _mapController!.setGeoJsonSource(
-        'user-location-source',
-        userLocationGeoJson,
-      );
-
-      debugPrint('User location marker updated');
-    } catch (e) {
-      debugPrint('Error updating user location marker: $e');
-      // If update fails, try to re-add the marker
-      await _addUserLocationMarker();
     }
   }
 
@@ -913,9 +860,10 @@ class _MapScreenState extends State<MapScreen> {
           } catch (e) {
             debugPrint('Error saving pin: $e');
             if (mounted) {
+              final friendlyMessage = ErrorMessages.getUserFriendlyMessage(e.toString());
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Error: ${e.toString()}'),
+                  content: Text(friendlyMessage),
                   duration: const Duration(seconds: 3),
                   backgroundColor: Colors.red,
                 ),
@@ -925,6 +873,9 @@ class _MapScreenState extends State<MapScreen> {
         },
         onDelete: isEditMode && pinId != null ? () async {
           debugPrint('Pin delete requested for ID: $pinId');
+
+          // Capture navigator before async operation
+          final navigator = Navigator.of(dialogContext, rootNavigator: true);
 
           // Show confirmation dialog
           final confirmed = await showDialog<bool>(
@@ -955,7 +906,7 @@ class _MapScreenState extends State<MapScreen> {
 
           if (confirmed == true) {
             // User confirmed deletion
-            Navigator.of(dialogContext, rootNavigator: true).pop();
+            navigator.pop();
 
             try {
               await _viewModel?.deletePin(pinId);
@@ -972,9 +923,10 @@ class _MapScreenState extends State<MapScreen> {
             } catch (e) {
               debugPrint('Error deleting pin: $e');
               if (mounted) {
+                final friendlyMessage = ErrorMessages.getUserFriendlyMessage(e.toString());
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error deleting pin: ${e.toString()}'),
+                    content: Text(friendlyMessage),
                     duration: const Duration(seconds: 3),
                     backgroundColor: Colors.red,
                   ),
@@ -1168,21 +1120,6 @@ class _MapScreenState extends State<MapScreen> {
            longitude <= maxLng;
   }
 
-  /// Get status name from color code
-  String _getStatusName(int? statusCode) {
-    if (statusCode == null) return 'Unknown';
-    switch (statusCode) {
-      case 0:
-        return 'ALLOWED (Green)';
-      case 1:
-        return 'UNCERTAIN (Yellow)';
-      case 2:
-        return 'NO_GUN (Red)';
-      default:
-        return 'Unknown';
-    }
-  }
-
   /// Re-center map to user's current location
   Future<void> _onRecenterTapped() async {
     debugPrint('Re-center button tapped');
@@ -1312,10 +1249,12 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          // MapLibre map widget wrapped in Listener for right-click on web
+    return Consumer<MapViewModel>(
+      builder: (context, viewModel, child) {
+        return Scaffold(
+          body: Stack(
+            children: [
+              // MapLibre map widget wrapped in Listener for right-click on web
           Listener(
             onPointerDown: (event) {
               // Detect right-click (secondary button) on web for creating pins
@@ -1360,12 +1299,15 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               ),
-              child: const Text(
-                'CCW Map',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+              child: Semantics(
+                label: 'CCW Map - Concealed Carry Weapon Map Application',
+                child: const Text(
+                  'CCW Map',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
             ),
@@ -1382,12 +1324,16 @@ class _MapScreenState extends State<MapScreen> {
               child: InkWell(
                 onTap: _onExitTapped,
                 borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  child: const Icon(
-                    Icons.exit_to_app,
-                    color: Colors.black87,
-                    size: 24,
+                child: Tooltip(
+                  message: 'Sign out',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    child: const Icon(
+                      Icons.exit_to_app,
+                      color: Colors.black87,
+                      size: 24,
+                      semanticLabel: 'Sign out button',
+                    ),
                   ),
                 ),
               ),
@@ -1402,14 +1348,86 @@ class _MapScreenState extends State<MapScreen> {
               onPressed: _onRecenterTapped,
               backgroundColor: const Color(0xFFE8DEF8), // Light purple/lavender
               elevation: 4,
+              tooltip: 'Re-center map to your location',
               child: const Icon(
                 Icons.my_location,
                 color: Colors.black87,
+                semanticLabel: 'Re-center map',
               ),
             ),
           ),
-        ],
-      ),
+
+          // Sync indicator (top-center, below title bar)
+          if (viewModel.isSyncing)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 60,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Syncing...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Initial loading overlay
+          if (viewModel.isLoading)
+            Container(
+              color: Colors.white.withValues(alpha: 0.9),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      'Loading map...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            ],
+          ),
+        );
+      },
     );
   }
 

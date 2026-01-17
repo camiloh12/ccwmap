@@ -4,7 +4,6 @@ import '../../domain/models/pin.dart';
 import '../../domain/models/sync_operation.dart';
 import '../../domain/repositories/pin_repository.dart';
 import '../database/database.dart';
-import '../datasources/remote_data_source_interface.dart';
 import '../mappers/pin_mapper.dart';
 import '../mappers/sync_operation_mapper.dart';
 import '../sync/sync_manager.dart';
@@ -101,13 +100,12 @@ class PinRepositoryImpl implements PinRepository {
   @override
   Future<SyncResult> syncWithRemote() async {
     // Delegate to SyncManager if available (Iteration 10+)
-    if (_syncManager != null) {
-      print('[PinRepository] Delegating sync to SyncManager');
-      return await _syncManager!.sync();
+    final syncManager = _syncManager;
+    if (syncManager != null) {
+      return await syncManager.sync();
     }
 
     // Fallback: No sync manager available
-    print('[PinRepository] No SyncManager available, skipping sync');
     return SyncResult(
       uploaded: 0,
       downloaded: 0,

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/mappers/sync_operation_mapper.dart';
 import 'package:ccwmap/domain/models/sync_operation.dart';
-import 'package:drift/drift.dart' as drift;
 
 void main() {
   group('SyncOperationMapper', () {

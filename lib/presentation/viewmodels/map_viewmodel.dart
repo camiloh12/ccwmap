@@ -32,18 +32,15 @@ class MapViewModel extends ChangeNotifier {
 
   /// Initialize the ViewModel and load data
   Future<void> initialize() async {
-    print('MapViewModel: Initializing...');
     _setLoading(true);
     try {
       // Start watching pins
       _pinsSubscription = _repository.watchPins().listen(
         (pins) {
-          print('MapViewModel: Received ${pins.length} pins from stream');
           _pins = pins;
           notifyListeners();
         },
         onError: (error) {
-          print('MapViewModel: Error in pins stream - $error');
           _setError(error.toString());
         },
       );
@@ -52,11 +49,9 @@ class MapViewModel extends ChangeNotifier {
       _wasOffline = !_networkMonitor.isOnline;
       _networkSubscription = _networkMonitor.isOnlineStream.listen(
         (isOnline) {
-          print('MapViewModel: Network changed - ${isOnline ? "ONLINE" : "OFFLINE"}');
 
           // Trigger sync when coming back online
           if (isOnline && _wasOffline) {
-            print('MapViewModel: Device reconnected, triggering sync...');
             syncWithRemote();
           }
 
@@ -68,13 +63,10 @@ class MapViewModel extends ChangeNotifier {
       if (_networkMonitor.isOnline) {
         syncWithRemote();
       } else {
-        print('MapViewModel: Device is offline, skipping initial sync');
       }
 
       _setLoading(false);
-      print('MapViewModel: Initialization complete. Total pins: ${_pins.length}');
     } catch (e) {
-      print('MapViewModel: Initialization error - $e');
       _setError(e.toString());
       _setLoading(false);
     }
@@ -157,7 +149,6 @@ class MapViewModel extends ChangeNotifier {
   /// Runs in background without blocking UI.
   Future<void> syncWithRemote() async {
     if (_isSyncing) {
-      print('MapViewModel: Sync already in progress, skipping');
       return;
     }
 
@@ -165,18 +156,14 @@ class MapViewModel extends ChangeNotifier {
       _isSyncing = true;
       notifyListeners();
 
-      print('MapViewModel: Starting sync with remote...');
       final result = await _repository.syncWithRemote();
 
       _lastSyncTime = DateTime.now();
-      print('MapViewModel: Sync complete - $result');
 
       if (!result.isSuccess) {
-        print('MapViewModel: Sync had errors: ${result.errorMessage}');
         // Don't set error state - sync errors are non-blocking
       }
     } catch (e) {
-      print('MapViewModel: Sync failed with exception: $e');
       // Don't set error state - sync failures are non-blocking
     } finally {
       _isSyncing = false;

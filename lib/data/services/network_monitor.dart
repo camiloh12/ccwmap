@@ -29,7 +29,6 @@ class NetworkMonitor {
 
       // Only emit if the state changed
       if (wasOnline != _isOnline) {
-        print('[NetworkMonitor] Connectivity changed: ${_isOnline ? "ONLINE" : "OFFLINE"}');
         _controller.add(_isOnline);
       }
     });
