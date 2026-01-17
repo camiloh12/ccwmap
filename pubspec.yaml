@@ -48,7 +48,7 @@ dependencies:
   connectivity_plus: ^6.0.0
 
   # Background task scheduling
-  workmanager: ^0.5.2
+  workmanager: ^0.6.0
 
   # Database
   drift: ^2.16.0

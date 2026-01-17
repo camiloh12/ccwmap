@@ -30,7 +30,8 @@
       "Bash(done)",
       "Bash(awk:*)",
       "Bash(cat:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(flutter clean:*)"
     ],
     "deny": [],
     "ask": []
