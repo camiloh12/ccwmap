@@ -296,8 +296,17 @@ class SyncManager {
   Future<bool> _mergeRemotePin(pin) async {
     final localEntity = await _pinDao.getPinById(pin.id);
 
-    // If pin doesn't exist locally, insert it
+    // If pin doesn't exist locally, check if there's a pending DELETE
     if (localEntity == null) {
+      // Check for pending DELETE operation - don't re-insert deleted pins
+      final pendingOps = await _syncQueueDao.getOperationsForPin(pin.id);
+      final hasPendingDelete = pendingOps.any((op) => op.operationType == 'DELETE');
+
+      if (hasPendingDelete) {
+        // Pin was deleted locally, don't re-insert from remote
+        return false;
+      }
+
       await _pinDao.insertPin(PinMapper.toEntity(pin));
       return true;
     }

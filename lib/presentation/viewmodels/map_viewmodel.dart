@@ -89,6 +89,9 @@ class MapViewModel extends ChangeNotifier {
 
       await _repository.addPin(pin);
       _clearError();
+
+      // Trigger immediate sync to upload the new pin
+      syncWithRemote();
     } catch (e) {
       _setError(e.toString());
       rethrow;
@@ -100,6 +103,9 @@ class MapViewModel extends ChangeNotifier {
     try {
       await _repository.updatePin(pin);
       _clearError();
+
+      // Trigger immediate sync to upload the changes
+      syncWithRemote();
     } catch (e) {
       _setError(e.toString());
       rethrow;
@@ -111,6 +117,9 @@ class MapViewModel extends ChangeNotifier {
     try {
       await _repository.deletePin(id);
       _clearError();
+
+      // Trigger immediate sync to propagate the deletion
+      syncWithRemote();
     } catch (e) {
       _setError(e.toString());
       rethrow;
