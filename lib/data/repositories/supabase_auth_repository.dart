@@ -79,16 +79,23 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Future<void> handleDeepLink(Uri uri) async {
     try {
-      // Extract tokens from URI fragment or query parameters
-      // Supabase sends tokens in the fragment for security (#access_token=...)
-      final fragment = uri.fragment;
-      final queryParams = Uri.splitQueryString(fragment);
+      // Check if this is a PKCE flow (token_hash in query params)
+      final tokenHash = uri.queryParameters['token_hash'];
+      final type = uri.queryParameters['type'];
 
-      if (queryParams.containsKey('access_token') &&
-          queryParams.containsKey('refresh_token')) {
-        await _supabase.auth.setSession(queryParams['access_token']!);
+      if (tokenHash != null && type != null) {
+        // PKCE flow: verify OTP with token_hash
+        await _supabase.auth.verifyOtp(
+          type: supabase.OtpType.values.firstWhere(
+            (t) => t.name == type,
+            orElse: () => supabase.OtpType.email,
+          ),
+          tokenHash: tokenHash,
+        );
       } else {
-        throw const supabase.AuthException('Invalid deep link: Missing tokens');
+        // Implicit flow: extract tokens from hash fragment
+        // This handles OAuth callbacks and legacy email confirmations
+        await _supabase.auth.getSessionFromUrl(uri);
       }
     } on supabase.AuthException {
       rethrow;

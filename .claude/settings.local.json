@@ -34,7 +34,8 @@
       "Bash(flutter clean:*)",
       "WebFetch(domain:supabase.com)",
       "Bash(gh api:*)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__supabase__search_docs"
     ],
     "deny": [],
     "ask": []

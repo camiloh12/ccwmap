@@ -202,12 +202,42 @@
             document.querySelector('.button').style.display = 'none';
             document.querySelector('.loading').style.display = 'block';
 
-            // Get the tokens from URL hash
+            // Get params from URL
+            const urlParams = new URLSearchParams(window.location.search);
             const hash = window.location.hash.substring(1);
+            const hashParams = new URLSearchParams(hash);
 
-            if (hash) {
-                // Try to open the deep link with tokens
-                const deepLink = `com.ccwmap.app://auth/callback#${hash}`;
+            // Debug logging
+            console.log('Full URL:', window.location.href);
+            console.log('Query params:', window.location.search);
+            console.log('Hash params:', hash);
+
+            // Check for PKCE flow (token_hash in query params)
+            const tokenHash = urlParams.get('token_hash');
+            const type = urlParams.get('type');
+
+            // Check for implicit flow (access_token in hash)
+            const accessToken = hashParams.get('access_token');
+            const refreshToken = hashParams.get('refresh_token');
+
+            let deepLink = null;
+
+            if (tokenHash && type) {
+                // PKCE flow - pass token_hash to app
+                deepLink = `com.ccwmap.app://auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=${encodeURIComponent(type)}`;
+                console.log('Using PKCE flow with token_hash');
+            } else if (accessToken && refreshToken) {
+                // Implicit flow - pass tokens in hash
+                deepLink = `com.ccwmap.app://auth/callback#access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
+                console.log('Using implicit flow with access tokens');
+            } else if (hash) {
+                // Fallback: pass entire hash
+                deepLink = `com.ccwmap.app://auth/callback#${hash}`;
+                console.log('Using fallback with full hash');
+            }
+
+            if (deepLink) {
+                console.log('Opening deep link:', deepLink);
                 window.location.href = deepLink;
 
                 // After 3 seconds, restore button and show message
@@ -215,7 +245,6 @@
                     document.querySelector('.loading').style.display = 'none';
                     document.querySelector('.button').style.display = 'inline-block';
 
-                    // Check if we're on mobile
                     if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                         alert('If the app didn\'t open, please install CCW Map from the Play Store or App Store first.');
                     } else {
@@ -223,7 +252,15 @@
                     }
                 }, 3000);
             } else {
-                alert('Invalid confirmation link. Please use the link from your email.');
+                // Show detailed error
+                const errorMsg = 'No authentication tokens found in URL.\n\n' +
+                                'URL: ' + window.location.href + '\n\n' +
+                                'Please ensure:\n' +
+                                '1. You clicked the link from your confirmation email\n' +
+                                '2. The redirect URLs are configured in Supabase\n' +
+                                '3. The email template uses the correct format';
+                alert(errorMsg);
+                console.error('No tokens found. Query:', window.location.search, 'Hash:', hash);
                 document.querySelector('.loading').style.display = 'none';
                 document.querySelector('.button').style.display = 'inline-block';
             }
@@ -231,6 +268,8 @@
 
         // Automatically try to open app on page load (mobile devices only)
         window.addEventListener('load', function() {
+            console.log('Page loaded with URL:', window.location.href);
+
             if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                 // Give user time to see the confirmation message
                 setTimeout(() => {
