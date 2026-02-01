@@ -31,7 +31,10 @@
       "Bash(awk:*)",
       "Bash(cat:*)",
       "Bash(grep:*)",
-      "Bash(flutter clean:*)"
+      "Bash(flutter clean:*)",
+      "WebFetch(domain:supabase.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
     "ask": []

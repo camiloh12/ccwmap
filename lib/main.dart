@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:app_links/app_links.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
 import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
@@ -119,6 +121,8 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
+  StreamSubscription<Uri>? _deepLinkSubscription;
+
   @override
   void initState() {
     super.initState();
@@ -127,7 +131,42 @@ class _AuthGateState extends State<AuthGate> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authViewModel = context.read<AuthViewModel>();
       authViewModel.initialize();
+      _initializeDeepLinkListener(authViewModel);
     });
+  }
+
+  Future<void> _initializeDeepLinkListener(AuthViewModel authViewModel) async {
+    final appLinks = AppLinks();
+
+    // Handle initial deep link (cold start - app was closed)
+    try {
+      final initialLink = await appLinks.getInitialLink();
+      if (initialLink != null) {
+        debugPrint('AuthGate: Processing initial deep link: $initialLink');
+        await authViewModel.handleDeepLink(initialLink);
+      }
+    } catch (e) {
+      debugPrint('AuthGate: Failed to process initial deep link: $e');
+      authViewModel.setError('Failed to process authentication link.');
+    }
+
+    // Listen to runtime deep links (app is already open)
+    _deepLinkSubscription = appLinks.uriLinkStream.listen(
+      (Uri uri) {
+        debugPrint('AuthGate: Processing runtime deep link: $uri');
+        authViewModel.handleDeepLink(uri);
+      },
+      onError: (err) {
+        debugPrint('AuthGate: Deep link stream error: $err');
+        authViewModel.setError('Failed to process authentication link.');
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _deepLinkSubscription?.cancel();
+    super.dispose();
   }
 
   @override

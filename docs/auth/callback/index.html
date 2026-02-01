@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Your CCW Map Account</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            max-width: 500px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+            text-align: center;
+        }
+
+        .checkmark {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #4CAF50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+
+        .checkmark::after {
+            content: "✓";
+            color: white;
+            font-size: 50px;
+            font-weight: bold;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .instructions {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            text-align: left;
+        }
+
+        .instructions h3 {
+            color: #333;
+            margin-bottom: 16px;
+            font-size: 18px;
+        }
+
+        .instruction-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .instruction-icon {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #667eea;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-weight: bold;
+        }
+
+        .instruction-text {
+            flex: 1;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .instruction-text strong {
+            color: #333;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .button {
+            background: #667eea;
+            color: white;
+            padding: 14px 32px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+
+        .button:hover {
+            background: #5568d3;
+        }
+
+        .footer {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #eee;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="checkmark"></div>
+        <h1>Email Confirmed!</h1>
+        <p class="subtitle">Your CCW Map account has been verified.</p>
+
+        <div class="instructions">
+            <h3>Next Steps</h3>
+
+            <div class="instruction-item">
+                <div class="instruction-icon">1</div>
+                <div class="instruction-text">
+                    <strong>On Mobile Device</strong>
+                    The CCW Map app should open automatically. If not, tap the button below.
+                </div>
+            </div>
+
+            <div class="instruction-item">
+                <div class="instruction-icon">2</div>
+                <div class="instruction-text">
+                    <strong>On Desktop</strong>
+                    Open the CCW Map app on your phone and sign in with your email and password.
+                </div>
+            </div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 10px; color: #666;">Opening app...</p>
+        </div>
+
+        <button class="button" onclick="tryOpenApp()">Open CCW Map App</button>
+
+        <div class="footer">
+            Need help? Contact support or check the app for more information.
+        </div>
+    </div>
+
+    <script>
+        function tryOpenApp() {
+            // Show loading indicator
+            document.querySelector('.button').style.display = 'none';
+            document.querySelector('.loading').style.display = 'block';
+
+            // Get the tokens from URL hash
+            const hash = window.location.hash.substring(1);
+
+            if (hash) {
+                // Try to open the deep link with tokens
+                const deepLink = `com.ccwmap.app://auth/callback#${hash}`;
+                window.location.href = deepLink;
+
+                // After 3 seconds, restore button and show message
+                setTimeout(() => {
+                    document.querySelector('.loading').style.display = 'none';
+                    document.querySelector('.button').style.display = 'inline-block';
+
+                    // Check if we're on mobile
+                    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                        alert('If the app didn\'t open, please install CCW Map from the Play Store or App Store first.');
+                    } else {
+                        alert('Please open CCW Map on your mobile device and sign in.');
+                    }
+                }, 3000);
+            } else {
+                alert('Invalid confirmation link. Please use the link from your email.');
+                document.querySelector('.loading').style.display = 'none';
+                document.querySelector('.button').style.display = 'inline-block';
+            }
+        }
+
+        // Automatically try to open app on page load (mobile devices only)
+        window.addEventListener('load', function() {
+            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                // Give user time to see the confirmation message
+                setTimeout(() => {
+                    tryOpenApp();
+                }, 1500);
+            }
+        });
+    </script>
+</body>
+</html>

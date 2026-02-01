@@ -137,6 +137,12 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets an error message (used by deep link listener)
+  void setError(String message) {
+    _error = message;
+    notifyListeners();
+  }
+
   // Private helpers
 
   void _setLoading(bool value) {

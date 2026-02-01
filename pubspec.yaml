@@ -66,6 +66,9 @@ dependencies:
   supabase_flutter: ^2.3.0
   flutter_secure_storage: ^10.0.0
 
+  # Deep linking for email confirmation
+  app_links: ^6.4.1
+
   # HTTP client for API calls
   http: ^1.1.0
 
