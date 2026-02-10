@@ -85,7 +85,7 @@ class SupabaseAuthRepository implements AuthRepository {
 
       if (tokenHash != null && type != null) {
         // PKCE flow: verify OTP with token_hash
-        await _supabase.auth.verifyOtp(
+        await _supabase.auth.verifyOTP(
           type: supabase.OtpType.values.firstWhere(
             (t) => t.name == type,
             orElse: () => supabase.OtpType.email,
