@@ -34,8 +34,8 @@ android {
         applicationId = "com.ccwmap.app"
         minSdk = flutter.minSdkVersion  // Minimum Android 5.0 (Lollipop)
         targetSdk = 35  // Required for 2026 Play Store compliance
-        versionCode = 2
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.1.1"
     }
 
     signingConfigs {
@@ -48,6 +48,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-DEBUG"
+            // Debug builds use debug signing automatically
+        }
+
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true

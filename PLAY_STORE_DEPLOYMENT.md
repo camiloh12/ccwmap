@@ -162,18 +162,18 @@
 ## Phase 4: Play Console Setup
 
 ### 4.1 Create App in Play Console
-- [ ] Go to [Play Console](https://play.google.com/console)
-- [ ] Sign in with your developer account
-- [ ] Click **Create app**
-- [ ] Fill in form:
-  - [ ] App name: `CCW Map`
-  - [ ] Default language: `English (United States)`
-  - [ ] App or game: Select `App`
-  - [ ] Free or paid: Select `Free`
-  - [ ] Declarations: Check all required boxes
-- [ ] Click **Create app** button
-- [ ] Wait for app to be created
-- [ ] Note your App ID: `_________________________________`
+- [x] Go to [Play Console](https://play.google.com/console)
+- [x] Sign in with your developer account
+- [x] Click **Create app**
+- [x] Fill in form:
+  - [x] App name: `CCW Map`
+  - [x] Default language: `English (United States)`
+  - [x] App or game: Select `App`
+  - [x] Free or paid: Select `Free`
+  - [x] Declarations: Check all required boxes
+- [x] Click **Create app** button
+- [x] Wait for app to be created
+- [x] Note your App ID: `com.ccwmap.app` (Package name / Application ID)
 
 ### 4.2 Enable Play App Signing
 - [ ] Navigate to **Release > Setup > App signing**
@@ -184,81 +184,81 @@
 - [ ] **Status should show:** "Managed by Google Play"
 
 ### 4.3 Complete Data Safety Form (CRITICAL FOR 2026)
-- [ ] Navigate to **App content > Data safety**
-- [ ] Click **Start** or **Edit**
-- [ ] Answer questions about data collection:
-  - [ ] **Location data:** Yes - Precise location (for pin mapping)
-  - [ ] **User account information:** Yes - Email addresses (authentication)
-  - [ ] **Photos/videos/audio:** No (unless added photo feature)
-  - [ ] **Calendar:** No
-  - [ ] **Contacts:** No
-  - [ ] **SMS:** No
-  - [ ] **Payment information:** No
-  - [ ] **Health/fitness:** No
-  - [ ] **Other personal info:** No
-- [ ] For each selected data type, answer:
-  - [ ] Is collection optional? `☐ Yes / ☐ No`
-  - [ ] Data usage: `App functionality`
-  - [ ] Shared with third parties? `☐ No`
-  - [ ] Encrypted in transit? `☐ Yes`
-  - [ ] Users can request deletion? `☐ Yes`
-- [ ] Complete security practices section:
-  - [ ] Data encrypted in transit: `☐ Yes`
-  - [ ] Committed to compliance: `☐ Checked`
-  - [ ] Authorized to bind by terms: `☐ Checked`
-- [ ] Click **Save and continue**
-- [ ] Verify form shows as complete with checkmark
+- [x] Navigate to **App content > Data safety**
+- [x] Click **Start** or **Edit**
+- [x] Answer questions about data collection:
+  - [x] **Location data:** Yes - Precise location (for pin mapping)
+  - [x] **User account information:** Yes - Email addresses (authentication)
+  - [x] **Photos/videos/audio:** No
+  - [x] **Calendar:** No
+  - [x] **Contacts:** No
+  - [x] **SMS:** No
+  - [x] **Payment information:** No
+  - [x] **Health/fitness:** No
+  - [x] **Other personal info:** No
+- [x] For each selected data type, answer:
+  - [x] Is collection optional? No (required for functionality)
+  - [x] Data usage: `App functionality`
+  - [x] Shared with third parties? No
+  - [x] Encrypted in transit? Yes
+  - [x] Users can request deletion? Yes
+- [x] Complete security practices section:
+  - [x] Data encrypted in transit: Yes
+  - [x] Committed to compliance: Checked
+  - [x] Authorized to bind by terms: Checked
+- [x] Click **Save and continue**
+- [x] Verify form shows as complete with checkmark
 
 ### 4.4 Set Content Rating
-- [ ] Go to **App content > Content rating**
-- [ ] If first time: Click **Fill out questionnaire**
-- [ ] Answer questions (CCW Map is informational, not violent):
-  - [ ] Violence: `None` or `Minimal`
-  - [ ] Profanity: `None`
-  - [ ] Sexual content: `None`
-  - [ ] Substance abuse: `None`
-  - [ ] Gambling: `None`
-  - [ ] Other: `None`
-- [ ] Click **Submit questionnaire**
-- [ ] View assigned rating:
-  - [ ] Should be PEGI 3 or ESRB E
-- [ ] Note rating: `_________________________________`
+- [x] Go to **App content > Content rating**
+- [x] If first time: Click **Fill out questionnaire**
+- [x] Answer questions (CCW Map is informational, not violent):
+  - [x] Violence: `None`
+  - [x] Profanity: `None`
+  - [x] Sexual content: `None`
+  - [x] Substance abuse: `None`
+  - [x] Gambling: `None`
+  - [x] Other: `None`
+- [x] Click **Submit questionnaire**
+- [x] View assigned rating:
+  - [x] Rating received (informational app)
+- [x] Note rating: **Completed**
 
 ### 4.5 Add Privacy Policy URL
-- [ ] Go to **App content > Privacy policy**
-- [ ] Enter hosted URL: `https://camiloh12.github.io/ccwmap/privacy-policy.html`
-- [ ] Click **Save**
-- [ ] Verify status shows as complete
-- [ ] Test URL in browser to confirm it's accessible
+- [x] Go to **App content > Privacy policy**
+- [x] Enter hosted URL: `https://camiloh12.github.io/ccwmap/privacy-policy.html`
+- [x] Click **Save**
+- [x] Verify status shows as complete
+- [x] Test URL in browser to confirm it's accessible
 
 ### 4.6 Set Target Audience and Content
-- [ ] Go to **App content > Target audience**
-- [ ] Select primary target age: `18+` (firearm-related content)
-- [ ] For content guidelines:
-  - [ ] Content rating: Verified (from 4.4)
-  - [ ] Apps for kids: `No`
-  - [ ] Advertisements: `No` (unless you've added ad networks)
-  - [ ] User-generated content: `Yes` (pins are user-generated)
-  - [ ] Financial transactions: `No`
-  - [ ] Sensitive information: `Yes` (location data collected)
-- [ ] Click **Save**
+- [x] Go to **App content > Target audience**
+- [x] Select primary target age: `18+` (firearm-related content)
+- [x] For content guidelines:
+  - [x] Content rating: Verified (from 4.4)
+  - [x] Apps for kids: `No`
+  - [x] Advertisements: `No`
+  - [x] User-generated content: `Yes` (pins are user-generated)
+  - [x] Financial transactions: `No`
+  - [x] Sensitive information: `Yes` (location data collected)
+- [x] Click **Save**
 
 ---
 
 ## Phase 5: Create Store Listing
 
 ### 5.1 Main Store Listing Setup
-- [ ] Go to **Main store listing** or **Manage > Main store listing**
-- [ ] Fill in basic information:
-  - [ ] **App name:** `CCW Map` (max 50 chars)
-  - [ ] **Short description:** (max 80 chars)
+- [x] Go to **Main store listing** or **Manage > Main store listing**
+- [x] Fill in basic information:
+  - [x] **App name:** `CCW Map` (max 50 chars)
+  - [x] **Short description:** (max 80 chars)
     ```
     Collaborative map of concealed carry weapon zones across the United States
     ```
-  - [ ] Copy short description here for reference: `_________________________________`
+  - [x] Short description: "Collaborative map of concealed carry weapon zones across the United States"
 
 ### 5.2 Full Description
-- [ ] In **Full description** field (max 4000 chars), paste:
+- [x] In **Full description** field (max 4000 chars), paste:
   ```
   CCW Map helps responsible gun owners navigate concealed carry laws by crowdsourcing information about CCW-friendly and restricted zones.
 
@@ -278,45 +278,51 @@
 
   Note: This app provides user-contributed information and should not be considered legal advice. Always verify local laws and regulations.
   ```
-- [ ] Click **Save**
-- [ ] Verify character count is under 4000
+- [x] Click **Save**
+- [x] Verify character count is under 4000
 
 ### 5.3 Upload App Icon
-- [ ] Create or obtain 512 x 512 PNG app icon with alpha channel
-- [ ] Icon should be square with rounded corners
-- [ ] Go to **App icon** section
-- [ ] Click **Upload image**
-- [ ] Select your 512x512 PNG file
-- [ ] Verify preview looks correct
-- [ ] Icon should be memorable and clear at small sizes
-- [ ] File path/name: `_________________________________`
+- [x] Create or obtain 512 x 512 PNG app icon with alpha channel
+- [x] Icon should be square with rounded corners
+- [x] Go to **App icon** section
+- [x] Click **Upload image**
+- [x] Select your 512x512 PNG file
+- [x] Verify preview looks correct
+- [x] Icon should be memorable and clear at small sizes
+- [x] File uploaded and verified
 
 ### 5.4 Upload Feature Graphic
-- [ ] Create or obtain 1024 x 500 feature graphic (JPG or PNG)
-- [ ] Should showcase app key features (map with pins)
-- [ ] Go to **Feature graphic** section
-- [ ] Click **Upload image**
-- [ ] Select your 1024x500 file
-- [ ] Verify preview looks good
-- [ ] File path/name: `_________________________________`
+- [x] Create or obtain 1024 x 500 feature graphic (JPG or PNG)
+- [x] Should showcase app key features (map with pins)
+- [x] Go to **Feature graphic** section
+- [x] Click **Upload image**
+- [x] Select your 1024x500 file
+- [x] Verify preview looks good
+- [x] File uploaded and verified
 
 ### 5.5 Upload Phone Screenshots (MINIMUM 2, MAXIMUM 8)
-- [ ] Create 2-8 screenshots showing app interface
-- [ ] Each screenshot must be:
-  - [ ] 16:9 or 9:16 aspect ratio
-  - [ ] JPG or PNG format
-  - [ ] Minimum 320px on shortest side
-- [ ] Suggested screenshots:
-  - [ ] Screenshot 1: Map view with multiple pins
-  - [ ] Screenshot 2: Pin detail dialog
-  - [ ] Screenshot 3: Pin creation dialog
-  - [ ] Screenshot 4: Status color legend
-  - [ ] Screenshot 5: Offline functionality highlight
-- [ ] Go to **Phone screenshots** section
-- [ ] Click **Add screenshot** (repeat 2-8 times)
-- [ ] Upload each screenshot in order
-- [ ] Add optional captions explaining each (e.g., "Browse CCW zones on interactive map")
-- [ ] Verify all uploads completed
+- [x] Create 2-8 screenshots showing app interface - **5 screenshots created**
+- [x] Each screenshot must be:
+  - [x] 9:16 aspect ratio (portrait)
+  - [x] PNG format
+  - [x] Minimum 320px on shortest side
+- [x] Screenshots captured:
+  - [x] Screenshot 1: Sign In / Authentication screen
+  - [x] Screenshot 2: Map view with multiple pins (green/red)
+  - [x] Screenshot 3: Create Pin dialog
+  - [x] Screenshot 4: Edit Pin dialog (Allowed - Publix)
+  - [x] Screenshot 5: Edit Pin dialog (Restricted - Hospital with tags)
+- [x] Go to **Phone screenshots** section
+- [x] Click **Add screenshot** (5 times)
+- [x] Upload each screenshot in order
+- [x] Add optional captions:
+  - "Secure authentication with email verification"
+  - "Interactive map showing CCW-friendly and restricted zones"
+  - "Easy pin creation with color-coded status indicators"
+  - "Edit locations with detailed information"
+  - "Specify restriction reasons for no-carry zones"
+- [x] Verify all uploads completed
+- [x] **Screenshots saved in:** `assets/screenshots/` (version controlled)
 
 ### 5.6 Optional: Upload Tablet Screenshots
 - [ ] If tablet layout is significantly different, consider tablet screenshots
@@ -329,29 +335,29 @@
 - [ ] Note: For first release, phone screenshots are sufficient
 
 ### 5.7 Set Category
-- [ ] Go to **Category** section
-- [ ] Select: `Maps & Navigation`
-- [ ] Optional tags (space-separated):
-  - [ ] Add: `travel safety location firearm concealed-carry`
-- [ ] Save
+- [x] Go to **Category** section
+- [x] Select: `Maps & Navigation`
+- [x] Optional tags (space-separated):
+  - [x] Add: `travel safety location firearm concealed-carry`
+- [x] Save
 
 ### 5.8 Contact Details
-- [ ] Go to **Contact details** section
-- [ ] **Email:** `_________________________________`
-- [ ] **Phone:** (optional) `_________________________________`
-- [ ] **Website:** `https://github.com/camiloh12/ccwmap`
-- [ ] Save
+- [x] Go to **Contact details** section
+- [x] **Email:** Provided
+- [x] **Phone:** (optional) Not provided
+- [x] **Website:** `https://github.com/camiloh12/ccwmap`
+- [x] Save
 
 ### 5.9 Verify Complete Store Listing
-- [ ] Check all sections marked with green checkmark:
-  - [ ] ✓ Short description
-  - [ ] ✓ Full description
-  - [ ] ✓ App icon
-  - [ ] ✓ Feature graphic
-  - [ ] ✓ Phone screenshots (2+)
-  - [ ] ✓ Category
-  - [ ] ✓ Contact details
-- [ ] Preview how listing will appear in Play Store
+- [x] Check all sections marked with green checkmark:
+  - [x] ✓ Short description
+  - [x] ✓ Full description
+  - [x] ✓ App icon (512x512)
+  - [x] ✓ Feature graphic (1024x500)
+  - [x] ✓ Phone screenshots (5 screenshots uploaded)
+  - [x] ✓ Category (Maps & Navigation)
+  - [x] ✓ Contact details
+- [x] Preview how listing will appear in Play Store
 
 ---
 

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground>
+        <layer-list>
+            <!-- Original icon -->
+            <item android:drawable="@drawable/ic_launcher_foreground"/>
+            <!-- Debug badge overlay in top-right corner -->
+            <item
+                android:width="40dp"
+                android:height="20dp"
+                android:gravity="top|end"
+                android:drawable="@drawable/debug_badge"/>
+        </layer-list>
+    </foreground>
+</adaptive-icon>

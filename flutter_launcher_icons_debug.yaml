@@ -1,0 +1,10 @@
+# Debug icon configuration - generates icons with red border
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/app_icon.png"
+  adaptive_icon_background: "#FF0000"  # Red background for debug
+  adaptive_icon_foreground: "assets/icon/app_icon.png"
+
+  # This will be manually run to generate debug icons
+  # Run: dart run flutter_launcher_icons -f flutter_launcher_icons_debug.yaml
