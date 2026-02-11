@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug badge colors -->
+    <color name="debug_badge_background">#FF0000</color>
+    <color name="debug_badge_text">#FFFFFF</color>
+</resources>
