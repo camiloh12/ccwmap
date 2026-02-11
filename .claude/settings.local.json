@@ -35,7 +35,10 @@
       "WebFetch(domain:supabase.com)",
       "Bash(gh api:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "mcp__supabase__search_docs"
+      "mcp__supabase__search_docs",
+      "Bash(./gradlew tasks:*)",
+      "Bash(./gradlew help:*)",
+      "Bash(./gradlew signingReport:*)"
     ],
     "deny": [],
     "ask": []
