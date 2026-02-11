@@ -35,7 +35,7 @@ android {
         minSdk = flutter.minSdkVersion  // Minimum Android 5.0 (Lollipop)
         targetSdk = 35  // Required for 2026 Play Store compliance
         versionCode = 3
-        versionName = "0.1.0"
+        versionName = "0.1.1"
     }
 
     signingConfigs {

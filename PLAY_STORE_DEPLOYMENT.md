@@ -301,22 +301,28 @@
 - [x] File uploaded and verified
 
 ### 5.5 Upload Phone Screenshots (MINIMUM 2, MAXIMUM 8)
-- [ ] Create 2-8 screenshots showing app interface
-- [ ] Each screenshot must be:
-  - [ ] 16:9 or 9:16 aspect ratio
-  - [ ] JPG or PNG format
-  - [ ] Minimum 320px on shortest side
-- [ ] Suggested screenshots:
-  - [ ] Screenshot 1: Map view with multiple pins
-  - [ ] Screenshot 2: Pin detail dialog
-  - [ ] Screenshot 3: Pin creation dialog
-  - [ ] Screenshot 4: Status color legend
-  - [ ] Screenshot 5: Offline functionality highlight
-- [ ] Go to **Phone screenshots** section
-- [ ] Click **Add screenshot** (repeat 2-8 times)
-- [ ] Upload each screenshot in order
-- [ ] Add optional captions explaining each (e.g., "Browse CCW zones on interactive map")
-- [ ] Verify all uploads completed
+- [x] Create 2-8 screenshots showing app interface - **5 screenshots created**
+- [x] Each screenshot must be:
+  - [x] 9:16 aspect ratio (portrait)
+  - [x] PNG format
+  - [x] Minimum 320px on shortest side
+- [x] Screenshots captured:
+  - [x] Screenshot 1: Sign In / Authentication screen
+  - [x] Screenshot 2: Map view with multiple pins (green/red)
+  - [x] Screenshot 3: Create Pin dialog
+  - [x] Screenshot 4: Edit Pin dialog (Allowed - Publix)
+  - [x] Screenshot 5: Edit Pin dialog (Restricted - Hospital with tags)
+- [x] Go to **Phone screenshots** section
+- [x] Click **Add screenshot** (5 times)
+- [x] Upload each screenshot in order
+- [x] Add optional captions:
+  - "Secure authentication with email verification"
+  - "Interactive map showing CCW-friendly and restricted zones"
+  - "Easy pin creation with color-coded status indicators"
+  - "Edit locations with detailed information"
+  - "Specify restriction reasons for no-carry zones"
+- [x] Verify all uploads completed
+- [x] **Screenshots saved in:** `assets/screenshots/` (version controlled)
 
 ### 5.6 Optional: Upload Tablet Screenshots
 - [ ] If tablet layout is significantly different, consider tablet screenshots
@@ -346,12 +352,12 @@
 - [x] Check all sections marked with green checkmark:
   - [x] ✓ Short description
   - [x] ✓ Full description
-  - [x] ✓ App icon
-  - [x] ✓ Feature graphic
-  - [ ] ✓ Phone screenshots (2+) - **PENDING**
-  - [x] ✓ Category
+  - [x] ✓ App icon (512x512)
+  - [x] ✓ Feature graphic (1024x500)
+  - [x] ✓ Phone screenshots (5 screenshots uploaded)
+  - [x] ✓ Category (Maps & Navigation)
   - [x] ✓ Contact details
-- [x] Preview how listing will appear in Play Store (once screenshots added)
+- [x] Preview how listing will appear in Play Store
 
 ---
 
