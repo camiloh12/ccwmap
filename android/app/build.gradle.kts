@@ -18,7 +18,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.ccwmap.ccwmap"
-    compileSdk = 35  // Required for 2026 Play Store compliance
+    compileSdk = 36  // Required by dependencies (androidx.browser, androidx.core)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -32,10 +32,10 @@ android {
 
     defaultConfig {
         applicationId = "com.ccwmap.app"
-        minSdk = 21  // Minimum Android 5.0 (Lollipop)
+        minSdk = flutter.minSdkVersion  // Minimum Android 5.0 (Lollipop)
         targetSdk = 35  // Required for 2026 Play Store compliance
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "0.1.0"
     }
 
     signingConfigs {

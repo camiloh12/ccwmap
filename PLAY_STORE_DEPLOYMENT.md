@@ -138,18 +138,24 @@
 ## Phase 3: Build Release Bundle
 
 ### 3.1 Clean and Build
-- [ ] Run: `flutter clean`
-- [ ] Run: `flutter pub get`
-- [ ] Run: `flutter build appbundle --release`
-- [ ] Wait for completion (may take 2-5 minutes)
-- [ ] Verify no errors in output
+- [x] Run: `flutter clean` - **Completed**
+- [x] Run: `flutter pub get` - **Completed**
+- [x] Run: `flutter build appbundle --release` - **Completed**
+- [x] Wait for completion (may take 2-5 minutes) - **Took 1m 16s**
+- [x] Verify no errors in output - **Gradle BUILD SUCCESSFUL**
+- [x] Note: Debug symbol stripping warning is non-critical (cmdline-tools issue)
+- [x] Updated `compileSdk` to 36 (required by androidx dependencies)
 
 ### 3.2 Verify Build Output
-- [ ] Check file exists: `build/app/outputs/bundle/release/app-release.aab`
-- [ ] Check file size: `ls -lh build/app/outputs/bundle/release/app-release.aab`
-- [ ] Verify size is under 150MB
-- [ ] **BACKUP** `app-release.aab` file to secure location
-- [ ] Note the exact file path: `_________________________________`
+- [x] Check file exists: `build/app/outputs/bundle/release/app-release.aab` - **Confirmed**
+- [x] Check file size: `ls -lh build/app/outputs/bundle/release/app-release.aab` - **59 MB**
+- [x] Verify size is under 150MB - **✓ Well under limit (59 MB / 150 MB)**
+- [x] Verify AAB is signed - **✓ Signed with upload keystore (SHA384withRSA)**
+  - Signer: CN=Camilo Hurtado, O=Kybernetic Labs, L=Tampa, ST=Florida, C=US
+  - Valid: 2/10/26 to 6/28/53
+  - MD5: `bf3be1bd77602376dda2e3a4cea515e5`
+- [ ] **BACKUP** `app-release.aab` file to secure location - **ACTION REQUIRED**
+- [x] Note the exact file path: `C:\Users\camil\projects\ccwmap\build\app\outputs\bundle\release\app-release.aab`
 
 ---
 
@@ -220,7 +226,7 @@
 
 ### 4.5 Add Privacy Policy URL
 - [ ] Go to **App content > Privacy policy**
-- [ ] Enter hosted URL: `https://camiloh12.github.io/ccwmap/privacy.html`
+- [ ] Enter hosted URL: `https://camiloh12.github.io/ccwmap/privacy-policy.html`
 - [ ] Click **Save**
 - [ ] Verify status shows as complete
 - [ ] Test URL in browser to confirm it's accessible
@@ -365,7 +371,7 @@
   - [ ] Wait for upload and validation
 - [ ] In **Release notes** (what's new):
   ```
-  Initial beta release - v1.0.0
+  Initial beta release - v0.1.0
 
   Features:
   - Interactive map of concealed carry zones
