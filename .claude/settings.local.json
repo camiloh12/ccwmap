@@ -41,7 +41,9 @@
       "Bash(./gradlew signingReport:*)",
       "Bash(\"/c/Program Files/Java/jdk-21/bin/jarsigner.exe\" -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab)",
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java.exe\" -jar \"/c/Program Files/Android/Android Studio/plugins/android/lib/bundletool.jar\" dump manifest build/app/outputs/bundle/release/app-release.aab)",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "Bash(ls:*)",
+      "Bash(identify:*)"
     ],
     "deny": [],
     "ask": []
