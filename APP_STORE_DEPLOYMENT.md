@@ -38,14 +38,14 @@
   - [x] Address
 - [x] Agree to Apple Developer Program License Agreement
 - [x] Pay $99 USD annual fee
-- [ ] Wait for enrollment approval (typically 24-48 hours)
-- [ ] Confirmation email received: `_________________________________`
+- [x] Wait for enrollment approval (typically 24-48 hours)
+- [x] Confirmation email received: `_________________________________`
 
 ### 0.4 Verify Account Access
-- [ ] Sign in to [App Store Connect](https://appstoreconnect.apple.com)
-- [ ] Sign in to [Apple Developer Portal](https://developer.apple.com/account)
-- [ ] Note your **Team ID** (visible in Membership section): `_________________________________`
-- [ ] Note your **Apple ID** used for enrollment: `_________________________________`
+- [x] Sign in to [App Store Connect](https://appstoreconnect.apple.com)
+- [x] Sign in to [Apple Developer Portal](https://developer.apple.com/account)
+- [x] Note your **Team ID** (visible in Membership section): `_________________________________`
+- [x] Note your **Apple ID** used for enrollment: `_________________________________`
 
 ---
 
