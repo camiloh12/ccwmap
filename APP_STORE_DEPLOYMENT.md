@@ -157,7 +157,7 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
   ```
 
 ### 2.4 Add Privacy Manifest (Required 2024+)
-- [ ] Create `ios/Runner/PrivacyInfo.xcprivacy` if it doesn't exist
+- [x] Create `ios/Runner/PrivacyInfo.xcprivacy` if it doesn't exist ✅ Created 2026-03-08
 - [ ] Add the following content:
   ```xml
   <?xml version="1.0" encoding="UTF-8"?>
@@ -212,6 +212,7 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
   ```
 - [ ] In Xcode: Add `PrivacyInfo.xcprivacy` to the Runner target if not auto-included
 - [ ] Verify it appears in Build Phases → Copy Bundle Resources
+> **Note:** File is committed to repo. Must be added to Xcode target manually on MacBook.
 
 ### 2.5 Configure App Icons
 - [ ] Verify `ios/Runner/Assets.xcassets/AppIcon.appiconset/` contains all required sizes
@@ -683,8 +684,8 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 - Free for public repos (2,000 min/month for private)
 
 ### 9.2 Basic Build Workflow (Already Created)
-- [ ] File: `.github/workflows/ios.yml` — verifies code compiles
-- [ ] Add GitHub Secrets:
+- [x] File: `.github/workflows/ios.yml` — verifies code compiles ✅ Already existed
+- [ ] Add GitHub Secrets (do in browser: github.com → repo → Settings → Secrets → Actions):
   - [ ] `SUPABASE_URL`
   - [ ] `SUPABASE_ANON_KEY`
   - [ ] `MAPTILER_API_KEY`
@@ -721,79 +722,12 @@ To automatically upload to TestFlight from GitHub Actions:
 - [ ] `PROVISIONING_PROFILE`: Base64-encoded provisioning profile
 
 **Step 5: Create TestFlight Upload Workflow**
-- [ ] Create `.github/workflows/ios-testflight.yml`:
-  ```yaml
-  name: iOS TestFlight Deploy
-
-  on:
-    workflow_dispatch:  # Manual trigger only
-
-  jobs:
-    deploy:
-      name: Build & Upload to TestFlight
-      runs-on: macos-latest
-      steps:
-        - uses: actions/checkout@v4
-
-        - uses: subosito/flutter-action@v2
-          with:
-            channel: stable
-
-        - name: Create .env file
-          run: |
-            cat <<EOF > .env
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-            MAPTILER_API_KEY=${{ secrets.MAPTILER_API_KEY }}
-            EOF
-
-        - name: Install dependencies
-          run: flutter pub get
-
-        - name: Import code signing certificate
-          uses: apple-actions/import-codesign-certs@v2
-          with:
-            p12-file-base64: ${{ secrets.CERTIFICATES_P12 }}
-            p12-password: ${{ secrets.CERTIFICATES_PASSWORD }}
-
-        - name: Import provisioning profile
-          run: |
-            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-            echo "${{ secrets.PROVISIONING_PROFILE }}" | \
-              base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
-
-        - name: Build IPA
-          run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
-
-        - name: Upload to TestFlight
-          uses: apple-actions/upload-testflight-build@v3
-          with:
-            app-path: build/ios/ipa/ccwmap.ipa
-            issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-            api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-            api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-  ```
+- [x] Create `.github/workflows/ios-testflight.yml` ✅ Created 2026-03-08
+  > See `.github/workflows/ios-testflight.yml` in the repo.
 
 **Step 6: Create ExportOptions.plist**
-- [ ] Create `ios/ExportOptions.plist`:
-  ```xml
-  <?xml version="1.0" encoding="UTF-8"?>
-  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-  <plist version="1.0">
-  <dict>
-      <key>method</key>
-      <string>app-store</string>
-      <key>teamID</key>
-      <string>YOUR_TEAM_ID</string>
-      <key>uploadBitcode</key>
-      <false/>
-      <key>uploadSymbols</key>
-      <true/>
-  </dict>
-  </plist>
-  ```
-- [ ] Replace `YOUR_TEAM_ID` with your actual Team ID
+- [x] Create `ios/ExportOptions.plist` ✅ Created 2026-03-08
+- [ ] Replace `YOUR_TEAM_ID` in `ios/ExportOptions.plist` with actual Team ID (visible in Apple Developer Portal → Membership)
 
 ---
 
