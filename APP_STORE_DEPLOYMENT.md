@@ -319,17 +319,11 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 ## Phase 4: App Store Connect Setup
 
 ### 4.1 Create App Record
-- [ ] Go to [App Store Connect](https://appstoreconnect.apple.com)
-- [ ] Click **My Apps** → **+** → **New App**
-- [ ] Fill in required information:
-  - [ ] **Platforms:** iOS
-  - [ ] **Name:** `CCW Map` (max 30 characters)
-  - [ ] **Primary Language:** English (U.S.)
-  - [ ] **Bundle ID:** Select `com.ccwmap.ccwmap` from dropdown
-    - If not listed, register it in [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list)
-  - [ ] **SKU:** `ccwmap-ios-001` (internal identifier, any unique string)
-  - [ ] **User Access:** Full Access
-- [ ] Click **Create**
+- [x] Go to App Store Connect
+- [x] Click **My Apps** → **+** → **New App**
+- [x] **Platforms:** iOS, **Name:** `CCW Map`, **Primary Language:** English (U.S.)
+- [x] **Bundle ID:** `com.ccwmap.ccwmap`, **SKU:** `ccwmap-ios-001`
+- [x] App record created ✅
 
 ### 4.2 Set Pricing and Availability
 - [ ] Go to **Pricing and Availability**

@@ -92,8 +92,7 @@ GitHub Actions (`macos-latest`) provides:
 - [x] `APP_STORE_CONNECT_PRIVATE_KEY`
 
 ### Remaining One-Time Setup
-- [ ] Create App Record in App Store Connect → My Apps → + → New App
-  - Platform: iOS, Name: `CCW Map`, Bundle ID: `com.ccwmap.ccwmap`, SKU: `ccwmap-ios-001`
+- [x] App Record created in App Store Connect — `CCW Map`, Bundle ID: `com.ccwmap.ccwmap`, SKU: `ccwmap-ios-001`
 - [x] App Store Connect API Key created → all 3 secrets added
 
 ### Mac Steps Progress
