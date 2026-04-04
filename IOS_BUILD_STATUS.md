@@ -87,14 +87,14 @@ GitHub Actions (`macos-latest`) provides:
 - [x] `CERTIFICATES_P12`
 - [x] `CERTIFICATES_PASSWORD`
 - [x] `PROVISIONING_PROFILE`
-- [ ] `APP_STORE_CONNECT_API_KEY_ID` — from App Store Connect → Integrations → API Keys
-- [ ] `APP_STORE_CONNECT_ISSUER_ID` — same page
-- [ ] `APP_STORE_CONNECT_PRIVATE_KEY` — contents of `.p8` file (download once only)
+- [x] `APP_STORE_CONNECT_API_KEY_ID`
+- [x] `APP_STORE_CONNECT_ISSUER_ID`
+- [x] `APP_STORE_CONNECT_PRIVATE_KEY`
 
 ### Remaining One-Time Setup
 - [ ] Create App Record in App Store Connect → My Apps → + → New App
   - Platform: iOS, Name: `CCW Map`, Bundle ID: `com.ccwmap.ccwmap`, SKU: `ccwmap-ios-001`
-- [ ] Create App Store Connect API Key → add `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_PRIVATE_KEY` secrets
+- [x] App Store Connect API Key created → all 3 secrets added
 
 ### Mac Steps Progress
 1. ✅ Install Xcode 14.2

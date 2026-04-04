@@ -693,12 +693,11 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 To automatically upload to TestFlight from GitHub Actions:
 
 **Step 1: Create App Store Connect API Key**
-- [ ] Go to [App Store Connect → Users and Access → Integrations → App Store Connect API](https://appstoreconnect.apple.com/access/integrations/api)
-- [ ] Click **Generate API Key**
-- [ ] Name: `GitHub Actions`
-- [ ] Access: `App Manager`
-- [ ] Download the `.p8` file (can only be downloaded ONCE)
-- [ ] Note the **Key ID** and **Issuer ID**
+- [x] Go to App Store Connect → Users and Access → Integrations → App Store Connect API
+- [x] Generated API Key — Name: `GitHub Actions`, Access: `App Manager`
+- [x] Downloaded `.p8` file
+- [x] Noted Key ID and Issuer ID
+- [x] Added `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_PRIVATE_KEY` secrets
 
 **Step 2: Export Signing Certificate**
 - [x] On MacBook: Open Keychain Access
