@@ -43,7 +43,8 @@
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/java.exe\" -jar \"/c/Program Files/Android/Android Studio/plugins/android/lib/bundletool.jar\" dump manifest build/app/outputs/bundle/release/app-release.aab)",
       "Bash(unzip:*)",
       "Bash(ls:*)",
-      "Bash(identify:*)"
+      "Bash(identify:*)",
+      "Bash(flutter:*)"
     ],
     "deny": [],
     "ask": []

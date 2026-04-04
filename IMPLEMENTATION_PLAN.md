@@ -2402,9 +2402,11 @@ App is ready for manual testing with real Supabase backend:
 - [ ] Select Signing & Capabilities tab
 - [ ] Select Team (Apple Developer account)
 - [ ] Enable "Automatically manage signing"
-- [ ] Verify bundle identifier: `com.ccwmap.app`
-- [ ] Create provisioning profile
-- [ ] Archive app to verify signing works
+- [ ] Verify bundle identifier: `com.ccwmap.ccwmap`
+- [ ] Provisioning profile auto-created by Xcode
+- [x] Apple Distribution certificate created via Xcode → Preferences → Accounts
+- [x] `.p12` exported from Keychain Access
+- [ ] Archive app — N/A locally, done via GitHub Actions
 
 #### 13.3 Configure App Signing (Android)
 
