@@ -81,34 +81,34 @@ GitHub Actions (`macos-latest`) provides:
 
 ### GitHub Secrets Checklist
 
-**Do now (browser: github.com → repo → Settings → Secrets → Actions):**
-- [ ] `SUPABASE_URL`
-- [ ] `SUPABASE_ANON_KEY`
-- [ ] `MAPTILER_API_KEY`
-
-**Requires Mac (Xcode + Keychain Access):**
-- [ ] `CERTIFICATES_P12` — export Apple Distribution cert from Keychain, `base64 -i cert.p12`
-- [ ] `CERTIFICATES_PASSWORD` — password set during `.p12` export
-- [ ] `PROVISIONING_PROFILE` — download from Developer Portal, `base64 -i profile.mobileprovision`
+- [x] `SUPABASE_URL`
+- [x] `SUPABASE_ANON_KEY`
+- [x] `MAPTILER_API_KEY`
+- [x] `CERTIFICATES_P12`
+- [x] `CERTIFICATES_PASSWORD`
+- [x] `PROVISIONING_PROFILE`
 - [ ] `APP_STORE_CONNECT_API_KEY_ID` — from App Store Connect → Integrations → API Keys
 - [ ] `APP_STORE_CONNECT_ISSUER_ID` — same page
 - [ ] `APP_STORE_CONNECT_PRIVATE_KEY` — contents of `.p8` file (download once only)
 
-### Remaining One-Time Setup (browser, do now)
+### Remaining One-Time Setup
 - [ ] Create App Record in App Store Connect → My Apps → + → New App
   - Platform: iOS, Name: `CCW Map`, Bundle ID: `com.ccwmap.ccwmap`, SKU: `ccwmap-ios-001`
-- [ ] Create App Store Connect API Key (Integrations → App Store Connect API → Generate)
+- [ ] Create App Store Connect API Key → add `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `APP_STORE_CONNECT_PRIVATE_KEY` secrets
 
 ### Mac Steps Progress
 1. ✅ Install Xcode 14.2
 2. ✅ Sign in: Xcode → Preferences → Accounts → Apple ID added
 3. ✅ Apple Distribution certificate created (Manage Certificates)
 4. ✅ `.p12` exported from Keychain Access (password set)
-5. ⏳ Open `ios/Runner.xcworkspace` → configure Team → provisioning profile auto-created → download
-6. ⏳ Base64 encode `.p12`: `base64 -i distribution.p12 | pbcopy` → add as `CERTIFICATES_P12` secret
-7. ⏳ Base64 encode provisioning profile → add as `PROVISIONING_PROFILE` secret
-8. ⏳ Fill in real Team ID in `ios/ExportOptions.plist` (replace `YOUR_TEAM_ID`)
-9. ⏳ Add `PrivacyInfo.xcprivacy` to Runner target in Xcode (Build Phases → Copy Bundle Resources)
+5. ✅ App ID `com.ccwmap.ccwmap` registered in Developer Portal
+6. ✅ Distribution provisioning profile `CCW Map App Store` created and downloaded
+7. ✅ `.p12` base64 encoded → added as `CERTIFICATES_P12` GitHub secret
+8. ✅ `.p12` password added as `CERTIFICATES_PASSWORD` GitHub secret
+9. ✅ Provisioning profile base64 encoded → added as `PROVISIONING_PROFILE` GitHub secret
+10. ✅ Team ID `DW4GKDYWNP` filled in `ios/ExportOptions.plist`
+11. ✅ `PrivacyInfo.xcprivacy` added to Runner target (Build Phases → Copy Bundle Resources)
+12. ✅ `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `MAPTILER_API_KEY` added as GitHub secrets
 
 ---
 

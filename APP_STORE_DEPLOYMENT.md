@@ -708,17 +708,18 @@ To automatically upload to TestFlight from GitHub Actions:
 - [ ] Base64 encode it: `base64 -i distribution.p12 | pbcopy` → add as `CERTIFICATES_P12` secret
 
 **Step 3: Export Provisioning Profile**
-- [ ] Download from Apple Developer Portal or Xcode
-- [ ] Located at: `~/Library/MobileDevice/Provisioning Profiles/`
-- [ ] Base64 encode it: `base64 -i profile.mobileprovision | pbcopy`
+- [x] App ID `com.ccwmap.ccwmap` registered in Developer Portal
+- [x] Distribution profile `CCW Map App Store` created and downloaded
+- [x] Base64 encoded: `base64 -i CCW_Map_App_Store.mobileprovision | pbcopy`
 
 **Step 4: Add GitHub Secrets**
 - [ ] `APP_STORE_CONNECT_API_KEY_ID`: Key ID from Step 1
 - [ ] `APP_STORE_CONNECT_ISSUER_ID`: Issuer ID from Step 1
 - [ ] `APP_STORE_CONNECT_PRIVATE_KEY`: Contents of `.p8` file
-- [ ] `CERTIFICATES_P12`: Base64-encoded `.p12` certificate
-- [ ] `CERTIFICATES_PASSWORD`: Password for `.p12` file
-- [ ] `PROVISIONING_PROFILE`: Base64-encoded provisioning profile
+- [x] `CERTIFICATES_P12`: Base64-encoded `.p12` certificate
+- [x] `CERTIFICATES_PASSWORD`: Password for `.p12` file
+- [x] `PROVISIONING_PROFILE`: Base64-encoded provisioning profile
+- [x] `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `MAPTILER_API_KEY`
 
 **Step 5: Create TestFlight Upload Workflow**
 - [x] Create `.github/workflows/ios-testflight.yml` ✅ Created 2026-03-08
@@ -726,7 +727,7 @@ To automatically upload to TestFlight from GitHub Actions:
 
 **Step 6: Create ExportOptions.plist**
 - [x] Create `ios/ExportOptions.plist` ✅ Created 2026-03-08
-- [ ] Replace `YOUR_TEAM_ID` in `ios/ExportOptions.plist` with actual Team ID (visible in Apple Developer Portal → Membership)
+- [x] Team ID `DW4GKDYWNP` filled in, provisioning profile name `CCW Map App Store` set
 
 ---
 
