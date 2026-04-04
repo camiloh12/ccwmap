@@ -1,6 +1,6 @@
 # iOS Build Status — MacBook Air 2017
 
-**Date:** 2026-03-08 (last updated)
+**Date:** 2026-04-04 (last updated)
 **Machine:** MacBook Air 2017 (MacBookAir7,2), Intel Core i5, 8GB RAM
 **macOS:** 12.7.6 Monterey (hardware-limited, cannot upgrade)
 **Disk:** 31 GB free (started), ~29 GB after Flutter download
@@ -14,17 +14,16 @@
 - Maximum Xcode for this OS: **Xcode 14.2** (supports iOS 16.2 SDK)
 - iPhone 13 Pro Max runs iOS 18.6.2 — requires device support workaround
 
-### 1.2 Tool Installation — ⚠️ Partially Blocked
+### 1.2 Tool Installation — ✅ Complete (for certificate purposes)
 
 | Tool | Status | Notes |
 |------|--------|-------|
 | Command Line Tools | ✅ Installed | At /Library/Developer/CommandLineTools |
-| Xcode 14.2 | ⏳ Pending | User must download manually from developer.apple.com/download/all |
-| Flutter | ⬇️ Downloaded (incompatible) | flutter_macos_3.41.2-stable.zip at ~/development/flutter — **requires macOS 14+, fails on this Mac** |
-| CocoaPods | ❌ Blocked | System Ruby 2.6 is too old; CocoaPods needs Ruby 3.0+ |
-| Homebrew | ❌ Not installed | Would fix Ruby/CocoaPods issue but requires sudo |
+| Xcode 14.2 | ✅ Installed | `/Applications/Xcode.app`, license accepted, xcode-select configured |
+| Flutter | N/A | Not needed locally — builds run in GitHub Actions |
+| CocoaPods | N/A | Not needed locally — builds run in GitHub Actions |
 
-### 1.3 iOS 18 Device Support — ⏳ Pending Xcode install
+### 1.3 iOS 18 Device Support — Skipped (not building locally)
 
 ### 1.4 Clone & Build — ⚠️ Cannot build locally
 - Repo is already at `/Users/camiloh/projects/ccwmap`
@@ -100,14 +99,16 @@ GitHub Actions (`macos-latest`) provides:
   - Platform: iOS, Name: `CCW Map`, Bundle ID: `com.ccwmap.ccwmap`, SKU: `ccwmap-ios-001`
 - [ ] Create App Store Connect API Key (Integrations → App Store Connect API → Generate)
 
-### Remaining Mac Steps (one-time, then all future builds via GitHub Actions)
-1. Install Xcode 14.2 — only needed for certificate export, not for building
-2. Sign in: Xcode → Preferences → Accounts → add Apple ID
-3. Download Distribution certificate (Xcode auto-creates it)
-4. Export `.p12` from Keychain Access → add as `CERTIFICATES_P12` secret
-5. Download provisioning profile from Developer Portal → add as `PROVISIONING_PROFILE` secret
-6. Fill in real Team ID in `ios/ExportOptions.plist` (replace `YOUR_TEAM_ID`)
-7. Add `PrivacyInfo.xcprivacy` to Runner target in Xcode (Build Phases → Copy Bundle Resources)
+### Mac Steps Progress
+1. ✅ Install Xcode 14.2
+2. ✅ Sign in: Xcode → Preferences → Accounts → Apple ID added
+3. ✅ Apple Distribution certificate created (Manage Certificates)
+4. ✅ `.p12` exported from Keychain Access (password set)
+5. ⏳ Open `ios/Runner.xcworkspace` → configure Team → provisioning profile auto-created → download
+6. ⏳ Base64 encode `.p12`: `base64 -i distribution.p12 | pbcopy` → add as `CERTIFICATES_P12` secret
+7. ⏳ Base64 encode provisioning profile → add as `PROVISIONING_PROFILE` secret
+8. ⏳ Fill in real Team ID in `ios/ExportOptions.plist` (replace `YOUR_TEAM_ID`)
+9. ⏳ Add `PrivacyInfo.xcprivacy` to Runner target in Xcode (Build Phases → Copy Bundle Resources)
 
 ---
 
@@ -116,10 +117,12 @@ GitHub Actions (`macos-latest`) provides:
 > **Note:** Local builds are not possible on this Mac. Xcode 14.2 is still useful for certificate export only.
 
 - [x] 1.1 macOS version verified
-- [ ] 1.2 Install Xcode 14.2 — needed **only** for certificate/profile export
-  - Download: https://developer.apple.com/download/all/
-  - [ ] Accept license: `sudo xcodebuild -license accept`
-  - [ ] Sign in to Apple account: Xcode → Preferences → Accounts
-  - [ ] CocoaPods NOT needed (builds run in GitHub Actions)
-- [ ] 1.3 iOS 18 Device Support — skip (not building locally)
-- [ ] 1.4 Verify `.env` file exists at project root with production keys (for local reference only)
+- [x] 1.2 Install Xcode 14.2
+  - [x] Downloaded and extracted Xcode_14.2.xip
+  - [x] Accept license: `sudo xcodebuild -license accept`
+  - [x] `sudo xcode-select -s /Applications/Xcode.app`
+  - [x] Sign in to Apple account: Xcode → Preferences → Accounts
+  - [x] Apple Distribution certificate created
+  - [x] `.p12` exported from Keychain Access
+- [x] 1.3 iOS 18 Device Support — skipped (not building locally)
+- [ ] 1.4 Verify `.env` file exists at project root with production keys

@@ -52,18 +52,17 @@
 ## Phase 1: MacBook Setup
 
 ### 1.1 Check macOS and Xcode Compatibility
-- [ ] Current macOS version: 12.7.6 (Monterey)
-- [ ] Maximum Xcode version on Monterey: **Xcode 14.2**
-- [ ] Xcode 14.2 supports building for iOS 16.2 SDK
-- [ ] **IMPORTANT:** Your iPhone runs iOS 18.6.2 — see Phase 1.3 for workaround
+- [x] Current macOS version: 12.7.6 (Monterey)
+- [x] Maximum Xcode version on Monterey: **Xcode 14.2**
+- [x] Xcode 14.2 supports building for iOS 16.2 SDK
+- [x] **NOTE:** Local builds not possible (Flutter requires macOS 14+) — using GitHub Actions instead
 
 ### 1.2 Install Development Tools
-- [ ] Install Xcode 14.2 from the Mac App Store (or [developer.apple.com/download](https://developer.apple.com/download/all/))
-  - Requires ~12 GB download + ~35 GB disk space
-- [ ] Accept Xcode license: `sudo xcodebuild -license accept`
-- [ ] Install Xcode Command Line Tools: `xcode-select --install`
-- [ ] Install CocoaPods: `sudo gem install cocoapods`
-- [ ] Install Flutter SDK:
+- [x] Install Xcode 14.2 (downloaded Xcode_14.2.xip, extracted to /Applications)
+- [x] Accept Xcode license: `sudo xcodebuild -license accept`
+- [x] `sudo xcode-select -s /Applications/Xcode.app`
+- [x] CocoaPods — N/A (builds run in GitHub Actions)
+- [ ] Install Flutter SDK: — N/A locally
   - [ ] Download from [docs.flutter.dev/get-started/install/macos](https://docs.flutter.dev/get-started/install/macos)
   - [ ] Extract to `~/development/flutter`
   - [ ] Add to PATH: `export PATH="$PATH:$HOME/development/flutter/bin"` (add to `~/.zshrc`)
@@ -702,11 +701,11 @@ To automatically upload to TestFlight from GitHub Actions:
 - [ ] Note the **Key ID** and **Issuer ID**
 
 **Step 2: Export Signing Certificate**
-- [ ] On MacBook: Open Keychain Access
-- [ ] Find your Apple Distribution certificate
-- [ ] Right-click → Export → Save as `.p12` file
-- [ ] Set an export password
-- [ ] Base64 encode it: `base64 -i certificate.p12 | pbcopy`
+- [x] On MacBook: Open Keychain Access
+- [x] Find your Apple Distribution certificate
+- [x] Right-click → Export → Save as `.p12` file
+- [x] Set an export password
+- [ ] Base64 encode it: `base64 -i distribution.p12 | pbcopy` → add as `CERTIFICATES_P12` secret
 
 **Step 3: Export Provisioning Profile**
 - [ ] Download from Apple Developer Portal or Xcode
