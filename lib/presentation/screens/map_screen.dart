@@ -1037,8 +1037,10 @@ class _MapScreenState extends State<MapScreen> {
   ) async {
     if (_mapController == null) return null;
 
-    // Layer IDs to query for POIs (MapLibre/OpenMapTiles base map layers)
+    // Layer IDs to query for POIs — our custom Overpass layer first (always
+    // queryable on iOS), then base map layers (work on Android).
     const poiLayerIds = [
+      'overpass-poi-labels-layer', // Custom layer added by _updateOverpassPoiLayer
       'poi',               // Common base map layer
       'poi_label',         // MapTiler POI labels
       'poi-label',         // Alternative naming
@@ -1119,8 +1121,9 @@ class _MapScreenState extends State<MapScreen> {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our pin layers
+            // Skip our own layers (pins and overpass — already queried above)
             if (layerId.contains('pins')) continue;
+            if (layerId == 'overpass-poi-labels-layer') continue;
 
             if (name != null && name.isNotEmpty) {
               final geometry = feature['geometry'];
