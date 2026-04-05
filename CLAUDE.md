@@ -8,6 +8,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Secondary machine:** MacBook Air 2017 (macOS 12.7.6, hardware-limited) — Xcode 14.2 for certificate/provisioning profile management only; cannot run Flutter (requires macOS 14+)
 - **iOS builds:** GitHub Actions only (`macos-latest` runner with Xcode 16+)
 
+## Known Bugs (Do Not Fix Without Being Asked)
+
+### BUG-001: POIs not rendering on iOS
+- **Platform:** iOS only (Android works correctly)
+- **Symptom:** Business names and other landmarks/POI labels do not appear on the map. Users cannot tap a POI label to create a pin. Workaround: long-press anywhere on the map still creates a pin.
+- **Android behavior (expected):** Business names and landmark labels are visible; tapping a label opens the create-pin dialog with the POI name pre-filled.
+- **Status:** Fixed — `feature/ios-build` branch
+- **Root cause:** MapLibre GL Native iOS does not render text from base map style symbol layers (font/glyph loading limitation), and `queryRenderedFeatures` on iOS does not return features from those layers.
+- **Fix:** At zoom ≥ 12, the app fetches POIs from the Overpass API (already cached via `PoiRepository`) and on iOS renders them as a custom `addSymbolLayer`. Added geographic proximity fallback (≤ 50m) to `_detectPoiAtPoint` so taps find Overpass POIs when `queryRenderedFeatures` returns nothing.
+
 ## Project Overview
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.

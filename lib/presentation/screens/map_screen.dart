@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:ccwmap/domain/models/poi.dart';
+import 'package:ccwmap/domain/repositories/poi_repository.dart';
+import 'package:ccwmap/data/datasources/overpass_api_client.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
@@ -42,6 +45,10 @@ class _MapScreenState extends State<MapScreen> {
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
 
+  // POI data (used on iOS where base map symbol layers don't render)
+  PoiRepository? _poiRepository;
+  List<Poi> _overpassPois = [];
+
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
   static const double _initialLongitude = -98.5795;
@@ -62,6 +69,7 @@ class _MapScreenState extends State<MapScreen> {
   /// Initialize ViewModel and listen to pin updates
   Future<void> _initializeViewModel() async {
     _viewModel = Provider.of<MapViewModel>(context, listen: false);
+    _poiRepository = Provider.of<PoiRepository>(context, listen: false);
 
     // Listen to pin changes
     _viewModel!.addListener(_onPinsChanged);
@@ -311,6 +319,99 @@ class _MapScreenState extends State<MapScreen> {
         _updatePinsLayer();
       }
     }
+  }
+
+  /// Called when map camera stops moving - fetch Overpass POIs for the visible area.
+  ///
+  /// On iOS, base map symbol layers (business names, landmarks) do not render due
+  /// to a known limitation in MapLibre GL Native iOS. This method fetches POI data
+  /// from the Overpass API and renders it as a custom symbol layer so users can see
+  /// and tap POI labels on iOS.
+  Future<void> _onCameraIdle() async {
+    if (_mapController == null || _poiRepository == null) return;
+
+    // Only fetch POIs at street-level zoom (avoids fetching for huge areas)
+    final zoom = _mapController!.cameraPosition?.zoom ?? 0.0;
+    if (zoom < 12.0) {
+      _overpassPois = [];
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await _clearOverpassPoiLayer();
+      }
+      return;
+    }
+
+    try {
+      final region = await _mapController!.getVisibleRegion();
+      final bounds = OverpassBounds(
+        south: region.southwest.latitude,
+        west: region.southwest.longitude,
+        north: region.northeast.latitude,
+        east: region.northeast.longitude,
+      );
+
+      final pois = await _poiRepository!.getPOIs(bounds);
+      _overpassPois = pois;
+
+      // On iOS, render POI labels as a custom layer since base map labels don't render
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+        await _updateOverpassPoiLayer(pois);
+      }
+    } catch (e) {
+      debugPrint('MapScreen: Error fetching Overpass POIs: $e');
+    }
+  }
+
+  /// Renders Overpass POIs as a custom symbol layer on iOS.
+  Future<void> _updateOverpassPoiLayer(List<Poi> pois) async {
+    if (_mapController == null) return;
+
+    await _clearOverpassPoiLayer();
+
+    final namedPois = pois.where((p) => p.name.isNotEmpty).toList();
+    if (namedPois.isEmpty) return;
+
+    final geojson = {
+      'type': 'FeatureCollection',
+      'features': namedPois.map((poi) => {
+        'type': 'Feature',
+        'id': poi.id,
+        'geometry': {
+          'type': 'Point',
+          'coordinates': [poi.longitude, poi.latitude],
+        },
+        'properties': {
+          'name': poi.name,
+          'type': poi.type,
+        },
+      }).toList(),
+    };
+
+    try {
+      await _mapController!.addGeoJsonSource('overpass-poi-source', geojson);
+      await _mapController!.addSymbolLayer(
+        'overpass-poi-source',
+        'overpass-poi-labels-layer',
+        SymbolLayerProperties(
+          textField: ['get', 'name'],
+          textSize: 11.0,
+          textColor: '#555555',
+          textHaloColor: '#FFFFFF',
+          textHaloWidth: 1.5,
+          textAllowOverlap: false,
+          textIgnorePlacement: false,
+        ),
+        belowLayerId: 'pins-layer',
+      );
+    } catch (e) {
+      debugPrint('MapScreen: Error rendering Overpass POI layer: $e');
+    }
+  }
+
+  /// Removes the custom Overpass POI layer if present.
+  Future<void> _clearOverpassPoiLayer() async {
+    if (_mapController == null) return;
+    try { await _mapController!.removeLayer('overpass-poi-labels-layer'); } catch (_) {}
+    try { await _mapController!.removeSource('overpass-poi-source'); } catch (_) {}
   }
 
   /// Build GeoJSON FeatureCollection from pins
@@ -1048,6 +1149,33 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
+    // Fallback: check cached Overpass POIs by geographic proximity.
+    // On iOS, queryRenderedFeatures does not reliably return base map symbol
+    // layer features, so we fall back to the nearest known POI within 50 meters.
+    if (_overpassPois.isNotEmpty) {
+      const maxDistanceMeters = 50.0;
+      Poi? nearest;
+      double minDist = double.infinity;
+
+      for (final poi in _overpassPois) {
+        final dist = _calculateGeographicDistance(
+          coordinates.latitude,
+          coordinates.longitude,
+          poi.latitude,
+          poi.longitude,
+        );
+        if (dist < maxDistanceMeters && dist < minDist) {
+          minDist = dist;
+          nearest = poi;
+        }
+      }
+
+      if (nearest != null) {
+        debugPrint('Found POI by Overpass proximity: ${nearest.name} (${minDist.toStringAsFixed(0)}m)');
+        return {'name': nearest.name, 'lat': nearest.latitude, 'lng': nearest.longitude};
+      }
+    }
+
     // No POI found at any query point
     return null;
   }
@@ -1246,6 +1374,7 @@ class _MapScreenState extends State<MapScreen> {
               onStyleLoadedCallback: _onStyleLoadedCallback,
               onMapClick: _onMapClick,
               onMapLongClick: _onMapLongClick,
+              onCameraIdle: _onCameraIdle,
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
