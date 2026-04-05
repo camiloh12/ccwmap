@@ -214,19 +214,12 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 > **Note:** File is committed to repo. Must be added to Xcode target manually on MacBook.
 
 ### 2.5 Configure App Icons
-- [ ] Verify `ios/Runner/Assets.xcassets/AppIcon.appiconset/` contains all required sizes
-- [ ] If icons are missing, generate them:
-  - [ ] Use your `assets/icon/app_icon.png` as source
-  - [ ] Update `pubspec.yaml` to enable iOS icons:
-    ```yaml
-    flutter_launcher_icons:
-      android: true
-      ios: true  # Change from false to true
-      image_path: "assets/icon/app_icon.png"
-    ```
-  - [ ] Run: `flutter pub run flutter_launcher_icons`
-- [ ] Verify `Contents.json` in AppIcon.appiconset references all icon sizes
-- [ ] Required sizes: 20pt, 29pt, 40pt, 58pt, 60pt, 76pt, 80pt, 87pt, 120pt, 152pt, 167pt, 180pt, 1024pt
+- [x] Verify `ios/Runner/Assets.xcassets/AppIcon.appiconset/` contains all required sizes
+- [x] Generated icons from `assets/icon/app_icon.png`:
+  - [x] Set `ios: true` in `pubspec.yaml` flutter_launcher_icons config (was false)
+  - [x] Run: `dart run flutter_launcher_icons` on Windows laptop
+- [x] Verify `Contents.json` in AppIcon.appiconset references all icon sizes
+- [x] Required sizes: 20pt, 29pt, 40pt, 58pt, 60pt, 76pt, 80pt, 87pt, 120pt, 152pt, 167pt, 180pt, 1024pt
 
 ### 2.6 Test on Physical Device
 - [ ] Connect iPhone 13 Pro Max via USB to MacBook
@@ -253,66 +246,19 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 ## Phase 3: Build Release Archive
 
 ### 3.1 Prepare for Release Build
-- [ ] Update version in `pubspec.yaml`:
-  ```yaml
-  version: 1.0.0+1
-  ```
-  - Format: `versionName+buildNumber`
-  - `buildNumber` must increment with every App Store submission
-- [ ] Ensure `.env` file is present with production keys
-- [ ] Run: `flutter clean`
-- [ ] Run: `flutter pub get`
+- [x] Version set in `pubspec.yaml` — increments with each build via GitHub Actions
+- [x] Production keys provided via GitHub Actions secrets (no local `.env` needed for CI)
+- [x] `flutter pub get` runs in CI workflow
 
 ### 3.2 Build IPA
-**Option A: Using Flutter CLI (Recommended)**
-- [ ] Run:
-  ```
-  flutter build ipa --release
-  ```
-- [ ] Wait for build to complete (2-5 minutes)
-- [ ] Output location: `build/ios/ipa/ccwmap.ipa`
-- [ ] Note: This creates an unsigned archive; signing happens during distribution
-
-**Option B: Using Xcode**
-- [ ] Open `ios/Runner.xcworkspace` in Xcode
-- [ ] Select **Any iOS Device (arm64)** as destination (not a simulator)
-- [ ] Menu: **Product → Archive**
-- [ ] Wait for archive to complete
-- [ ] Xcode Organizer window opens automatically
+- [x] Built via GitHub Actions: `flutter build ipa --release --export-options-plist=ios/ExportOptions.plist`
 
 ### 3.3 Validate Build
-- [ ] In Xcode Organizer (Window → Organizer):
-  - [ ] Select your archive
-  - [ ] Click **Validate App**
-  - [ ] Select your distribution certificate and profile
-  - [ ] Wait for validation to complete
-  - [ ] Resolve any validation errors
-- [ ] Common validation errors:
-  - Missing icon sizes → Fix in Assets.xcassets
-  - Invalid bundle ID → Fix in Xcode project settings
-  - Missing privacy manifest → Add PrivacyInfo.xcprivacy
-  - Code signing issues → Re-select team in Signing & Capabilities
+- [x] Validation handled by App Store Connect on upload (no Xcode Organizer needed with GitHub Actions)
 
 ### 3.4 Upload to App Store Connect
-
-**Option A: Xcode Organizer (Recommended)**
-- [ ] In Xcode Organizer, select your validated archive
-- [ ] Click **Distribute App**
-- [ ] Select **App Store Connect**
-- [ ] Select **Upload**
-- [ ] Follow prompts (accept defaults for symbol upload, bitcode)
-- [ ] Wait for upload to complete
-- [ ] Status: "Upload Successful"
-
-**Option B: Transporter App**
-- [ ] Download [Transporter](https://apps.apple.com/app/transporter/id1450874784) from Mac App Store
-- [ ] Sign in with your Apple ID
-- [ ] Drag and drop the `.ipa` file
-- [ ] Click **Deliver**
-- [ ] Wait for upload and processing
-
-- [ ] After upload, wait for processing email from Apple (typically < 30 minutes)
-- [ ] Build will appear in App Store Connect → TestFlight tab
+- [x] Uploaded automatically via `apple-actions/upload-testflight-build` in GitHub Actions workflow
+- [x] Build processed and appeared in TestFlight ✅
 
 ---
 
@@ -476,12 +422,9 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 - Don't include status bar with personal info
 
 ### 5.4 App Icon (1024x1024)
-- [ ] App Store icon is automatically pulled from your asset catalog
-- [ ] Verify `ios/Runner/Assets.xcassets/AppIcon.appiconset/` contains 1024x1024 icon
-- [ ] Icon requirements:
-  - [ ] PNG format, no alpha channel (no transparency)
-  - [ ] No rounded corners (Apple adds them automatically)
-  - [ ] No overlay text or badges
+- [x] App Store icon is automatically pulled from your asset catalog
+- [x] `ios/Runner/Assets.xcassets/AppIcon.appiconset/` contains 1024x1024 icon
+- [x] Icon requirements met (generated via flutter_launcher_icons from `assets/icon/app_icon.png`)
 
 ### 5.5 Contact Information
 - [ ] **Contact email:** `_________________________________`
@@ -520,21 +463,12 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 ## Phase 6: TestFlight Beta Testing
 
 ### 6.1 Internal Testing (Immediate, No Review)
-- [ ] Go to **TestFlight** tab in App Store Connect
-- [ ] Your uploaded build should appear (wait for processing if needed)
-- [ ] Click on the build version
-- [ ] **Export Compliance:**
-  - [ ] "Does your app use encryption?" → **Yes** (HTTPS/TLS)
-  - [ ] "Does your app qualify for any exemptions?" → **Yes**
-  - [ ] Select: "Uses encryption exempt from EAR" (standard HTTPS)
-- [ ] **Add Internal Testers:**
-  - [ ] Click **App Store Connect Users**
-  - [ ] Add your own account
-  - [ ] Add up to 100 internal testers (same team)
-- [ ] Testers receive email invitation
-- [ ] On iPhone: Download **TestFlight** app from App Store
-- [ ] Open TestFlight → Accept invitation → Install CCW Map
-- [ ] Test the app thoroughly
+- [x] Build appeared in TestFlight tab in App Store Connect
+- [x] **Export Compliance:** Selected "Uses encryption exempt from EAR" (standard HTTPS/TLS)
+- [x] Added own account as internal tester
+- [x] Accepted invitation via email
+- [x] Installed CCW Map via TestFlight on iPhone 13 Pro Max
+- [x] Tested app on device ✅
 
 ### 6.2 External Testing (Requires Beta App Review)
 - [ ] Create a new external testing group:
@@ -553,8 +487,8 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 - [ ] Once approved, testers receive invitation
 
 ### 6.3 TestFlight Testing Checklist
-- [ ] App installs successfully via TestFlight
-- [ ] App launches without crash
+- [x] App installs successfully via TestFlight
+- [x] App launches without crash
 - [ ] Location permission works
 - [ ] Map renders correctly on iOS
 - [ ] Can create account and sign in
