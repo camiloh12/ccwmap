@@ -326,79 +326,79 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 - [x] App record created ✅
 
 ### 4.2 Set Pricing and Availability
-- [ ] Go to **Pricing and Availability**
-- [ ] **Price:** Free
-- [ ] **Availability:** United States (add other countries as desired)
-- [ ] Click **Save**
+- [x] Go to **Pricing and Availability**
+- [x] **Price:** Free
+- [x] **Availability:** United States (add other countries as desired)
+- [x] Click **Save**
 
 ### 4.3 Set Age Rating
-- [ ] Go to **App Information** → **Age Rating**
-- [ ] Click **Edit** next to Age Rating
-- [ ] Answer questionnaire:
-  - [ ] Cartoon or Fantasy Violence: None
-  - [ ] Realistic Violence: None
-  - [ ] Prolonged Graphic or Sadistic Realistic Violence: No
-  - [ ] Profanity or Crude Humor: None
-  - [ ] Mature/Suggestive Themes: None
-  - [ ] Horror/Fear Themes: None
-  - [ ] Medical/Treatment Information: No
-  - [ ] Alcohol, Tobacco, or Drug Use: None
-  - [ ] Simulated Gambling: No
-  - [ ] Sexual Content and Nudity: None
-  - [ ] Unrestricted Web Access: No
-  - [ ] Gambling with Real Money: No
-  - [ ] **Made for Kids:** No
-  - [ ] **Contains firearms information:** Technically yes — mark accordingly
-    - [ ] If prompted about violence context, clarify: "Informational/legal reference only, no violent content"
-- [ ] Click **Save**
-- [ ] Expected rating: **17+** (due to firearms reference) or **12+** (informational only)
-- [ ] Note assigned rating: `_________________________________`
+- [x] Go to **App Information** → **Age Rating**
+- [x] Click **Edit** next to Age Rating
+- [x] Answer questionnaire:
+  - [x] Cartoon or Fantasy Violence: None
+  - [x] Realistic Violence: None
+  - [x] Prolonged Graphic or Sadistic Realistic Violence: No
+  - [x] Profanity or Crude Humor: None
+  - [x] Mature/Suggestive Themes: None
+  - [x] Horror/Fear Themes: None
+  - [x] Medical/Treatment Information: No
+  - [x] Alcohol, Tobacco, or Drug Use: None
+  - [x] Simulated Gambling: No
+  - [x] Sexual Content and Nudity: None
+  - [x] Unrestricted Web Access: No
+  - [x] Gambling with Real Money: No
+  - [x] **Made for Kids:** No
+  - [x] **Contains firearms information:** Technically yes — mark accordingly
+    - [x] If prompted about violence context, clarify: "Informational/legal reference only, no violent content"
+- [x] Click **Save**
+- [x] Expected rating: **17+** (due to firearms reference) or **12+** (informational only)
+- [x] Note assigned rating: `_________________________________`
 
 ### 4.4 App Privacy (Privacy Nutrition Labels)
-- [ ] Go to **App Privacy**
-- [ ] Click **Get Started** or **Edit**
-- [ ] **Data Collection:**
-  - [ ] "Does your app collect data?" → **Yes**
-- [ ] **Data Types Collected:**
-  - [ ] **Location** → Precise Location
-    - [ ] Usage: App Functionality
-    - [ ] Linked to user: Yes
-    - [ ] Used for tracking: No
-  - [ ] **Contact Info** → Email Address
-    - [ ] Usage: App Functionality (authentication)
-    - [ ] Linked to user: Yes
-    - [ ] Used for tracking: No
-  - [ ] **Identifiers** → User ID
-    - [ ] Usage: App Functionality
-    - [ ] Linked to user: Yes
-    - [ ] Used for tracking: No
-- [ ] **Third-party data sharing:** No
-- [ ] Click **Publish**
-- [ ] Verify privacy labels appear correctly on app page preview
+- [x] Go to **App Privacy**
+- [x] Click **Get Started** or **Edit**
+- [x] **Data Collection:**
+  - [x] "Does your app collect data?" → **Yes**
+- [x] **Data Types Collected:**
+  - [x] **Location** → Precise Location
+    - [x] Usage: App Functionality
+    - [x] Linked to user: Yes
+    - [x] Used for tracking: No
+  - [x] **Contact Info** → Email Address
+    - [x] Usage: App Functionality (authentication)
+    - [x] Linked to user: Yes
+    - [x] Used for tracking: No
+  - [x] **Identifiers** → User ID
+    - [x] Usage: App Functionality
+    - [x] Linked to user: Yes
+    - [x] Used for tracking: No
+- [x] **Third-party data sharing:** No
+- [x] Click **Publish**
+- [x] Verify privacy labels appear correctly on app page preview
 
 ### 4.5 Add Privacy Policy URL
-- [ ] Go to **App Information** → **Privacy Policy URL**
-- [ ] Enter: `https://camiloh12.github.io/ccwmap/privacy-policy.html`
-- [ ] Click **Save**
-- [ ] Test URL in browser to confirm it's accessible
+- [x] Go to **App Information** → **Privacy Policy URL**
+- [x] Enter: `https://camiloh12.github.io/ccwmap/privacy-policy.html`
+- [x] Click **Save**
+- [x] Test URL in browser to confirm it's accessible
 
 ### 4.6 App Category
-- [ ] Go to **App Information**
-- [ ] **Primary Category:** Navigation
-- [ ] **Secondary Category:** Travel (optional)
-- [ ] Click **Save**
+- [x] Go to **App Information**
+- [x] **Primary Category:** Navigation
+- [x] **Secondary Category:** Travel (optional)
+- [x] Click **Save**
 
 ---
 
 ## Phase 5: Store Listing
 
 ### 5.1 App Description
-- [ ] Go to your app version (e.g., "1.0 Prepare for Submission")
-- [ ] Fill in **Promotional Text** (max 170 chars, can be updated without new version):
+- [x] Go to your app version (e.g., "1.0 Prepare for Submission")
+- [x] Fill in **Promotional Text** (max 170 chars, can be updated without new version):
   ```
   Navigate concealed carry laws with community-sourced CCW zone information across the United States.
   ```
-- [ ] Fill in **Description** (max 4000 chars):
+- [x] Fill in **Description** (max 4000 chars):
   ```
   CCW Map helps responsible gun owners navigate concealed carry laws by crowdsourcing information about CCW-friendly and restricted zones.
 
@@ -418,15 +418,15 @@ Your MacBook's Xcode 14.2 does not natively support iOS 18 devices. Apply this w
 
   Note: This app provides user-contributed information and should not be considered legal advice. Always verify local laws and regulations.
   ```
-- [ ] Fill in **Keywords** (max 100 chars, comma-separated):
+- [x] Fill in **Keywords** (max 100 chars, comma-separated):
   ```
   ccw,concealed carry,gun zones,firearm,map,second amendment,restriction,permit,weapon
   ```
-- [ ] Fill in **Support URL:**
+- [x] Fill in **Support URL:**
   ```
   https://github.com/camiloh12/ccwmap
   ```
-- [ ] Fill in **Marketing URL** (optional):
+- [x] Fill in **Marketing URL** (optional):
   ```
   https://github.com/camiloh12/ccwmap
   ```

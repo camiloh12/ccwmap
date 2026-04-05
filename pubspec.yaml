@@ -134,7 +134,7 @@ flutter:
 # Icon configuration
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
   image_path: "assets/icon/app_icon.png"
   adaptive_icon_background: "#2C3E50"  # Dark blue from icon
   adaptive_icon_foreground: "assets/icon/app_icon.png"
