@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Development Environment
+
+- **Primary machine:** Windows laptop — Flutter installed, all local commands (pub get, code generation, icon generation, etc.) run here
+- **Secondary machine:** MacBook Air 2017 (macOS 12.7.6, hardware-limited) — Xcode 14.2 for certificate/provisioning profile management only; cannot run Flutter (requires macOS 14+)
+- **iOS builds:** GitHub Actions only (`macos-latest` runner with Xcode 16+)
+
 ## Project Overview
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.
