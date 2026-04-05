@@ -401,6 +401,7 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: false,
         ),
         belowLayerId: 'pins-layer',
+        enableInteraction: false, // Let taps pass through to onMapClick
       );
     } catch (e) {
       debugPrint('MapScreen: Error rendering Overpass POI layer: $e');
