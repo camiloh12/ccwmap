@@ -29,9 +29,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate app icons
-        run: dart run flutter_launcher_icons
-
       - name: Import code signing certificate
         uses: apple-actions/import-codesign-certs@v3
         with:
