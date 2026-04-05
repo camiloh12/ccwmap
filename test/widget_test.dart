@@ -18,6 +18,7 @@ import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/user.dart';
 import 'fakes/fake_auth_repository.dart';
 import 'fakes/fake_network_monitor.dart';
+import 'fakes/fake_poi_repository.dart';
 
 void main() {
   // Initialize dotenv before running tests
@@ -56,6 +57,7 @@ MAPTILER_API_KEY=test_key
       CCWMapApp(
         mapViewModel: mapViewModel,
         authViewModel: authViewModel,
+        poiRepository: FakePoiRepository(),
       ),
     );
 
@@ -101,6 +103,7 @@ MAPTILER_API_KEY=test_key
       CCWMapApp(
         mapViewModel: mapViewModel,
         authViewModel: authViewModel,
+        poiRepository: FakePoiRepository(),
       ),
     );
 

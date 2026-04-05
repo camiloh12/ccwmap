@@ -8,11 +8,15 @@ import 'package:ccwmap/presentation/screens/map_screen.dart';
 import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
+import 'package:ccwmap/data/datasources/overpass_api_client.dart';
+import 'package:ccwmap/data/datasources/poi_cache.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
+import 'package:ccwmap/data/repositories/poi_repository_impl.dart';
 import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
 import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/domain/repositories/poi_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
@@ -66,6 +70,10 @@ Future<void> main() async {
     syncManager: syncManager,
   );
   final authRepository = SupabaseAuthRepository(supabaseClient);
+  final poiRepository = PoiRepositoryImpl(
+    apiClient: OverpassApiClient(),
+    cache: PoiCache(),
+  );
 
   // Create ViewModels
   final mapViewModel = MapViewModel(pinRepository, networkMonitor);
@@ -75,6 +83,7 @@ Future<void> main() async {
     CCWMapApp(
       mapViewModel: mapViewModel,
       authViewModel: authViewModel,
+      poiRepository: poiRepository,
     ),
   );
 }
@@ -82,11 +91,13 @@ Future<void> main() async {
 class CCWMapApp extends StatelessWidget {
   final MapViewModel mapViewModel;
   final AuthViewModel authViewModel;
+  final PoiRepository poiRepository;
 
   const CCWMapApp({
     super.key,
     required this.mapViewModel,
     required this.authViewModel,
+    required this.poiRepository,
   });
 
   @override
@@ -95,6 +106,7 @@ class CCWMapApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: mapViewModel),
         ChangeNotifierProvider.value(value: authViewModel),
+        Provider<PoiRepository>.value(value: poiRepository),
       ],
       child: MaterialApp(
         title: 'CCW Map',

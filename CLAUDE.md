@@ -14,7 +14,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Platform:** iOS only (Android works correctly)
 - **Symptom:** Business names and other landmarks/POI labels do not appear on the map. Users cannot tap a POI label to create a pin. Workaround: long-press anywhere on the map still creates a pin.
 - **Android behavior (expected):** Business names and landmark labels are visible; tapping a label opens the create-pin dialog with the POI name pre-filled.
-- **Status:** Not investigated — do not fix until asked
+- **Status:** Fixed — `feature/ios-build` branch
+- **Root cause:** MapLibre GL Native iOS does not render text from base map style symbol layers (font/glyph loading limitation), and `queryRenderedFeatures` on iOS does not return features from those layers.
+- **Fix:** At zoom ≥ 12, the app fetches POIs from the Overpass API (already cached via `PoiRepository`) and on iOS renders them as a custom `addSymbolLayer`. Added geographic proximity fallback (≤ 50m) to `_detectPoiAtPoint` so taps find Overpass POIs when `queryRenderedFeatures` returns nothing.
 
 ## Project Overview
 
