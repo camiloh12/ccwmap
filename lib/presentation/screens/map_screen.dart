@@ -166,6 +166,54 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Point: ${point.x}, ${point.y}');
     debugPrint('Coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
 
+    // Handle taps on Overpass POI labels → open create-pin dialog
+    if (layerId == 'overpass-poi-labels-layer') {
+      if (_isDialogOpen) return;
+
+      // Find the tapped POI by geographic proximity to the tap coordinates
+      Poi? tappedPoi;
+      double minDist = double.infinity;
+      for (final poi in _overpassPois) {
+        final dist = _calculateGeographicDistance(
+          coordinates.latitude, coordinates.longitude,
+          poi.latitude, poi.longitude,
+        );
+        if (dist < minDist) {
+          minDist = dist;
+          tappedPoi = poi;
+        }
+      }
+
+      if (tappedPoi != null && minDist < 200.0) {
+        final lat = tappedPoi.latitude;
+        final lng = tappedPoi.longitude;
+
+        if (!_isWithinUSBounds(lat, lng)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cannot create pins outside the continental US'),
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+          return;
+        }
+
+        debugPrint('Overpass POI tapped: ${tappedPoi.name} (${minDist.toStringAsFixed(0)}m)');
+        _showPinDialog(
+          isEditMode: false,
+          poiName: tappedPoi.name,
+          initialStatus: null,
+          initialRestrictionTag: null,
+          initialHasSecurityScreening: false,
+          initialHasPostedSignage: false,
+          coordinates: LatLng(lat, lng),
+        );
+      }
+      return;
+    }
+
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
       debugPrint('Not our layer, ignoring');
@@ -288,6 +336,7 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       // Add symbol layer for pin name labels
+      // enableInteraction: false so taps fall through to pins-layer circles
       await _mapController!.addSymbolLayer(
         'pins-source',
         'pins-labels-layer',
@@ -307,6 +356,7 @@ class _MapScreenState extends State<MapScreen> {
           textAllowOverlap: false,
           textIgnorePlacement: false,
         ),
+        enableInteraction: false,
       );
 
     } catch (e) {
@@ -401,7 +451,7 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: false,
         ),
         belowLayerId: 'pins-layer',
-        enableInteraction: false, // Let taps pass through to onMapClick
+        enableInteraction: true, // Fire onFeatureTapped so iOS detects POI taps
       );
     } catch (e) {
       debugPrint('MapScreen: Error rendering Overpass POI layer: $e');
@@ -597,6 +647,10 @@ class _MapScreenState extends State<MapScreen> {
       // PRIORITY 1: Check if user tapped on a POI label (from base map OR Overpass)
       // Query at click point and nearby points to catch offset labels
       final poiResult = await _detectPoiAtPoint(point, coordinates);
+
+      // Re-check after async gap — onFeatureTapped may have opened a dialog
+      if (_isDialogOpen) return;
+
       if (poiResult != null) {
         debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
 
@@ -665,6 +719,8 @@ class _MapScreenState extends State<MapScreen> {
           clickedPin = pin;
         }
       }
+
+      if (_isDialogOpen) return;
 
       if (clickedPin != null) {
         debugPrint('Found clicked pin: ${clickedPin.name} (${minDistance.toStringAsFixed(0)}m away)');
