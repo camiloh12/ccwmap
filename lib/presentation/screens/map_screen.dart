@@ -170,21 +170,33 @@ class _MapScreenState extends State<MapScreen> {
     if (layerId == 'overpass-poi-labels-layer') {
       if (_isDialogOpen) return;
 
-      // Find the tapped POI by geographic proximity to the tap coordinates
+      // Look up the tapped POI by its GeoJSON feature ID first (exact match),
+      // then fall back to geographic proximity. Using the ID avoids picking a
+      // wrong neighbour and works even when the proximity search would fail.
       Poi? tappedPoi;
-      double minDist = double.infinity;
-      for (final poi in _overpassPois) {
-        final dist = _calculateGeographicDistance(
-          coordinates.latitude, coordinates.longitude,
-          poi.latitude, poi.longitude,
-        );
-        if (dist < minDist) {
-          minDist = dist;
-          tappedPoi = poi;
+      if (id.isNotEmpty) {
+        try {
+          tappedPoi = _overpassPois.firstWhere((p) => p.id == id);
+        } catch (_) {
+          // Feature id not found — fall through to proximity search
         }
       }
 
-      if (tappedPoi != null && minDist < 200.0) {
+      if (tappedPoi == null) {
+        double minDist = double.infinity;
+        for (final poi in _overpassPois) {
+          final dist = _calculateGeographicDistance(
+            coordinates.latitude, coordinates.longitude,
+            poi.latitude, poi.longitude,
+          );
+          if (dist < minDist) {
+            minDist = dist;
+            if (minDist < 200.0) tappedPoi = poi;
+          }
+        }
+      }
+
+      if (tappedPoi != null) {
         final lat = tappedPoi.latitude;
         final lng = tappedPoi.longitude;
 
@@ -200,7 +212,7 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
 
-        debugPrint('Overpass POI tapped: ${tappedPoi.name} (${minDist.toStringAsFixed(0)}m)');
+        debugPrint('Overpass POI tapped: ${tappedPoi.name}');
         _showPinDialog(
           isEditMode: false,
           poiName: tappedPoi.name,
@@ -1178,9 +1190,14 @@ class _MapScreenState extends State<MapScreen> {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our own layers (pins and overpass — already queried above)
+            // Skip our own layers (pins and overpass — already queried above).
+            // Also filter by the 'status' property: our pins always carry a
+            // numeric status (0/1/2) that no base-map or Overpass POI feature
+            // has. On iOS, queryRenderedFeatures omits the layer.id field so
+            // layerId is '', making the contains('pins') check unreliable.
             if (layerId.contains('pins')) continue;
             if (layerId == 'overpass-poi-labels-layer') continue;
+            if (feature['properties']?['status'] != null) continue;
 
             if (name != null && name.isNotEmpty) {
               final geometry = feature['geometry'];
