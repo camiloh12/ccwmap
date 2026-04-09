@@ -1227,10 +1227,17 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     // Fallback: check cached Overpass POIs by geographic proximity.
-    // On iOS, queryRenderedFeatures does not reliably return base map symbol
-    // layer features, so we fall back to the nearest known POI within 50 meters.
+    // On iOS, queryRenderedFeatures does not reliably return symbol layer
+    // features. We fall back to the nearest Overpass POI within a
+    // zoom-dependent radius. The fixed 50 m threshold was too tight:
+    // at zoom 15 (~3.7 m/px) a medium-length label like "McDonald's" extends
+    // ~110 m from its geographic anchor, so edge taps always missed the window.
+    // Using the same zoom formula as PRIORITY 3 scales the radius correctly.
     if (_overpassPois.isNotEmpty) {
-      const maxDistanceMeters = 50.0;
+      final zoom = _mapController!.cameraPosition?.zoom ?? 15.0;
+      // At zoom 15 → ~200 m; doubles for every zoom level zoomed out.
+      // Floored at 50 m so we don't pick up distant POIs at high zoom.
+      final maxDistanceMeters = math.max(50.0, 200.0 * math.pow(2.0, 15.0 - zoom));
       Poi? nearest;
       double minDist = double.infinity;
 
