@@ -166,6 +166,17 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Point: ${point.x}, ${point.y}');
     debugPrint('Coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
 
+    // TEMP DEBUG: show which layer was tapped
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('[DBG] featureTapped layer=$layerId id=$id'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+    // END TEMP DEBUG
+
     // Handle taps on Overpass POI labels → open create-pin dialog
     if (layerId == 'overpass-poi-labels-layer') {
       if (_isDialogOpen) return;
@@ -655,13 +666,35 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('Querying features at point...');
       debugPrint('Number of pins in _pins list: ${_pins.length}');
       debugPrint('Click coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
+      debugPrint('_overpassPois count: ${_overpassPois.length}');
+      if (_overpassPois.isNotEmpty) {
+        for (final poi in _overpassPois.take(3)) {
+          final dist = _calculateGeographicDistance(
+            coordinates.latitude, coordinates.longitude,
+            poi.latitude, poi.longitude,
+          );
+          debugPrint('  POI "${poi.name}" is ${dist.toStringAsFixed(0)}m away');
+        }
+      }
 
       // PRIORITY 1: Check if user tapped on a POI label (from base map OR Overpass)
       // Query at click point and nearby points to catch offset labels
       final poiResult = await _detectPoiAtPoint(point, coordinates);
+      debugPrint('_detectPoiAtPoint result: $poiResult');
 
       // Re-check after async gap — onFeatureTapped may have opened a dialog
       if (_isDialogOpen) return;
+
+      // TEMP DEBUG: show what _detectPoiAtPoint returned and how many POIs we have
+      if (mounted) {
+        final msg = poiResult != null
+            ? 'POI found: ${poiResult['name']}'
+            : 'No POI found (pois:${_overpassPois.length})';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('[DBG] $msg'), duration: const Duration(seconds: 4)),
+        );
+      }
+      // END TEMP DEBUG
 
       if (poiResult != null) {
         debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
