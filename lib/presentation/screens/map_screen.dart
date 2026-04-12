@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:ccwmap/domain/models/poi.dart';
-import 'package:ccwmap/domain/repositories/poi_repository.dart';
-import 'package:ccwmap/data/datasources/overpass_api_client.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
@@ -45,10 +42,6 @@ class _MapScreenState extends State<MapScreen> {
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
 
-  // POI data (used on iOS where base map symbol layers don't render)
-  PoiRepository? _poiRepository;
-  List<Poi> _overpassPois = [];
-
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
   static const double _initialLongitude = -98.5795;
@@ -69,7 +62,6 @@ class _MapScreenState extends State<MapScreen> {
   /// Initialize ViewModel and listen to pin updates
   Future<void> _initializeViewModel() async {
     _viewModel = Provider.of<MapViewModel>(context, listen: false);
-    _poiRepository = Provider.of<PoiRepository>(context, listen: false);
 
     // Listen to pin changes
     _viewModel!.addListener(_onPinsChanged);
@@ -160,86 +152,8 @@ class _MapScreenState extends State<MapScreen> {
   /// - layerId: Layer ID (should be 'pins-layer')
   /// - annotation: Additional annotation data (unused)
   void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) {
-    debugPrint('=== FEATURE TAPPED ===');
-    debugPrint('Feature ID: $id');
-    debugPrint('Layer ID: $layerId');
-    debugPrint('Point: ${point.x}, ${point.y}');
-    debugPrint('Coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
-
-    // TEMP DEBUG: show which layer was tapped
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('[DBG] featureTapped layer=$layerId id=$id'),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-    // END TEMP DEBUG
-
-    // Handle taps on Overpass POI labels → open create-pin dialog
-    if (layerId == 'overpass-poi-labels-layer') {
-      if (_isDialogOpen) return;
-
-      // Look up the tapped POI by its GeoJSON feature ID first (exact match),
-      // then fall back to geographic proximity. Using the ID avoids picking a
-      // wrong neighbour and works even when the proximity search would fail.
-      Poi? tappedPoi;
-      if (id.isNotEmpty) {
-        try {
-          tappedPoi = _overpassPois.firstWhere((p) => p.id == id);
-        } catch (_) {
-          // Feature id not found — fall through to proximity search
-        }
-      }
-
-      if (tappedPoi == null) {
-        double minDist = double.infinity;
-        for (final poi in _overpassPois) {
-          final dist = _calculateGeographicDistance(
-            coordinates.latitude, coordinates.longitude,
-            poi.latitude, poi.longitude,
-          );
-          if (dist < minDist) {
-            minDist = dist;
-            if (minDist < 200.0) tappedPoi = poi;
-          }
-        }
-      }
-
-      if (tappedPoi != null) {
-        final lat = tappedPoi.latitude;
-        final lng = tappedPoi.longitude;
-
-        if (!_isWithinUSBounds(lat, lng)) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Cannot create pins outside the continental US'),
-                duration: Duration(seconds: 3),
-              ),
-            );
-          }
-          return;
-        }
-
-        debugPrint('Overpass POI tapped: ${tappedPoi.name}');
-        _showPinDialog(
-          isEditMode: false,
-          poiName: tappedPoi.name,
-          initialStatus: null,
-          initialRestrictionTag: null,
-          initialHasSecurityScreening: false,
-          initialHasPostedSignage: false,
-          coordinates: LatLng(lat, lng),
-        );
-      }
-      return;
-    }
-
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
-      debugPrint('Not our layer, ignoring');
       return;
     }
 
@@ -392,100 +306,6 @@ class _MapScreenState extends State<MapScreen> {
         _updatePinsLayer();
       }
     }
-  }
-
-  /// Called when map camera stops moving - fetch Overpass POIs for the visible area.
-  ///
-  /// On iOS, base map symbol layers (business names, landmarks) do not render due
-  /// to a known limitation in MapLibre GL Native iOS. This method fetches POI data
-  /// from the Overpass API and renders it as a custom symbol layer so users can see
-  /// and tap POI labels on iOS.
-  Future<void> _onCameraIdle() async {
-    if (_mapController == null || _poiRepository == null) return;
-
-    // Only fetch POIs at street-level zoom (avoids fetching for huge areas)
-    final zoom = _mapController!.cameraPosition?.zoom ?? 0.0;
-    if (zoom < 12.0) {
-      _overpassPois = [];
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        await _clearOverpassPoiLayer();
-      }
-      return;
-    }
-
-    try {
-      final region = await _mapController!.getVisibleRegion();
-      final bounds = OverpassBounds(
-        south: region.southwest.latitude,
-        west: region.southwest.longitude,
-        north: region.northeast.latitude,
-        east: region.northeast.longitude,
-      );
-
-      final pois = await _poiRepository!.getPOIs(bounds);
-      _overpassPois = pois;
-
-      // On iOS, render POI labels as a custom layer since base map labels don't render
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        await _updateOverpassPoiLayer(pois);
-      }
-    } catch (e) {
-      debugPrint('MapScreen: Error fetching Overpass POIs: $e');
-    }
-  }
-
-  /// Renders Overpass POIs as a custom symbol layer on iOS.
-  Future<void> _updateOverpassPoiLayer(List<Poi> pois) async {
-    if (_mapController == null) return;
-
-    await _clearOverpassPoiLayer();
-
-    final namedPois = pois.where((p) => p.name.isNotEmpty).toList();
-    if (namedPois.isEmpty) return;
-
-    final geojson = {
-      'type': 'FeatureCollection',
-      'features': namedPois.map((poi) => {
-        'type': 'Feature',
-        'id': poi.id,
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [poi.longitude, poi.latitude],
-        },
-        'properties': {
-          'name': poi.name,
-          'type': poi.type,
-        },
-      }).toList(),
-    };
-
-    try {
-      await _mapController!.addGeoJsonSource('overpass-poi-source', geojson);
-      await _mapController!.addSymbolLayer(
-        'overpass-poi-source',
-        'overpass-poi-labels-layer',
-        SymbolLayerProperties(
-          textField: ['get', 'name'],
-          textSize: 11.0,
-          textColor: '#555555',
-          textHaloColor: '#FFFFFF',
-          textHaloWidth: 1.5,
-          textAllowOverlap: false,
-          textIgnorePlacement: false,
-        ),
-        belowLayerId: 'pins-layer',
-        enableInteraction: true, // Fire onFeatureTapped so iOS detects POI taps
-      );
-    } catch (e) {
-      debugPrint('MapScreen: Error rendering Overpass POI layer: $e');
-    }
-  }
-
-  /// Removes the custom Overpass POI layer if present.
-  Future<void> _clearOverpassPoiLayer() async {
-    if (_mapController == null) return;
-    try { await _mapController!.removeLayer('overpass-poi-labels-layer'); } catch (_) {}
-    try { await _mapController!.removeSource('overpass-poi-source'); } catch (_) {}
   }
 
   /// Build GeoJSON FeatureCollection from pins
@@ -663,38 +483,11 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     try {
-      debugPrint('Querying features at point...');
-      debugPrint('Number of pins in _pins list: ${_pins.length}');
-      debugPrint('Click coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
-      debugPrint('_overpassPois count: ${_overpassPois.length}');
-      if (_overpassPois.isNotEmpty) {
-        for (final poi in _overpassPois.take(3)) {
-          final dist = _calculateGeographicDistance(
-            coordinates.latitude, coordinates.longitude,
-            poi.latitude, poi.longitude,
-          );
-          debugPrint('  POI "${poi.name}" is ${dist.toStringAsFixed(0)}m away');
-        }
-      }
-
-      // PRIORITY 1: Check if user tapped on a POI label (from base map OR Overpass)
-      // Query at click point and nearby points to catch offset labels
+      // PRIORITY 1: Check if user tapped on a POI label (from base map)
       final poiResult = await _detectPoiAtPoint(point, coordinates);
-      debugPrint('_detectPoiAtPoint result: $poiResult');
 
       // Re-check after async gap — onFeatureTapped may have opened a dialog
       if (_isDialogOpen) return;
-
-      // TEMP DEBUG: show what _detectPoiAtPoint returned and how many POIs we have
-      if (mounted) {
-        final msg = poiResult != null
-            ? 'POI found: ${poiResult['name']}'
-            : 'No POI found (pois:${_overpassPois.length})';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('[DBG] $msg'), duration: const Duration(seconds: 4)),
-        );
-      }
-      // END TEMP DEBUG
 
       if (poiResult != null) {
         debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
@@ -1139,10 +932,8 @@ class _MapScreenState extends State<MapScreen> {
   ) async {
     if (_mapController == null) return null;
 
-    // Layer IDs to query for POIs — our custom Overpass layer first (always
-    // queryable on iOS), then base map layers (work on Android).
+    // Layer IDs to query for POIs from the base map tiles
     const poiLayerIds = [
-      'overpass-poi-labels-layer', // Custom layer added by _updateOverpassPoiLayer
       'poi',               // Common base map layer
       'poi_label',         // MapTiler POI labels
       'poi-label',         // Alternative naming
@@ -1223,13 +1014,11 @@ class _MapScreenState extends State<MapScreen> {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our own layers (pins and overpass — already queried above).
-            // Also filter by the 'status' property: our pins always carry a
-            // numeric status (0/1/2) that no base-map or Overpass POI feature
-            // has. On iOS, queryRenderedFeatures omits the layer.id field so
-            // layerId is '', making the contains('pins') check unreliable.
+            // Skip our own pin layers. Also filter by the 'status' property:
+            // our pins always carry a numeric status (0/1/2) that no base-map
+            // POI feature has. On iOS, queryRenderedFeatures omits the layer.id
+            // field so layerId is '', making the contains('pins') check unreliable.
             if (layerId.contains('pins')) continue;
-            if (layerId == 'overpass-poi-labels-layer') continue;
             if (feature['properties']?['status'] != null) continue;
 
             if (name != null && name.isNotEmpty) {
@@ -1256,40 +1045,6 @@ class _MapScreenState extends State<MapScreen> {
         }
       } catch (e) {
         debugPrint('Error querying at offset $offset: $e');
-      }
-    }
-
-    // Fallback: check cached Overpass POIs by geographic proximity.
-    // On iOS, queryRenderedFeatures does not reliably return symbol layer
-    // features. We fall back to the nearest Overpass POI within a
-    // zoom-dependent radius. The fixed 50 m threshold was too tight:
-    // at zoom 15 (~3.7 m/px) a medium-length label like "McDonald's" extends
-    // ~110 m from its geographic anchor, so edge taps always missed the window.
-    // Using the same zoom formula as PRIORITY 3 scales the radius correctly.
-    if (_overpassPois.isNotEmpty) {
-      final zoom = _mapController!.cameraPosition?.zoom ?? 15.0;
-      // At zoom 15 → ~200 m; doubles for every zoom level zoomed out.
-      // Floored at 50 m so we don't pick up distant POIs at high zoom.
-      final maxDistanceMeters = math.max(50.0, 200.0 * math.pow(2.0, 15.0 - zoom));
-      Poi? nearest;
-      double minDist = double.infinity;
-
-      for (final poi in _overpassPois) {
-        final dist = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          poi.latitude,
-          poi.longitude,
-        );
-        if (dist < maxDistanceMeters && dist < minDist) {
-          minDist = dist;
-          nearest = poi;
-        }
-      }
-
-      if (nearest != null) {
-        debugPrint('Found POI by Overpass proximity: ${nearest.name} (${minDist.toStringAsFixed(0)}m)');
-        return {'name': nearest.name, 'lat': nearest.latitude, 'lng': nearest.longitude};
       }
     }
 
@@ -1491,7 +1246,6 @@ class _MapScreenState extends State<MapScreen> {
               onStyleLoadedCallback: _onStyleLoadedCallback,
               onMapClick: _onMapClick,
               onMapLongClick: _onMapLongClick,
-              onCameraIdle: _onCameraIdle,
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
