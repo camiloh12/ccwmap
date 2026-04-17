@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
@@ -41,6 +43,12 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastDialogCloseTime;
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
+
+  // Debug state (toggled by long-pressing the title bar — lets user verify
+  // iOS POI tap detection on-device without a Mac)
+  bool _debugMode = false;
+  String? _debugLastTap;
+  String? _debugLastDetection;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -462,6 +470,15 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Click at: ${coordinates.latitude}, ${coordinates.longitude}');
     debugPrint('Screen point: ${point.x}, ${point.y}');
 
+    if (_debugMode && mounted) {
+      setState(() {
+        _debugLastTap =
+            'px=(${point.x.toStringAsFixed(0)},${point.y.toStringAsFixed(0)}) '
+            'geo=(${coordinates.latitude.toStringAsFixed(5)},${coordinates.longitude.toStringAsFixed(5)})';
+        _debugLastDetection = '…';
+      });
+    }
+
     if (_mapController == null) {
       debugPrint('Map controller is null, returning');
       return;
@@ -563,6 +580,8 @@ class _MapScreenState extends State<MapScreen> {
       if (clickedPin != null) {
         debugPrint('Found clicked pin: ${clickedPin.name} (${minDistance.toStringAsFixed(0)}m away)');
         debugPrint('Opening edit dialog for manually detected pin: ${clickedPin.name}');
+        _setDebugDetection(
+            'fallback to nearest pin "${clickedPin.name}" (${minDistance.toStringAsFixed(0)}m)');
         final Pin pin = clickedPin;
         final properties = {
           'id': pin.id,
@@ -605,6 +624,7 @@ class _MapScreenState extends State<MapScreen> {
         // No pin or POI clicked - do nothing on single click
         // User must long-press to create a pin at empty location
         debugPrint('No pin or POI found at click location. Use long-press to create pin here.');
+        _setDebugDetection('no POI, no nearby pin — tap ignored');
       }
     } catch (e) {
       debugPrint('Error handling map click: $e');
@@ -925,7 +945,9 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Detect POI at or near click point
   /// Returns map with 'name', 'lat', 'lng' if POI found, null otherwise
-  /// Checks MapLibre base map POIs (from the map tiles)
+  /// Checks MapLibre base map POIs (from the map tiles), with a MapTiler
+  /// reverse geocoding fallback on iOS (where queryRenderedFeatures does not
+  /// return base map symbol features).
   Future<Map<String, dynamic>?> _detectPoiAtPoint(
     Point<double> point,
     LatLng coordinates,
@@ -955,6 +977,11 @@ class _MapScreenState extends State<MapScreen> {
       [15.0, 15.0],
     ];
 
+    // Debug counters so we can see on-device whether queryRenderedFeatures
+    // is returning anything at all on iOS.
+    int totalFeatures = 0;
+    int namedFeatures = 0;
+
     // Query rendered features at multiple points
     for (final offset in offsets) {
       final queryPoint = Point<double>(
@@ -972,11 +999,13 @@ class _MapScreenState extends State<MapScreen> {
               null,
             );
 
+            totalFeatures += features.length;
             if (features.isNotEmpty) {
               final feature = features.first;
               final name = feature['properties']?['name']?.toString();
 
               if (name != null && name.isNotEmpty) {
+                namedFeatures++;
                 // Extract coordinates from feature geometry
                 final geometry = feature['geometry'];
                 double? lat, lng;
@@ -994,6 +1023,8 @@ class _MapScreenState extends State<MapScreen> {
                 lng ??= coordinates.longitude;
 
                 debugPrint('Found POI in layer $layerId: $name');
+                _setDebugDetection(
+                    'QRF hit layer=$layerId name=$name');
                 return {'name': name, 'lat': lat, 'lng': lng};
               }
             }
@@ -1010,6 +1041,8 @@ class _MapScreenState extends State<MapScreen> {
             null,
           );
 
+          totalFeatures += allFeatures.length;
+
           for (final feature in allFeatures) {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
@@ -1022,6 +1055,7 @@ class _MapScreenState extends State<MapScreen> {
             if (feature['properties']?['status'] != null) continue;
 
             if (name != null && name.isNotEmpty) {
+              namedFeatures++;
               final geometry = feature['geometry'];
               double? lat, lng;
 
@@ -1037,6 +1071,8 @@ class _MapScreenState extends State<MapScreen> {
               lng ??= coordinates.longitude;
 
               debugPrint('Found named feature in layer $layerId: $name');
+              _setDebugDetection(
+                  'QRF hit layer=${layerId.isEmpty ? "?" : layerId} name=$name');
               return {'name': name, 'lat': lat, 'lng': lng};
             }
           }
@@ -1048,8 +1084,79 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    // No POI found at any query point
+    // queryRenderedFeatures miss. On iOS, base map symbol layers are not
+    // returned by queryRenderedFeatures — fall back to MapTiler's reverse
+    // geocoding API to identify the POI label that was tapped.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      final fallback = await _reverseGeocodePoiAtPoint(point, coordinates);
+      if (fallback != null) return fallback;
+    } else {
+      _setDebugDetection(
+          'QRF miss (features=$totalFeatures named=$namedFeatures)');
+    }
+
     return null;
+  }
+
+  /// iOS fallback: reverse geocode the tap coordinate and, if a POI lives
+  /// within 60 screen pixels of the tap, return it as a POI hit.
+  Future<Map<String, dynamic>?> _reverseGeocodePoiAtPoint(
+    Point<double> point,
+    LatLng coordinates,
+  ) async {
+    final apiKey = dotenv.env['MAPTILER_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      _setDebugDetection('geocode skip: no API key');
+      return null;
+    }
+
+    final result = await MaptilerGeocodingClient.reverseGeocode(
+      lat: coordinates.latitude,
+      lng: coordinates.longitude,
+      apiKey: apiKey,
+    );
+
+    if (result == null) {
+      _setDebugDetection('geocode: no result');
+      return null;
+    }
+    if (!result.isPoi) {
+      _setDebugDetection(
+          'geocode: not POI (types=${result.placeType.join(",")})');
+      return null;
+    }
+
+    // Verify the POI's anchor is visually close to where the user tapped.
+    try {
+      final poiScreen = await _mapController!
+          .toScreenLocation(LatLng(result.lat, result.lng));
+      final dx = poiScreen.x - point.x;
+      final dy = poiScreen.y - point.y;
+      final pixelDist = math.sqrt(dx * dx + dy * dy);
+
+      if (pixelDist > 60.0) {
+        _setDebugDetection(
+            'geocode: ${result.name} too far (${pixelDist.toStringAsFixed(0)}px)');
+        return null;
+      }
+
+      _setDebugDetection(
+          'geocode hit: ${result.name} (${pixelDist.toStringAsFixed(0)}px)');
+      return {'name': result.name, 'lat': result.lat, 'lng': result.lng};
+    } catch (e) {
+      debugPrint('_reverseGeocodePoiAtPoint: toScreenLocation failed: $e');
+      _setDebugDetection('geocode: screen projection failed');
+      return null;
+    }
+  }
+
+  /// Record the latest POI detection outcome for the on-device debug overlay.
+  void _setDebugDetection(String info) {
+    debugPrint('POI detect: $info');
+    if (!_debugMode || !mounted) return;
+    setState(() {
+      _debugLastDetection = info;
+    });
   }
 
   /// Calculate geographic distance between two points using Haversine formula
@@ -1257,30 +1364,54 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // Title bar overlay (top-left)
+          // Long-press the title to toggle on-device debug mode. This shows a
+          // panel with the last tap, how POI detection resolved it, and the
+          // name of any pin/POI returned — so iOS tap issues can be diagnosed
+          // without plugging into a Mac.
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            child: GestureDetector(
+              onLongPress: () {
+                setState(() {
+                  _debugMode = !_debugMode;
+                  if (!_debugMode) {
+                    _debugLastTap = null;
+                    _debugLastDetection = null;
+                  }
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_debugMode
+                        ? 'Debug mode ON — tap POIs to see detection info'
+                        : 'Debug mode OFF'),
+                    duration: const Duration(seconds: 2),
                   ),
-                ],
-              ),
-              child: Semantics(
-                label: 'CCW Map - Concealed Carry Weapon Map Application',
-                child: const Text(
-                  'CCW Map',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                );
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Semantics(
+                  label: 'CCW Map - Concealed Carry Weapon Map Application',
+                  child: Text(
+                    _debugMode ? 'CCW Map · DEBUG' : 'CCW Map',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: _debugMode ? Colors.red : Colors.black87,
+                    ),
                   ),
                 ),
               ),
@@ -1330,6 +1461,49 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+
+          // Debug info panel (only visible when debug mode is on)
+          if (_debugMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 60,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.78),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _debugLastTap == null
+                          ? 'Tap somewhere to test POI detection'
+                          : 'tap: ${_debugLastTap!}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    if (_debugLastDetection != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'det: ${_debugLastDetection!}',
+                        style: const TextStyle(
+                          color: Colors.lightGreenAccent,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
 
           // Sync indicator (top-center, below title bar)
           if (viewModel.isSyncing)
