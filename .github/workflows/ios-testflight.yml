@@ -42,7 +42,10 @@ jobs:
             base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
 
       - name: Build IPA
-        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+        # SHOW_DEBUG_UI=true exposes the in-app bug-icon toggle and tap-detection
+        # overlay. Keep this on internal / TestFlight builds. OMIT it on App Store
+        # production workflows. See "CI/CD & Build Flags" in CLAUDE.md.
+        run: flutter build ipa --release --dart-define=SHOW_DEBUG_UI=true --export-options-plist=ios/ExportOptions.plist
 
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v3

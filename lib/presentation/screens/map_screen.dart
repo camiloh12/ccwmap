@@ -9,6 +9,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:ccwmap/core/build_flags.dart';
 import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
@@ -1347,107 +1348,86 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // Title bar overlay (top-left)
-          // Long-press the title to toggle on-device debug mode. This shows a
-          // panel with the last tap, how POI detection resolved it, and the
-          // name of any pin/POI returned — so iOS tap issues can be diagnosed
-          // without plugging into a Mac.
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
-            child: GestureDetector(
-              onLongPress: () {
-                setState(() {
-                  _debugMode = !_debugMode;
-                  if (!_debugMode) {
-                    _debugLastTap = null;
-                    _debugLastDetection = null;
-                  }
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(_debugMode
-                        ? 'Debug mode ON — tap POIs to see detection info'
-                        : 'Debug mode OFF'),
-                    duration: const Duration(seconds: 2),
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.1),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
                   ),
-                );
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Semantics(
-                  label: 'CCW Map - Concealed Carry Weapon Map Application',
-                  child: Text(
-                    _debugMode ? 'CCW Map · DEBUG' : 'CCW Map',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _debugMode ? Colors.red : Colors.black87,
-                    ),
+                ],
+              ),
+              child: Semantics(
+                label: 'CCW Map - Concealed Carry Weapon Map Application',
+                child: Text(
+                  kShowDebugUI && _debugMode ? 'CCW Map · DEBUG' : 'CCW Map',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: kShowDebugUI && _debugMode
+                        ? Colors.red
+                        : Colors.black87,
                   ),
                 ),
               ),
             ),
           ),
 
-          // Debug toggle (top-right, left of exit button)
-          // Tapping toggles an on-screen panel showing how each tap was
-          // resolved — essential for diagnosing iOS POI-tap issues on
-          // TestFlight builds without a Mac.
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 72,
-            child: Material(
-              color: _debugMode
-                  ? Colors.red.withValues(alpha: 0.9)
-                  : Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(8),
-              elevation: 2,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _debugMode = !_debugMode;
-                    if (!_debugMode) {
-                      _debugLastTap = null;
-                      _debugLastDetection = null;
-                    }
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(_debugMode
-                          ? 'Debug mode ON — tap anywhere to see detection info'
-                          : 'Debug mode OFF'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                },
+          // Debug toggle (top-right, left of exit button). Gated on
+          // kShowDebugUI so it is tree-shaken out of production release
+          // builds. See lib/core/build_flags.dart.
+          if (kShowDebugUI)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 72,
+              child: Material(
+                color: _debugMode
+                    ? Colors.red.withValues(alpha: 0.9)
+                    : Colors.white.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(8),
-                child: Tooltip(
-                  message: 'Toggle debug overlay',
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    child: Icon(
-                      Icons.bug_report_outlined,
-                      color: _debugMode ? Colors.white : Colors.black87,
-                      size: 24,
-                      semanticLabel: 'Debug overlay toggle',
+                elevation: 2,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _debugMode = !_debugMode;
+                      if (!_debugMode) {
+                        _debugLastTap = null;
+                        _debugLastDetection = null;
+                      }
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(_debugMode
+                            ? 'Debug mode ON — tap anywhere to see detection info'
+                            : 'Debug mode OFF'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Tooltip(
+                    message: 'Toggle debug overlay',
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Icon(
+                        Icons.bug_report_outlined,
+                        color: _debugMode ? Colors.white : Colors.black87,
+                        size: 24,
+                        semanticLabel: 'Debug overlay toggle',
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
           // Exit/sign out icon (top-right)
           Positioned(
@@ -1493,8 +1473,9 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // Debug info panel (only visible when debug mode is on)
-          if (_debugMode)
+          // Debug info panel. Gated on kShowDebugUI so it is tree-shaken
+          // out of production release builds. See lib/core/build_flags.dart.
+          if (kShowDebugUI && _debugMode)
             Positioned(
               top: MediaQuery.of(context).padding.top + 60,
               left: 16,
