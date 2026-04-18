@@ -10,16 +10,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Known Bugs (Do Not Fix Without Being Asked)
 
-### BUG-001: Tapping POI label on iOS opens edit dialog instead of create dialog
-- **Platform:** iOS only (Android works correctly)
-- **Symptom:** Tapping a POI label on the map opens the edit dialog for the nearest existing pin instead of a create-pin dialog with the POI name. If no pin is nearby, nothing happens. Long-press workaround still works.
-- **Android behavior (expected):** Business names and landmark labels are visible; tapping a label opens the create-pin dialog with the POI name pre-filled via `queryRenderedFeatures`.
-- **Status:** Fix implemented on `feature/ios-build`, awaiting TestFlight verification.
-- **Root cause:** `queryRenderedFeatures` on iOS does not return features from base map symbol layers (MapTiler POI labels). Base map labels DO render visually on iOS. Because `_detectPoiAtPoint` returned null, the tap fell through to PRIORITY 3 (nearest-pin proximity search), which opened an edit dialog.
-- **Fix approach:** When `queryRenderedFeatures` returns nothing on iOS, `_detectPoiAtPoint` falls back to calling MapTiler's reverse-geocoding API at the tap coordinates, filtering for `place_type == "poi"`, and accepting the result only if the POI's anchor point is within 60 screen pixels of the tap. See `lib/data/datasources/maptiler_geocoding_client.dart` and `_reverseGeocodePoiAtPoint` in `lib/presentation/screens/map_screen.dart`.
-- **On-device debug aid:** Long-press the "CCW Map" title to toggle a debug panel that shows the last tap's screen/geo coordinates and how `_detectPoiAtPoint` resolved it (QRF hit, geocode hit, fallback to nearest pin, or ignored). Intended for diagnosing iOS tap behavior on TestFlight builds without needing a Mac.
-- **Known limitation:** Tapping empty space within 60 px of a POI anchor will now open a create dialog for that POI. This is a strictly better failure mode than opening an edit dialog for an unrelated pin, and the user can cancel out.
+_No open bugs._
+
+### BUG-001 (FIXED): Tapping POI label on iOS opened edit dialog instead of create dialog
+- **Platform:** iOS only (Android was already working correctly).
+- **Original symptom:** Tapping a POI label opened the edit dialog for the nearest existing pin — often a pin far off-screen — instead of a create-pin dialog with the POI name. If no pin was nearby, nothing happened.
+- **Root cause:** `queryRenderedFeatures` on iOS does not return features from base map symbol layers (MapTiler POI labels). Because `_detectPoiAtPoint` returned null, taps fell through to PRIORITY 3 (nearest-pin proximity search), which used a meter-based threshold that expanded at low zoom levels — so distant pins matched.
+- **Fix:** Two parts.
+  1. **POI detection fallback (iOS):** When `queryRenderedFeatures` returns nothing on iOS, `_detectPoiAtPoint` calls MapTiler's reverse-geocoding API at the tap coordinates, filters for `place_type == "poi"`, and accepts the result only if the POI anchor is within 60 screen pixels of the tap. See `lib/data/datasources/maptiler_geocoding_client.dart` and `_reverseGeocodePoiAtPoint` in `lib/presentation/screens/map_screen.dart`.
+  2. **Pixel-based pin hit detection:** `_onFeatureTapped` and the PRIORITY 3 nearest-pin branch now use `mapController.toScreenLocation` and a 30-pixel threshold (`_pinHitPixelThreshold`, `_nearPinPixelThreshold`) rather than meters. Prevents distant pins from being matched when empty space is tapped.
+- **On-device debug aid:** Tap the bug icon (top-right, left of the exit button) to toggle a debug overlay showing the last tap's screen/geo coordinates and how `_detectPoiAtPoint` resolved it (QRF hit, geocode hit, fallback to nearest pin, or ignored). Gated on `kShowDebugUI` (see "CI/CD & Build Flags" below) so it ships to TestFlight but is tree-shaken out of App Store builds.
+- **Known limitation:** Tapping empty space within 60 px of a POI anchor opens a create dialog for that POI. This is a strictly better failure mode than the original bug, and the user can cancel out.
 - **Previous failed approach (removed):** Overpass API was used to render a custom symbol layer on iOS, but the Overpass data never loaded (`pois:0`). That code has been removed.
+
+## CI/CD & Build Flags
+
+### `SHOW_DEBUG_UI` compile-time flag
+- **Defined in:** `lib/core/build_flags.dart` as `kShowDebugUI = !kReleaseMode || bool.fromEnvironment('SHOW_DEBUG_UI')`.
+- **What it controls:** The in-app bug-icon toggle (top-right of map) and the tap-detection debug overlay. Both are invaluable for diagnosing map behavior on physical devices without a Mac + Xcode.
+- **Resolution:**
+  - `flutter run` (debug) or `--profile` → `true` automatically (not release mode).
+  - `flutter build ... --release --dart-define=SHOW_DEBUG_UI=true` → `true`.
+  - `flutter build ... --release` (no flag) → `false`. Dart's compiler tree-shakes the gated widgets out entirely — no bytecode for the debug UI ships.
+- **Current workflow state:**
+  - `.github/workflows/ios-testflight.yml` — **includes** `--dart-define=SHOW_DEBUG_UI=true` (manual trigger, internal TestFlight only).
+  - `.github/workflows/ios.yml` — build validation only (no deployment), flag not needed.
+- **TODO when wiring full production CI/CD:**
+  - Any workflow that uploads to **App Store Connect for public release** (as opposed to internal TestFlight) must **OMIT** `--dart-define=SHOW_DEBUG_UI=true` so the debug UI does not ship to end users.
+  - Same rule for Play Store production workflows.
+  - Reasonable convention: keep the flag on `workflow_dispatch` / internal-tester workflows, omit it on any workflow triggered by a release tag or release branch merge.
 
 ## Project Overview
 
