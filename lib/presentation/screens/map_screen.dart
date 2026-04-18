@@ -55,6 +55,16 @@ class _MapScreenState extends State<MapScreen> {
   static const double _initialLongitude = -98.5795;
   static const double _initialZoom = 4.0;
 
+  // Pin tap/near-miss thresholds in screen pixels. Pixel-based thresholds are
+  // zoom-agnostic and avoid relying on cameraPosition.zoom, which can be stale
+  // on iOS and lead to the nearest-pin fallback picking a pin hundreds of
+  // meters away.
+  //
+  // Circle radius is 12 px; 30 px gives a small forgiveness zone around the
+  // visible pin without catching unrelated taps in empty space.
+  static const double _pinHitPixelThreshold = 30.0;
+  static const double _nearPinPixelThreshold = 30.0;
+
   @override
   void initState() {
     super.initState();
@@ -159,7 +169,7 @@ class _MapScreenState extends State<MapScreen> {
   /// - id: Feature ID (should match pin.id from our GeoJSON)
   /// - layerId: Layer ID (should be 'pins-layer')
   /// - annotation: Additional annotation data (unused)
-  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) {
+  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) async {
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
       return;
@@ -176,36 +186,35 @@ class _MapScreenState extends State<MapScreen> {
     try {
       pin = _pins.firstWhere((p) => p.id == id);
     } catch (e) {
-      debugPrint('Pin not found by ID, using geographic fallback');
-      // Fallback: find nearest pin by coordinates
-      for (final p in _pins) {
-        final distance = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          p.location.latitude,
-          p.location.longitude,
-        );
-        if (distance < 100) { // Within 100 meters
-          pin = p;
-          break;
-        }
-      }
+      debugPrint('Pin not found by ID, ignoring feature tap');
+      return;
     }
 
-    if (pin != null) {
-      debugPrint('Found pin: ${pin.name}');
-      _showPinDialog(
-        isEditMode: true,
-        poiName: pin.name,
-        initialStatus: pin.status,
-        initialRestrictionTag: pin.restrictionTag,
-        initialHasSecurityScreening: pin.hasSecurityScreening,
-        initialHasPostedSignage: pin.hasPostedSignage,
-        pinId: pin.id,
-      );
-    } else {
-      debugPrint('Could not find matching pin');
+    // Verify the tap actually landed near this pin on-screen. iOS's native
+    // hit test can report a pin hit for taps that are visually far from the
+    // circle — without this guard, tapping empty space near the map can open
+    // the edit dialog for a distant pin.
+    final pixelDist = await _pixelDistanceToPin(pin, point);
+    if (pixelDist != null && pixelDist > _pinHitPixelThreshold) {
+      debugPrint(
+          'Feature tap rejected: ${pin.name} is ${pixelDist.toStringAsFixed(0)}px from tap');
+      _setDebugDetection(
+          'feature-tap rejected: ${pin.name} ${pixelDist.toStringAsFixed(0)}px > $_pinHitPixelThreshold');
+      return;
     }
+
+    debugPrint('Found pin: ${pin.name}');
+    _setDebugDetection(
+        'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}');
+    _showPinDialog(
+      isEditMode: true,
+      poiName: pin.name,
+      initialStatus: pin.status,
+      initialRestrictionTag: pin.restrictionTag,
+      initialHasSecurityScreening: pin.hasSecurityScreening,
+      initialHasPostedSignage: pin.hasPostedSignage,
+      pinId: pin.id,
+    );
   }
 
   void _onStyleLoadedCallback() {
@@ -541,36 +550,22 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Get current zoom level to calculate appropriate threshold
-      final cameraPosition = _mapController!.cameraPosition;
-      final zoomLevel = cameraPosition?.zoom ?? 10.0;
-
-      // Calculate threshold based on zoom level
-      // At zoom 15 (city level): ~30 meters
-      // At zoom 10 (state level): ~600 meters
-      // At zoom 18 (street level): ~30 meters (capped minimum)
-      // Formula: threshold decreases as zoom increases, with 30m minimum
-      final clickThresholdMeters = math.max(30.0, 10000.0 / math.pow(2, zoomLevel));
-
-      debugPrint('Zoom level: ${zoomLevel.toStringAsFixed(1)}, Threshold: ${clickThresholdMeters.toStringAsFixed(0)}m');
-
-      // PRIORITY 3: Find existing pin by checking geographic distance from click point
+      // PRIORITY 3: Find an existing pin very close to the tap (in screen
+      // pixels). Only triggers when the tap narrowly misses a visible pin
+      // circle. Pixel distance is used rather than meters because
+      // cameraPosition.zoom can be stale on iOS, which previously caused taps
+      // in empty space to match pins hundreds of meters away.
       Pin? clickedPin;
-      double minDistance = double.infinity;
+      double minPixelDistance = double.infinity;
 
       for (final pin in _pins) {
-        // Calculate geographic distance in meters
-        final distanceMeters = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          pin.location.latitude,
-          pin.location.longitude,
-        );
+        final pixelDist = await _pixelDistanceToPin(pin, point);
+        if (pixelDist == null) continue;
 
-        debugPrint('Pin ${pin.name}: ${distanceMeters.toStringAsFixed(0)}m away');
+        debugPrint('Pin ${pin.name}: ${pixelDist.toStringAsFixed(0)}px away');
 
-        if (distanceMeters < clickThresholdMeters && distanceMeters < minDistance) {
-          minDistance = distanceMeters;
+        if (pixelDist < _nearPinPixelThreshold && pixelDist < minPixelDistance) {
+          minPixelDistance = pixelDist;
           clickedPin = pin;
         }
       }
@@ -578,10 +573,10 @@ class _MapScreenState extends State<MapScreen> {
       if (_isDialogOpen) return;
 
       if (clickedPin != null) {
-        debugPrint('Found clicked pin: ${clickedPin.name} (${minDistance.toStringAsFixed(0)}m away)');
-        debugPrint('Opening edit dialog for manually detected pin: ${clickedPin.name}');
+        debugPrint(
+            'Found clicked pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px away)');
         _setDebugDetection(
-            'fallback to nearest pin "${clickedPin.name}" (${minDistance.toStringAsFixed(0)}m)');
+            'near-pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px)');
         final Pin pin = clickedPin;
         final properties = {
           'id': pin.id,
@@ -1159,33 +1154,21 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  /// Calculate geographic distance between two points using Haversine formula
-  /// Returns distance in meters
-  double _calculateGeographicDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadiusMeters = 6371000.0; // Earth's radius in meters
-
-    final dLat = _degreesToRadians(lat2 - lat1);
-    final dLon = _degreesToRadians(lon2 - lon1);
-
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degreesToRadians(lat1)) *
-            math.cos(_degreesToRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-
-    return earthRadiusMeters * c;
-  }
-
-  /// Convert degrees to radians
-  double _degreesToRadians(double degrees) {
-    return degrees * math.pi / 180.0;
+  /// Return the screen pixel distance from [tapPoint] to [pin], or null if
+  /// the projection fails.
+  Future<double?> _pixelDistanceToPin(Pin pin, Point<double> tapPoint) async {
+    if (_mapController == null) return null;
+    try {
+      final pinScreen = await _mapController!.toScreenLocation(
+        LatLng(pin.location.latitude, pin.location.longitude),
+      );
+      final dx = pinScreen.x - tapPoint.x;
+      final dy = pinScreen.y - tapPoint.y;
+      return math.sqrt(dx * dx + dy * dy);
+    } catch (e) {
+      debugPrint('_pixelDistanceToPin: toScreenLocation failed: $e');
+      return null;
+    }
   }
 
   /// Check if coordinates are within continental US bounds
@@ -1411,6 +1394,54 @@ class _MapScreenState extends State<MapScreen> {
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: _debugMode ? Colors.red : Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Debug toggle (top-right, left of exit button)
+          // Tapping toggles an on-screen panel showing how each tap was
+          // resolved — essential for diagnosing iOS POI-tap issues on
+          // TestFlight builds without a Mac.
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 72,
+            child: Material(
+              color: _debugMode
+                  ? Colors.red.withValues(alpha: 0.9)
+                  : Colors.white.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(8),
+              elevation: 2,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _debugMode = !_debugMode;
+                    if (!_debugMode) {
+                      _debugLastTap = null;
+                      _debugLastDetection = null;
+                    }
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_debugMode
+                          ? 'Debug mode ON — tap anywhere to see detection info'
+                          : 'Debug mode OFF'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Tooltip(
+                  message: 'Toggle debug overlay',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.bug_report_outlined,
+                      color: _debugMode ? Colors.white : Colors.black87,
+                      size: 24,
+                      semanticLabel: 'Debug overlay toggle',
                     ),
                   ),
                 ),
