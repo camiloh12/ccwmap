@@ -1,16 +1,15 @@
 import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:ccwmap/domain/models/poi.dart';
-import 'package:ccwmap/domain/repositories/poi_repository.dart';
-import 'package:ccwmap/data/datasources/overpass_api_client.dart';
+import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
@@ -45,14 +44,26 @@ class _MapScreenState extends State<MapScreen> {
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
 
-  // POI data (used on iOS where base map symbol layers don't render)
-  PoiRepository? _poiRepository;
-  List<Poi> _overpassPois = [];
+  // Debug state (toggled by long-pressing the title bar — lets user verify
+  // iOS POI tap detection on-device without a Mac)
+  bool _debugMode = false;
+  String? _debugLastTap;
+  String? _debugLastDetection;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
   static const double _initialLongitude = -98.5795;
   static const double _initialZoom = 4.0;
+
+  // Pin tap/near-miss thresholds in screen pixels. Pixel-based thresholds are
+  // zoom-agnostic and avoid relying on cameraPosition.zoom, which can be stale
+  // on iOS and lead to the nearest-pin fallback picking a pin hundreds of
+  // meters away.
+  //
+  // Circle radius is 12 px; 30 px gives a small forgiveness zone around the
+  // visible pin without catching unrelated taps in empty space.
+  static const double _pinHitPixelThreshold = 30.0;
+  static const double _nearPinPixelThreshold = 30.0;
 
   @override
   void initState() {
@@ -69,7 +80,6 @@ class _MapScreenState extends State<MapScreen> {
   /// Initialize ViewModel and listen to pin updates
   Future<void> _initializeViewModel() async {
     _viewModel = Provider.of<MapViewModel>(context, listen: false);
-    _poiRepository = Provider.of<PoiRepository>(context, listen: false);
 
     // Listen to pin changes
     _viewModel!.addListener(_onPinsChanged);
@@ -159,16 +169,9 @@ class _MapScreenState extends State<MapScreen> {
   /// - id: Feature ID (should match pin.id from our GeoJSON)
   /// - layerId: Layer ID (should be 'pins-layer')
   /// - annotation: Additional annotation data (unused)
-  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) {
-    debugPrint('=== FEATURE TAPPED ===');
-    debugPrint('Feature ID: $id');
-    debugPrint('Layer ID: $layerId');
-    debugPrint('Point: ${point.x}, ${point.y}');
-    debugPrint('Coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
-
+  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) async {
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
-      debugPrint('Not our layer, ignoring');
       return;
     }
 
@@ -183,36 +186,35 @@ class _MapScreenState extends State<MapScreen> {
     try {
       pin = _pins.firstWhere((p) => p.id == id);
     } catch (e) {
-      debugPrint('Pin not found by ID, using geographic fallback');
-      // Fallback: find nearest pin by coordinates
-      for (final p in _pins) {
-        final distance = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          p.location.latitude,
-          p.location.longitude,
-        );
-        if (distance < 100) { // Within 100 meters
-          pin = p;
-          break;
-        }
-      }
+      debugPrint('Pin not found by ID, ignoring feature tap');
+      return;
     }
 
-    if (pin != null) {
-      debugPrint('Found pin: ${pin.name}');
-      _showPinDialog(
-        isEditMode: true,
-        poiName: pin.name,
-        initialStatus: pin.status,
-        initialRestrictionTag: pin.restrictionTag,
-        initialHasSecurityScreening: pin.hasSecurityScreening,
-        initialHasPostedSignage: pin.hasPostedSignage,
-        pinId: pin.id,
-      );
-    } else {
-      debugPrint('Could not find matching pin');
+    // Verify the tap actually landed near this pin on-screen. iOS's native
+    // hit test can report a pin hit for taps that are visually far from the
+    // circle — without this guard, tapping empty space near the map can open
+    // the edit dialog for a distant pin.
+    final pixelDist = await _pixelDistanceToPin(pin, point);
+    if (pixelDist != null && pixelDist > _pinHitPixelThreshold) {
+      debugPrint(
+          'Feature tap rejected: ${pin.name} is ${pixelDist.toStringAsFixed(0)}px from tap');
+      _setDebugDetection(
+          'feature-tap rejected: ${pin.name} ${pixelDist.toStringAsFixed(0)}px > $_pinHitPixelThreshold');
+      return;
     }
+
+    debugPrint('Found pin: ${pin.name}');
+    _setDebugDetection(
+        'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}');
+    _showPinDialog(
+      isEditMode: true,
+      poiName: pin.name,
+      initialStatus: pin.status,
+      initialRestrictionTag: pin.restrictionTag,
+      initialHasSecurityScreening: pin.hasSecurityScreening,
+      initialHasPostedSignage: pin.hasPostedSignage,
+      pinId: pin.id,
+    );
   }
 
   void _onStyleLoadedCallback() {
@@ -288,6 +290,7 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       // Add symbol layer for pin name labels
+      // enableInteraction: false so taps fall through to pins-layer circles
       await _mapController!.addSymbolLayer(
         'pins-source',
         'pins-labels-layer',
@@ -307,6 +310,7 @@ class _MapScreenState extends State<MapScreen> {
           textAllowOverlap: false,
           textIgnorePlacement: false,
         ),
+        enableInteraction: false,
       );
 
     } catch (e) {
@@ -319,99 +323,6 @@ class _MapScreenState extends State<MapScreen> {
         _updatePinsLayer();
       }
     }
-  }
-
-  /// Called when map camera stops moving - fetch Overpass POIs for the visible area.
-  ///
-  /// On iOS, base map symbol layers (business names, landmarks) do not render due
-  /// to a known limitation in MapLibre GL Native iOS. This method fetches POI data
-  /// from the Overpass API and renders it as a custom symbol layer so users can see
-  /// and tap POI labels on iOS.
-  Future<void> _onCameraIdle() async {
-    if (_mapController == null || _poiRepository == null) return;
-
-    // Only fetch POIs at street-level zoom (avoids fetching for huge areas)
-    final zoom = _mapController!.cameraPosition?.zoom ?? 0.0;
-    if (zoom < 12.0) {
-      _overpassPois = [];
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        await _clearOverpassPoiLayer();
-      }
-      return;
-    }
-
-    try {
-      final region = await _mapController!.getVisibleRegion();
-      final bounds = OverpassBounds(
-        south: region.southwest.latitude,
-        west: region.southwest.longitude,
-        north: region.northeast.latitude,
-        east: region.northeast.longitude,
-      );
-
-      final pois = await _poiRepository!.getPOIs(bounds);
-      _overpassPois = pois;
-
-      // On iOS, render POI labels as a custom layer since base map labels don't render
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-        await _updateOverpassPoiLayer(pois);
-      }
-    } catch (e) {
-      debugPrint('MapScreen: Error fetching Overpass POIs: $e');
-    }
-  }
-
-  /// Renders Overpass POIs as a custom symbol layer on iOS.
-  Future<void> _updateOverpassPoiLayer(List<Poi> pois) async {
-    if (_mapController == null) return;
-
-    await _clearOverpassPoiLayer();
-
-    final namedPois = pois.where((p) => p.name.isNotEmpty).toList();
-    if (namedPois.isEmpty) return;
-
-    final geojson = {
-      'type': 'FeatureCollection',
-      'features': namedPois.map((poi) => {
-        'type': 'Feature',
-        'id': poi.id,
-        'geometry': {
-          'type': 'Point',
-          'coordinates': [poi.longitude, poi.latitude],
-        },
-        'properties': {
-          'name': poi.name,
-          'type': poi.type,
-        },
-      }).toList(),
-    };
-
-    try {
-      await _mapController!.addGeoJsonSource('overpass-poi-source', geojson);
-      await _mapController!.addSymbolLayer(
-        'overpass-poi-source',
-        'overpass-poi-labels-layer',
-        SymbolLayerProperties(
-          textField: ['get', 'name'],
-          textSize: 11.0,
-          textColor: '#555555',
-          textHaloColor: '#FFFFFF',
-          textHaloWidth: 1.5,
-          textAllowOverlap: false,
-          textIgnorePlacement: false,
-        ),
-        belowLayerId: 'pins-layer',
-      );
-    } catch (e) {
-      debugPrint('MapScreen: Error rendering Overpass POI layer: $e');
-    }
-  }
-
-  /// Removes the custom Overpass POI layer if present.
-  Future<void> _clearOverpassPoiLayer() async {
-    if (_mapController == null) return;
-    try { await _mapController!.removeLayer('overpass-poi-labels-layer'); } catch (_) {}
-    try { await _mapController!.removeSource('overpass-poi-source'); } catch (_) {}
   }
 
   /// Build GeoJSON FeatureCollection from pins
@@ -568,6 +479,15 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Click at: ${coordinates.latitude}, ${coordinates.longitude}');
     debugPrint('Screen point: ${point.x}, ${point.y}');
 
+    if (_debugMode && mounted) {
+      setState(() {
+        _debugLastTap =
+            'px=(${point.x.toStringAsFixed(0)},${point.y.toStringAsFixed(0)}) '
+            'geo=(${coordinates.latitude.toStringAsFixed(5)},${coordinates.longitude.toStringAsFixed(5)})';
+        _debugLastDetection = '…';
+      });
+    }
+
     if (_mapController == null) {
       debugPrint('Map controller is null, returning');
       return;
@@ -589,13 +509,12 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     try {
-      debugPrint('Querying features at point...');
-      debugPrint('Number of pins in _pins list: ${_pins.length}');
-      debugPrint('Click coordinates: ${coordinates.latitude}, ${coordinates.longitude}');
-
-      // PRIORITY 1: Check if user tapped on a POI label (from base map OR Overpass)
-      // Query at click point and nearby points to catch offset labels
+      // PRIORITY 1: Check if user tapped on a POI label (from base map)
       final poiResult = await _detectPoiAtPoint(point, coordinates);
+
+      // Re-check after async gap — onFeatureTapped may have opened a dialog
+      if (_isDialogOpen) return;
+
       if (poiResult != null) {
         debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
 
@@ -631,43 +550,33 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Get current zoom level to calculate appropriate threshold
-      final cameraPosition = _mapController!.cameraPosition;
-      final zoomLevel = cameraPosition?.zoom ?? 10.0;
-
-      // Calculate threshold based on zoom level
-      // At zoom 15 (city level): ~30 meters
-      // At zoom 10 (state level): ~600 meters
-      // At zoom 18 (street level): ~30 meters (capped minimum)
-      // Formula: threshold decreases as zoom increases, with 30m minimum
-      final clickThresholdMeters = math.max(30.0, 10000.0 / math.pow(2, zoomLevel));
-
-      debugPrint('Zoom level: ${zoomLevel.toStringAsFixed(1)}, Threshold: ${clickThresholdMeters.toStringAsFixed(0)}m');
-
-      // PRIORITY 3: Find existing pin by checking geographic distance from click point
+      // PRIORITY 3: Find an existing pin very close to the tap (in screen
+      // pixels). Only triggers when the tap narrowly misses a visible pin
+      // circle. Pixel distance is used rather than meters because
+      // cameraPosition.zoom can be stale on iOS, which previously caused taps
+      // in empty space to match pins hundreds of meters away.
       Pin? clickedPin;
-      double minDistance = double.infinity;
+      double minPixelDistance = double.infinity;
 
       for (final pin in _pins) {
-        // Calculate geographic distance in meters
-        final distanceMeters = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          pin.location.latitude,
-          pin.location.longitude,
-        );
+        final pixelDist = await _pixelDistanceToPin(pin, point);
+        if (pixelDist == null) continue;
 
-        debugPrint('Pin ${pin.name}: ${distanceMeters.toStringAsFixed(0)}m away');
+        debugPrint('Pin ${pin.name}: ${pixelDist.toStringAsFixed(0)}px away');
 
-        if (distanceMeters < clickThresholdMeters && distanceMeters < minDistance) {
-          minDistance = distanceMeters;
+        if (pixelDist < _nearPinPixelThreshold && pixelDist < minPixelDistance) {
+          minPixelDistance = pixelDist;
           clickedPin = pin;
         }
       }
 
+      if (_isDialogOpen) return;
+
       if (clickedPin != null) {
-        debugPrint('Found clicked pin: ${clickedPin.name} (${minDistance.toStringAsFixed(0)}m away)');
-        debugPrint('Opening edit dialog for manually detected pin: ${clickedPin.name}');
+        debugPrint(
+            'Found clicked pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px away)');
+        _setDebugDetection(
+            'near-pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px)');
         final Pin pin = clickedPin;
         final properties = {
           'id': pin.id,
@@ -710,6 +619,7 @@ class _MapScreenState extends State<MapScreen> {
         // No pin or POI clicked - do nothing on single click
         // User must long-press to create a pin at empty location
         debugPrint('No pin or POI found at click location. Use long-press to create pin here.');
+        _setDebugDetection('no POI, no nearby pin — tap ignored');
       }
     } catch (e) {
       debugPrint('Error handling map click: $e');
@@ -1030,14 +940,16 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Detect POI at or near click point
   /// Returns map with 'name', 'lat', 'lng' if POI found, null otherwise
-  /// Checks MapLibre base map POIs (from the map tiles)
+  /// Checks MapLibre base map POIs (from the map tiles), with a MapTiler
+  /// reverse geocoding fallback on iOS (where queryRenderedFeatures does not
+  /// return base map symbol features).
   Future<Map<String, dynamic>?> _detectPoiAtPoint(
     Point<double> point,
     LatLng coordinates,
   ) async {
     if (_mapController == null) return null;
 
-    // Layer IDs to query for POIs (MapLibre/OpenMapTiles base map layers)
+    // Layer IDs to query for POIs from the base map tiles
     const poiLayerIds = [
       'poi',               // Common base map layer
       'poi_label',         // MapTiler POI labels
@@ -1060,6 +972,11 @@ class _MapScreenState extends State<MapScreen> {
       [15.0, 15.0],
     ];
 
+    // Debug counters so we can see on-device whether queryRenderedFeatures
+    // is returning anything at all on iOS.
+    int totalFeatures = 0;
+    int namedFeatures = 0;
+
     // Query rendered features at multiple points
     for (final offset in offsets) {
       final queryPoint = Point<double>(
@@ -1077,11 +994,13 @@ class _MapScreenState extends State<MapScreen> {
               null,
             );
 
+            totalFeatures += features.length;
             if (features.isNotEmpty) {
               final feature = features.first;
               final name = feature['properties']?['name']?.toString();
 
               if (name != null && name.isNotEmpty) {
+                namedFeatures++;
                 // Extract coordinates from feature geometry
                 final geometry = feature['geometry'];
                 double? lat, lng;
@@ -1099,6 +1018,8 @@ class _MapScreenState extends State<MapScreen> {
                 lng ??= coordinates.longitude;
 
                 debugPrint('Found POI in layer $layerId: $name');
+                _setDebugDetection(
+                    'QRF hit layer=$layerId name=$name');
                 return {'name': name, 'lat': lat, 'lng': lng};
               }
             }
@@ -1115,14 +1036,21 @@ class _MapScreenState extends State<MapScreen> {
             null,
           );
 
+          totalFeatures += allFeatures.length;
+
           for (final feature in allFeatures) {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our pin layers
+            // Skip our own pin layers. Also filter by the 'status' property:
+            // our pins always carry a numeric status (0/1/2) that no base-map
+            // POI feature has. On iOS, queryRenderedFeatures omits the layer.id
+            // field so layerId is '', making the contains('pins') check unreliable.
             if (layerId.contains('pins')) continue;
+            if (feature['properties']?['status'] != null) continue;
 
             if (name != null && name.isNotEmpty) {
+              namedFeatures++;
               final geometry = feature['geometry'];
               double? lat, lng;
 
@@ -1138,6 +1066,8 @@ class _MapScreenState extends State<MapScreen> {
               lng ??= coordinates.longitude;
 
               debugPrint('Found named feature in layer $layerId: $name');
+              _setDebugDetection(
+                  'QRF hit layer=${layerId.isEmpty ? "?" : layerId} name=$name');
               return {'name': name, 'lat': lat, 'lng': lng};
             }
           }
@@ -1149,64 +1079,96 @@ class _MapScreenState extends State<MapScreen> {
       }
     }
 
-    // Fallback: check cached Overpass POIs by geographic proximity.
-    // On iOS, queryRenderedFeatures does not reliably return base map symbol
-    // layer features, so we fall back to the nearest known POI within 50 meters.
-    if (_overpassPois.isNotEmpty) {
-      const maxDistanceMeters = 50.0;
-      Poi? nearest;
-      double minDist = double.infinity;
-
-      for (final poi in _overpassPois) {
-        final dist = _calculateGeographicDistance(
-          coordinates.latitude,
-          coordinates.longitude,
-          poi.latitude,
-          poi.longitude,
-        );
-        if (dist < maxDistanceMeters && dist < minDist) {
-          minDist = dist;
-          nearest = poi;
-        }
-      }
-
-      if (nearest != null) {
-        debugPrint('Found POI by Overpass proximity: ${nearest.name} (${minDist.toStringAsFixed(0)}m)');
-        return {'name': nearest.name, 'lat': nearest.latitude, 'lng': nearest.longitude};
-      }
+    // queryRenderedFeatures miss. On iOS, base map symbol layers are not
+    // returned by queryRenderedFeatures — fall back to MapTiler's reverse
+    // geocoding API to identify the POI label that was tapped.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      final fallback = await _reverseGeocodePoiAtPoint(point, coordinates);
+      if (fallback != null) return fallback;
+    } else {
+      _setDebugDetection(
+          'QRF miss (features=$totalFeatures named=$namedFeatures)');
     }
 
-    // No POI found at any query point
     return null;
   }
 
-  /// Calculate geographic distance between two points using Haversine formula
-  /// Returns distance in meters
-  double _calculateGeographicDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadiusMeters = 6371000.0; // Earth's radius in meters
+  /// iOS fallback: reverse geocode the tap coordinate and, if a POI lives
+  /// within 60 screen pixels of the tap, return it as a POI hit.
+  Future<Map<String, dynamic>?> _reverseGeocodePoiAtPoint(
+    Point<double> point,
+    LatLng coordinates,
+  ) async {
+    final apiKey = dotenv.env['MAPTILER_API_KEY'];
+    if (apiKey == null || apiKey.isEmpty) {
+      _setDebugDetection('geocode skip: no API key');
+      return null;
+    }
 
-    final dLat = _degreesToRadians(lat2 - lat1);
-    final dLon = _degreesToRadians(lon2 - lon1);
+    final result = await MaptilerGeocodingClient.reverseGeocode(
+      lat: coordinates.latitude,
+      lng: coordinates.longitude,
+      apiKey: apiKey,
+    );
 
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degreesToRadians(lat1)) *
-            math.cos(_degreesToRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
+    if (result == null) {
+      _setDebugDetection('geocode: no result');
+      return null;
+    }
+    if (!result.isPoi) {
+      _setDebugDetection(
+          'geocode: not POI (types=${result.placeType.join(",")})');
+      return null;
+    }
 
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    // Verify the POI's anchor is visually close to where the user tapped.
+    try {
+      final poiScreen = await _mapController!
+          .toScreenLocation(LatLng(result.lat, result.lng));
+      final dx = poiScreen.x - point.x;
+      final dy = poiScreen.y - point.y;
+      final pixelDist = math.sqrt(dx * dx + dy * dy);
 
-    return earthRadiusMeters * c;
+      if (pixelDist > 60.0) {
+        _setDebugDetection(
+            'geocode: ${result.name} too far (${pixelDist.toStringAsFixed(0)}px)');
+        return null;
+      }
+
+      _setDebugDetection(
+          'geocode hit: ${result.name} (${pixelDist.toStringAsFixed(0)}px)');
+      return {'name': result.name, 'lat': result.lat, 'lng': result.lng};
+    } catch (e) {
+      debugPrint('_reverseGeocodePoiAtPoint: toScreenLocation failed: $e');
+      _setDebugDetection('geocode: screen projection failed');
+      return null;
+    }
   }
 
-  /// Convert degrees to radians
-  double _degreesToRadians(double degrees) {
-    return degrees * math.pi / 180.0;
+  /// Record the latest POI detection outcome for the on-device debug overlay.
+  void _setDebugDetection(String info) {
+    debugPrint('POI detect: $info');
+    if (!_debugMode || !mounted) return;
+    setState(() {
+      _debugLastDetection = info;
+    });
+  }
+
+  /// Return the screen pixel distance from [tapPoint] to [pin], or null if
+  /// the projection fails.
+  Future<double?> _pixelDistanceToPin(Pin pin, Point<double> tapPoint) async {
+    if (_mapController == null) return null;
+    try {
+      final pinScreen = await _mapController!.toScreenLocation(
+        LatLng(pin.location.latitude, pin.location.longitude),
+      );
+      final dx = pinScreen.x - tapPoint.x;
+      final dy = pinScreen.y - tapPoint.y;
+      return math.sqrt(dx * dx + dy * dy);
+    } catch (e) {
+      debugPrint('_pixelDistanceToPin: toScreenLocation failed: $e');
+      return null;
+    }
   }
 
   /// Check if coordinates are within continental US bounds
@@ -1374,7 +1336,6 @@ class _MapScreenState extends State<MapScreen> {
               onStyleLoadedCallback: _onStyleLoadedCallback,
               onMapClick: _onMapClick,
               onMapLongClick: _onMapLongClick,
-              onCameraIdle: _onCameraIdle,
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
@@ -1386,30 +1347,102 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // Title bar overlay (top-left)
+          // Long-press the title to toggle on-device debug mode. This shows a
+          // panel with the last tap, how POI detection resolved it, and the
+          // name of any pin/POI returned — so iOS tap issues can be diagnosed
+          // without plugging into a Mac.
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            child: GestureDetector(
+              onLongPress: () {
+                setState(() {
+                  _debugMode = !_debugMode;
+                  if (!_debugMode) {
+                    _debugLastTap = null;
+                    _debugLastDetection = null;
+                  }
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(_debugMode
+                        ? 'Debug mode ON — tap POIs to see detection info'
+                        : 'Debug mode OFF'),
+                    duration: const Duration(seconds: 2),
                   ),
-                ],
+                );
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Semantics(
+                  label: 'CCW Map - Concealed Carry Weapon Map Application',
+                  child: Text(
+                    _debugMode ? 'CCW Map · DEBUG' : 'CCW Map',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: _debugMode ? Colors.red : Colors.black87,
+                    ),
+                  ),
+                ),
               ),
-              child: Semantics(
-                label: 'CCW Map - Concealed Carry Weapon Map Application',
-                child: const Text(
-                  'CCW Map',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+            ),
+          ),
+
+          // Debug toggle (top-right, left of exit button)
+          // Tapping toggles an on-screen panel showing how each tap was
+          // resolved — essential for diagnosing iOS POI-tap issues on
+          // TestFlight builds without a Mac.
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 8,
+            right: 72,
+            child: Material(
+              color: _debugMode
+                  ? Colors.red.withValues(alpha: 0.9)
+                  : Colors.white.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(8),
+              elevation: 2,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _debugMode = !_debugMode;
+                    if (!_debugMode) {
+                      _debugLastTap = null;
+                      _debugLastDetection = null;
+                    }
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(_debugMode
+                          ? 'Debug mode ON — tap anywhere to see detection info'
+                          : 'Debug mode OFF'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(8),
+                child: Tooltip(
+                  message: 'Toggle debug overlay',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    child: Icon(
+                      Icons.bug_report_outlined,
+                      color: _debugMode ? Colors.white : Colors.black87,
+                      size: 24,
+                      semanticLabel: 'Debug overlay toggle',
+                    ),
                   ),
                 ),
               ),
@@ -1459,6 +1492,49 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+
+          // Debug info panel (only visible when debug mode is on)
+          if (_debugMode)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 60,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.78),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _debugLastTap == null
+                          ? 'Tap somewhere to test POI detection'
+                          : 'tap: ${_debugLastTap!}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    if (_debugLastDetection != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'det: ${_debugLastDetection!}',
+                        style: const TextStyle(
+                          color: Colors.lightGreenAccent,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
 
           // Sync indicator (top-center, below title bar)
           if (viewModel.isSyncing)

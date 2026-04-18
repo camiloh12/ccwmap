@@ -10,13 +10,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Known Bugs (Do Not Fix Without Being Asked)
 
-### BUG-001: POIs not rendering on iOS
+### BUG-001: Tapping POI label on iOS opens edit dialog instead of create dialog
 - **Platform:** iOS only (Android works correctly)
-- **Symptom:** Business names and other landmarks/POI labels do not appear on the map. Users cannot tap a POI label to create a pin. Workaround: long-press anywhere on the map still creates a pin.
-- **Android behavior (expected):** Business names and landmark labels are visible; tapping a label opens the create-pin dialog with the POI name pre-filled.
-- **Status:** Fixed — `feature/ios-build` branch
-- **Root cause:** MapLibre GL Native iOS does not render text from base map style symbol layers (font/glyph loading limitation), and `queryRenderedFeatures` on iOS does not return features from those layers.
-- **Fix:** At zoom ≥ 12, the app fetches POIs from the Overpass API (already cached via `PoiRepository`) and on iOS renders them as a custom `addSymbolLayer`. Added geographic proximity fallback (≤ 50m) to `_detectPoiAtPoint` so taps find Overpass POIs when `queryRenderedFeatures` returns nothing.
+- **Symptom:** Tapping a POI label on the map opens the edit dialog for the nearest existing pin instead of a create-pin dialog with the POI name. If no pin is nearby, nothing happens. Long-press workaround still works.
+- **Android behavior (expected):** Business names and landmark labels are visible; tapping a label opens the create-pin dialog with the POI name pre-filled via `queryRenderedFeatures`.
+- **Status:** Fix implemented on `feature/ios-build`, awaiting TestFlight verification.
+- **Root cause:** `queryRenderedFeatures` on iOS does not return features from base map symbol layers (MapTiler POI labels). Base map labels DO render visually on iOS. Because `_detectPoiAtPoint` returned null, the tap fell through to PRIORITY 3 (nearest-pin proximity search), which opened an edit dialog.
+- **Fix approach:** When `queryRenderedFeatures` returns nothing on iOS, `_detectPoiAtPoint` falls back to calling MapTiler's reverse-geocoding API at the tap coordinates, filtering for `place_type == "poi"`, and accepting the result only if the POI's anchor point is within 60 screen pixels of the tap. See `lib/data/datasources/maptiler_geocoding_client.dart` and `_reverseGeocodePoiAtPoint` in `lib/presentation/screens/map_screen.dart`.
+- **On-device debug aid:** Long-press the "CCW Map" title to toggle a debug panel that shows the last tap's screen/geo coordinates and how `_detectPoiAtPoint` resolved it (QRF hit, geocode hit, fallback to nearest pin, or ignored). Intended for diagnosing iOS tap behavior on TestFlight builds without needing a Mac.
+- **Known limitation:** Tapping empty space within 60 px of a POI anchor will now open a create dialog for that POI. This is a strictly better failure mode than opening an edit dialog for an unrelated pin, and the user can cancel out.
+- **Previous failed approach (removed):** Overpass API was used to render a custom symbol layer on iOS, but the Overpass data never loaded (`pois:0`). That code has been removed.
 
 ## Project Overview
 
@@ -144,10 +147,10 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 - **Postgrest:** RESTful API over PostgreSQL with RLS
 - **Realtime:** Optional WebSocket subscriptions for live updates
 
-### Overpass API (POI Data)
-- Fetches OpenStreetMap points of interest (restaurants, schools, etc.)
-- Rate limit: 2 req/second
-- Caching: 30 minutes, LRU eviction (20 viewports max)
+### Overpass API (POI Data) — NOT CURRENTLY USED
+- Code exists in `lib/data/` but is not wired into the app
+- Was previously used to fetch OpenStreetMap POIs but removed because MapTiler base map already provides POI labels
+- May be re-evaluated if needed for iOS POI tap detection
 
 ## Geographic Restrictions
 
