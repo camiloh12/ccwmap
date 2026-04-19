@@ -578,3 +578,39 @@ Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: 
 - `flutter build apk --debug`: **succeeded** (26.6 s) — `app-debug.apk` built cleanly; no missing native symbol errors
 
 **Status:** DONE
+
+## Phase H1 (full regression)
+
+**Analyzer:**
+- 17 issues (all infos) — **No change from post-F5/G1 baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 1 deprecated_member_use: `isInDebugMode` in `Workmanager().initialize()` (workmanager 0.9, no-op)
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**APK sizes:**
+- Debug: ~219 MB (consistent with F4 baseline)
+- Release: 92.8 MB (matches D3+D4 baseline of ~92.4 MB — stable, no regression)
+
+**Web build:**
+- `flutter build web --release`: succeeded (61.1 s)
+- Output: `build/web/`
+- Notice: "Wasm dry run succeeded. Consider building with `--wasm`" — informational only, not a warning or error. Pre-existing font tree-shaking notices (CupertinoIcons, MaterialIcons — expected).
+
+**Branch pushed:**
+- Remote: `origin/chore/deps-upgrade-2026-04`
+- PR creation URL: https://github.com/camiloh12/ccwmap/pull/new/chore/deps-upgrade-2026-04
+
+**GitHub Actions iOS workflow:**
+- Triggered: `ios.yml` on `chore/deps-upgrade-2026-04` (workflow_dispatch)
+- Run URL: https://github.com/camiloh12/ccwmap/actions/runs/24640873239
+
+**Manual device regression checklist (to be filled in by user):**
+
+- [ ] BUG-001: iOS — Tap a POI label → create-pin dialog opens (not edit dialog)
+- [ ] BUG-002: Android/iOS/web — Delete a pin → pin stays deleted after sync / re-render
+- [ ] BUG-003: iOS — Cold-start auto-pan to user location works
+- [ ] BUG-004: Web — Tap an existing pin → edit dialog opens
