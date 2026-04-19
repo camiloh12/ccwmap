@@ -42,7 +42,7 @@ dependencies:
   flutter_dotenv: ^6.0.0
 
   # Location services
-  geolocator: ^13.0.2
+  geolocator: ^14.0.2
 
   # Network connectivity monitoring
   connectivity_plus: ^6.0.0

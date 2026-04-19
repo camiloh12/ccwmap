@@ -344,3 +344,45 @@ Resolved version in `pubspec.lock`: `6.0.0`.
 - 109/109 passing — No regression
 
 **Status:** DONE
+
+## Phase F2 (geolocator 13.0.2 → 14.0.2)
+
+**Change:** Bumped `geolocator` from `^13.0.2` to `^14.0.2` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `14.0.2`.
+
+**Geolocator 14.0 breaking change review:**
+- Flutter SDK min requirement: 3.29.0+ (we run 3.41.7 ✓)
+- API renames in 14.x: **None** per changelog
+- No deprecated parameter removals affecting this project
+- All critical APIs used are unchanged:
+  - `Geolocator.checkPermission()`, `requestPermission()`, `isLocationServiceEnabled()`
+  - `Geolocator.getCurrentPosition(locationSettings: LocationSettings(accuracy: LocationAccuracy.high, ...))`
+  - `Geolocator.getPositionStream(locationSettings: ...)`
+  - `Geolocator.openLocationSettings()`, `openAppSettings()`
+  - `LocationPermission` enum (denied, deniedForever, whileInUse, always)
+  - `Position` model unchanged
+
+**Transitive bumps:**
+- `geolocator_android`: transitive → 5.0.2 (major; from prior 4.x, now aligns with geolocator 14.x requirement)
+- `geolocator_apple`: transitive → 2.3.13 (unchanged from prior state)
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+- **No new geolocator-related deprecations or API warnings**
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**`flutter build apk --debug`:**
+- Result: succeeded (47.6 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk`
+- Warnings: Pre-existing `[options] source/target value 8 obsolete` (transitive deps, unrelated to geolocator)
+
+**Regression testing notes:**
+- Manual BUG-003 (iOS auto-pan to user's location on cold-start) regression TBD in Phase H1 (after all F-phase commits land).
+- All API call sites in `lib/data/services/location_service.dart` remain unchanged; no breaking changes detected.
+
+**Status:** DONE
