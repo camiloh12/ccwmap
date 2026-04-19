@@ -77,3 +77,33 @@ Tools • Dart 3.11.5 • DevTools 2.54.2
 - 109/109 passing — **No regression**
 
 **Status:** DONE
+
+## Phase D1 (Java 11 → 21)
+
+**Change:** Bumped Java bytecode source/target from 11 to 21 in `android/app/build.gradle.kts`.
+
+Exact diff (3 lines changed):
+```
+-        sourceCompatibility = JavaVersion.VERSION_11
++        sourceCompatibility = JavaVersion.VERSION_21
+-        targetCompatibility = JavaVersion.VERSION_11
++        targetCompatibility = JavaVersion.VERSION_21
+-        jvmTarget = JavaVersion.VERSION_11.toString()
++        jvmTarget = JavaVersion.VERSION_21.toString()
+```
+
+**Toolchain at time of change:**
+- Local Java: 21.0.9 LTS (Oracle HotSpot)
+- AGP: 8.9.1
+- Gradle wrapper: 8.12
+- Kotlin: 2.1.0
+
+**`flutter build apk --debug`:**
+- Result: succeeded (140.9 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk` (216 MB)
+- No Java-21 or AGP-8.9 warnings in build output
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Status:** DONE
