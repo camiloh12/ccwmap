@@ -241,6 +241,52 @@ Neither `strict_top_level_inference` nor `unnecessary_underscores` triggered on 
 
 **Status:** DONE
 
+## Phase F1 (maplibre_gl 0.24.1 → 0.25.0)
+
+**Change:** Bumped `maplibre_gl` from `^0.24.1` to `^0.25.0` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `0.25.0` (transitive `maplibre_gl_platform_interface` and `maplibre_gl_web` also at 0.25.0).
+
+**Changelog review:**
+- maplibre_gl 0.25.0 lists NO breaking API changes.
+- Features: logo customization, annotation manager init.
+- Fixes: zoom preferences, feature querying, memory leaks.
+- All critical APIs used in this project are unchanged:
+  - `queryRenderedFeatures`, `toScreenLocation`, `addGeoJsonSource` with `promoteId: 'id'` (BUG-004 fix)
+  - `addCircleLayer`, `addSymbolLayer`
+  - `onMapCreated`, `onStyleLoadedCallback`, `onFeatureTapped`
+  - `animateCamera`, `updateMyLocationTrackingMode`
+
+**`flutter pub upgrade maplibre_gl`:**
+- Result: Resolved to 0.25.0
+- No other direct dependency changes
+- Command succeeded (0 errors)
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+- No new maplibre_gl-related warnings or errors
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**`flutter build apk --debug`:**
+- Result: succeeded (78.0 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk` (218 MB)
+- Warnings: None related to maplibre_gl. Pre-existing deprecation notes from transitive dependencies only.
+
+**`flutter build apk --release`:**
+- Result: succeeded (64.8 s)
+- Output: `build/app/outputs/flutter-apk/app-release.apk` (92.8 MB)
+- Warnings: Font tree-shaking notice (expected, not a regression). No R8/maplibre_gl-specific warnings.
+
+**Regression testing notes:**
+- Manual BUG-001 (POI tap iOS) and BUG-004 (pin tap web) regression TBD in Phase H1 (after all F-phase commits land).
+- APIs unchanged → no functional regression expected.
+
+**Status:** DONE
+
 ## Phase E2 (flutter_launcher_icons 0.13.1 → 0.14.4)
 
 **Change:** Bumped `flutter_launcher_icons` from `^0.13.1` to `^0.14.4` in `pubspec.yaml`.

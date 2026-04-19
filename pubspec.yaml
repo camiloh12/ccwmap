@@ -36,7 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # MapLibre for map display
-  maplibre_gl: ^0.24.1
+  maplibre_gl: ^0.25.0
 
   # Environment variables
   flutter_dotenv: ^6.0.0
