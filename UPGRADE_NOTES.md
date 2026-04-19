@@ -160,3 +160,60 @@ Exact diffs:
 - 109/109 passing — No regression
 
 **Status:** DONE
+
+## Phase D3+D4 (Gradle 8.14 + AGP 8.13.0)
+
+**Changes:**
+- Gradle wrapper: 8.12 → 8.14 (`android/gradle/wrapper/gradle-wrapper.properties`)
+- AGP: 8.9.1 → 8.13.0 (`android/settings.gradle.kts`)
+
+**AGP 9 attempt — deferred:**
+A prior attempt targeting AGP 9.1.1 was blocked by two upstream incompatibilities:
+1. `maplibre_gl` still applies `kotlin-android` via the legacy `apply plugin:` DSL, which AGP 9 rejects (plugin must be applied via `plugins {}` block).
+2. Flutter's bundled Gradle tooling requires `android.newDsl=false` to opt-out of AGP 9's DSL-breaking changes — an escape hatch not yet removed by the Flutter team.
+Tracking issue: flutter/flutter#181383. AGP 9 will be revisited once maplibre_gl and Flutter's Gradle plugin are updated.
+
+**Gradle 8.14 version rationale:**
+The `services.gradle.org/versions/current` endpoint returned 9.4.1 (Gradle 9.x current). Per plan, the latest stable Gradle 8.x was chosen instead. AGP 8.13 officially supports Gradle 8.11.1–9.x; Gradle 8.14 is the highest 8.x release and is the recommended stable 8.x at time of writing.
+
+**Exact diffs:**
+
+`android/gradle/wrapper/gradle-wrapper.properties` (1 line):
+```
+- distributionUrl=https\://services.gradle.org/distributions/gradle-8.12-all.zip
++ distributionUrl=https\://services.gradle.org/distributions/gradle-8.14-all.zip
+```
+
+`android/settings.gradle.kts` (1 line):
+```
+-     id("com.android.application") version "8.9.1" apply false
++     id("com.android.application") version "8.13.0" apply false
+```
+
+**Toolchain at time of change:**
+- Local Java: 21.0.9 LTS
+- AGP: 8.13.0 (upgraded from 8.9.1)
+- Gradle wrapper: 8.14 (upgraded from 8.12)
+- Kotlin: 2.3.20
+
+**`flutter build apk --debug`:**
+- Result: succeeded (292.0 s — Gradle 8.14 wrapper download included in first-run time)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk`
+- Warnings (pre-existing, unrelated to this change):
+  - `[options] source value 8 is obsolete` / `target value 8 is obsolete` (transitive deps)
+  - Deprecation notes from compiled dependencies (not our code)
+- No new AGP 8.13 or Gradle 8.14 warnings
+
+**`flutter build apk --release`:**
+- Result: succeeded (131.3 s)
+- Output: `build/app/outputs/flutter-apk/app-release.apk` (92.4 MB)
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Deprecation warnings for future AGP 9 prep:**
+- No new deprecations introduced by this bump. The pre-existing `source value 8 / target value 8 obsolete` warnings originate from transitive dependencies compiled against Java 8 bytecode targets — unrelated to our AGP/Gradle version and will need addressing upstream.
+
+**No escape hatches added** to `android/gradle.properties`.
+
+**Status:** DONE
