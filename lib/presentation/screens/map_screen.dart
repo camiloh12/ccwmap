@@ -1450,6 +1450,11 @@ class _MapScreenState extends State<MapScreen> {
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
+              // Required for cameraPosition to reflect user pan/zoom/rotate
+              // on Android/iOS. Without this, the native MapLibre SDKs do not
+              // emit camera-move events to Flutter and controller.cameraPosition
+              // stays frozen at initialCameraPosition. Web is unaffected.
+              trackCameraPosition: true,
               rotateGesturesEnabled: true,
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
