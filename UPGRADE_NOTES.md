@@ -272,3 +272,29 @@ Command: `dart run flutter_launcher_icons`
 - 109/109 passing — No regression
 
 **Status:** DONE
+
+## Phase E3 (flutter_dotenv 5 → 6)
+
+**Change:** Bumped `flutter_dotenv` from `^5.1.0` to `^6.0.0` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `6.0.0`.
+
+**Breaking changes in 6.0.0:**
+- `testLoad()` method renamed to `loadFromString()` (same functionality)
+- Parameter name changed: `fileInput` → `envString`
+- Empty-file handling: when `isOptional = true`, returns empty env instead of throwing. Not used in this project.
+- Dropped pre-release 2.12.0-0 Dart SDK support. We use Dart 3.11.5 (safe).
+
+**Code changes required:**
+- `test/widget_test.dart:27` — single line change: `dotenv.testLoad(fileInput: ...)` → `dotenv.loadFromString(envString: ...)`
+- All other usage sites in the project (`lib/main.dart`, `lib/presentation/screens/map_screen.dart`, `lib/data/sync/background_sync.dart`) use `dotenv.load()` or `dotenv.env[...]`, which are unchanged.
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Status:** DONE
