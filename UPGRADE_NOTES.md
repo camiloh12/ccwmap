@@ -477,3 +477,63 @@ Resolved version in `pubspec.lock`: `7.1.1`.
 - All Dart API call sites in `lib/data/services/network_monitor.dart` remain unchanged; no functional regression expected.
 
 **Status:** DONE
+
+## Phase F5 (workmanager 0.6 → 0.9)
+
+**Change:** Bumped `workmanager` from `^0.6.0` to `^0.9.0` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `0.9.0+3`.
+
+**workmanager 0.8–0.9 breaking changes review:**
+- 0.7: Min Dart 3.2, Flutter 3.16, iOS 13, AGP 8.10.1, Gradle 8.11.1, Kotlin 2.1.0, compileSdk 35, Java 17 — **all satisfied**
+- 0.8: Federated plugin architecture (adds `workmanager_android` + `workmanager_apple` transitively — transparent to us)
+- 0.8: Enum renames snake_case → camelCase:
+  - `NetworkType.not_required` → `notRequired`
+  - `NetworkType.not_roaming` → `notRoaming`
+  - `OutOfQuotaPolicy.run_as_non_expedited_work_request` → `runAsNonExpeditedWorkRequest`
+  - `OutOfQuotaPolicy.drop_work_request` → `dropWorkRequest`
+  - **IMPORTANT: `NetworkType.connected` is UNCHANGED** (already camelCase)
+- 0.8: InputData — removed JSON serialization; now native Map transfer
+- 0.9.0+3: Fixes periodic-task frequency bug
+
+**Enum usage audit:**
+- Command: `grep -rn "NetworkType\.\|OutOfQuotaPolicy\." lib/ test/`
+- Result: Single match on `NetworkType.connected` in `lib/data/sync/background_sync.dart:92`
+- Conclusion: No enum renames required — only unchanged `NetworkType.connected` is used
+
+**Transitive plugin versions (federated architecture):**
+- `workmanager_android`: transitive, resolved to version from 0.9.0+3 (no direct constraint)
+- `workmanager_apple`: transitive, resolved to version from 0.9.0+3 (no direct constraint)
+
+**Analyzer:**
+- 17 issues (all infos) — **+1 from baseline**
+  - **New:** 1 deprecated_member_use: `isInDebugMode` parameter in `Workmanager().initialize()` (line 82 `lib/data/sync/background_sync.dart`) — expected deprecation in workmanager 0.9; parameter now has no effect
+  - Unchanged: 1 deprecated_member_use: `package:drift/web.dart`
+  - Unchanged: 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - Unchanged: 13 constant_identifier_names: PinStatus and RestrictionTag enums
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**`flutter build apk --debug`:**
+- Result: succeeded (29.8 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk`
+- Warnings: Pre-existing `[options] source/target value 8 obsolete` (transitive deps, unrelated to workmanager)
+
+**`flutter build apk --release`:**
+- Result: succeeded (65.8 s)
+- Output: `build/app/outputs/flutter-apk/app-release.apk` (92.8 MB)
+- Warnings: Font tree-shaking notice (expected, not a regression). Pre-existing `[options]` warnings from transitive deps.
+
+**API stability:**
+- All critical APIs used in this project remain unchanged:
+  - `Workmanager().executeTask((task, inputData) async { ... })` (line 23)
+  - `Workmanager().initialize(callbackDispatcher, ...)` (line 80 — `isInDebugMode` parameter deprecated but no-op)
+  - `Workmanager().registerPeriodicTask(...)` with `Constraints(networkType: NetworkType.connected, ...)` (line 86)
+  - `Workmanager().cancelByUniqueName(...)` (line 106)
+
+**Regression testing notes:**
+- Manual background sync regression TBD in Phase H1 (after all F-phase commits land).
+- No enum value renames or InputData structure changes required; no functional regression expected.
+- Deprecation warning for `isInDebugMode` will be addressed in H1 if workmanager's replacement (WorkmanagerDebug handlers) is deemed necessary.
+
+**Status:** DONE
