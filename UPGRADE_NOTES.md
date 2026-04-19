@@ -636,3 +636,25 @@ Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: 
 - `flutter analyze --no-fatal-infos`: 17 issues (all infos) — no change from H1 baseline
 - `flutter test`: 109/109 passing — no regression
 - `flutter build apk --debug`: succeeded
+
+## Phase H1 hotfix #2 (revert connectivity_plus 7 → 6)
+
+**Root cause:** `connectivity_plus` 7.1.1 calls `NWPath.isUltraConstrained` in `PathMonitorConnectivityProvider.swift` at line 28 without an `@available` guard. `NWPath.isUltraConstrained` was introduced in iOS 17.0, making connectivity_plus 7.x effectively require an iOS 17.0 deployment target. Bumping the project floor from 14 → 17 would drop roughly 12% of active iPhones.
+
+**Decision:** Revert connectivity_plus from 7.1.1 back to 6.x. The 7.x upgrade (commit `4e43836`, Phase F4) was not load-bearing — the project only uses `Connectivity.checkConnectivity()`, `Connectivity.onConnectivityChanged`, and `ConnectivityResult.none`, all of which are identical across 6.x and 7.x. Reverting preserves the iOS 14.0 deployment floor with zero functional impact.
+
+**Fix:**
+- `pubspec.yaml`: constraint changed from `^7.1.1` back to `^6.0.0`
+- `flutter pub upgrade connectivity_plus`: resolved to **6.1.5** (latest 6.x)
+- `pubspec.lock`: connectivity_plus entry reverted to 6.1.5
+
+**No transitive side-effects:** No other packages changed version as a result of the downgrade.
+
+**Verification:**
+- `flutter analyze --no-fatal-infos`: **17 infos** — no change from H1 hotfix #1 baseline
+- `flutter test`: **109/109 passing** — no regression
+- `flutter build apk --debug`: **succeeded**
+
+**Commit SHA:** _filled in after commit_
+
+**Status:** DONE
