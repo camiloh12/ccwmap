@@ -51,6 +51,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _debugMode = false;
   String? _debugLastTap;
   String? _debugLastDetection;
+  String? _debugLocationPipeline;
+  int _locationComponentCallCount = 0;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -128,7 +130,7 @@ class _MapScreenState extends State<MapScreen> {
         debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
 
         // Try to enable — no-ops until map controller + style are ready.
-        _tryEnableLocationComponent();
+        _tryEnableLocationComponent(from: 'loc-arrived');
       }
     } catch (e) {
       debugPrint('Error requesting location: $e');
@@ -152,7 +154,7 @@ class _MapScreenState extends State<MapScreen> {
 
     // Actual location-component enable waits for style load — camera
     // operations before the style is ready can silently no-op on iOS.
-    _tryEnableLocationComponent();
+    _tryEnableLocationComponent(from: 'map-created');
   }
 
   /// Called when a feature (circle) is directly tapped
@@ -238,7 +240,7 @@ class _MapScreenState extends State<MapScreen> {
     _styleLoaded = true;
 
     // Now that the style is loaded, camera animations will stick on iOS.
-    _tryEnableLocationComponent();
+    _tryEnableLocationComponent(from: 'style-loaded');
 
     // Add pins layer to map
     _updatePinsLayer();
@@ -385,13 +387,24 @@ class _MapScreenState extends State<MapScreen> {
   /// not already enabled. Called from three places (map created, style loaded,
   /// location arrived) — whichever one completes the trio triggers the work.
   ///
-  /// Previously this toggled `updateMyLocationTrackingMode(tracking → none)`
-  /// around the animateCamera call, but on iOS the tracking-mode animation
-  /// raced with the explicit animateCamera and the camera ended up back at
-  /// the initial US center. `myLocationEnabled: true` on the MapLibreMap
-  /// widget already renders the puck on native, so tracking mode isn't
-  /// needed for a one-shot pan.
-  Future<void> _tryEnableLocationComponent() async {
+  /// iOS belt-and-suspenders: after the initial animateCamera we schedule a
+  /// delayed moveCamera. Theory is that onStyleLoadedCallback can fire while
+  /// MapLibre iOS is still applying initialCameraPosition, and our
+  /// animateCamera gets clobbered mid-flight. The follow-up moveCamera is a
+  /// no-op if the first call stuck, and corrects the camera if it didn't.
+  ///
+  /// Every call records its guard state into _debugLocationPipeline so the
+  /// on-device debug overlay (bug icon, top-right) shows exactly which guard
+  /// is failing on iOS TestFlight without needing a Mac.
+  Future<void> _tryEnableLocationComponent({String from = 'unknown'}) async {
+    _locationComponentCallCount++;
+    _setLocationPipelineDebug(
+        '#$_locationComponentCallCount $from '
+        'ctrl=${_mapController != null ? "Y" : "N"} '
+        'style=${_styleLoaded ? "Y" : "N"} '
+        'loc=${_currentLocation != null ? "Y" : "N"} '
+        'done=${_locationComponentEnabled ? "Y" : "N"}');
+
     if (_mapController == null) return;
     if (!_styleLoaded) return;
     if (_currentLocation == null) return;
@@ -399,9 +412,14 @@ class _MapScreenState extends State<MapScreen> {
 
     _locationComponentEnabled = true;
 
+    final target = LatLng(
+      _currentLocation!.latitude,
+      _currentLocation!.longitude,
+    );
+
     try {
       debugPrint(
-          'Enabling location component at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+          'Enabling location component at: ${target.latitude}, ${target.longitude}');
 
       if (kIsWeb) {
         // Web: myLocationEnabled doesn't render a puck reliably, so draw our
@@ -409,20 +427,53 @@ class _MapScreenState extends State<MapScreen> {
         await _addUserLocationMarker();
       }
 
+      _setLocationPipelineDebug(
+          'animating ${target.latitude.toStringAsFixed(3)},${target.longitude.toStringAsFixed(3)}');
+
       await _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
-          16.0,
-        ),
+        CameraUpdate.newLatLngZoom(target, 16.0),
         duration: const Duration(milliseconds: 1500),
       );
 
+      _setLocationPipelineDebug('animate done');
       debugPrint('Location component enabled successfully');
     } catch (e) {
       // On failure, allow a retry — e.g. if the controller was torn down
       // between the guard and the call.
       _locationComponentEnabled = false;
+      _setLocationPipelineDebug('animate err');
       debugPrint('Error enabling location component: $e');
+      return;
+    }
+
+    // iOS retry: if the animate was clobbered by MapLibre iOS's own
+    // initial-camera pass, re-apply with an instant moveCamera. No-op if
+    // the animate already landed at target.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted || _mapController == null) return;
+      try {
+        _setLocationPipelineDebug('ios retry');
+        await _mapController!.moveCamera(
+          CameraUpdate.newLatLngZoom(target, 16.0),
+        );
+        _setLocationPipelineDebug('ios retry done');
+      } catch (e) {
+        _setLocationPipelineDebug('ios retry err');
+        debugPrint('iOS retry moveCamera failed: $e');
+      }
+    }
+  }
+
+  /// Record the latest location-pipeline state for the on-device debug
+  /// overlay. Always updates the underlying field; setState only runs when
+  /// debug mode is active, so subsequently toggling debug on reveals the
+  /// most recent state regardless of when it was recorded.
+  void _setLocationPipelineDebug(String info) {
+    debugPrint('LocationPipeline: $info');
+    _debugLocationPipeline = info;
+    if (_debugMode && mounted) {
+      setState(() {});
     }
   }
 
@@ -1538,6 +1589,17 @@ class _MapScreenState extends State<MapScreen> {
                         'det: ${_debugLastDetection!}',
                         style: const TextStyle(
                           color: Colors.lightGreenAccent,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                    if (_debugLocationPipeline != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'loc: ${_debugLocationPipeline!}',
+                        style: const TextStyle(
+                          color: Colors.yellowAccent,
                           fontSize: 11,
                           fontFamily: 'monospace',
                         ),
