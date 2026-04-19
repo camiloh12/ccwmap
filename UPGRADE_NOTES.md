@@ -386,3 +386,48 @@ Resolved version in `pubspec.lock`: `14.0.2`.
 - All API call sites in `lib/data/services/location_service.dart` remain unchanged; no breaking changes detected.
 
 **Status:** DONE
+
+## Phase F3 (app_links 6.4.1 → 7.0.0)
+
+**Change:** Bumped `app_links` from `^6.4.1` to `^7.0.0` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `7.0.0`.
+
+**app_links 7.0.0 breaking changes review:**
+- Minimum Flutter version: 3.38.1+ (we run 3.41.7 ✓)
+- Minimum iOS deployment target: 13.0+ — **verified and met** (see below)
+- No Dart API renames in 7.0 — all APIs unchanged from 6.4.1:
+  - `AppLinks()` constructor (`lib/main.dart:145`)
+  - `appLinks.getInitialLink()` (`lib/main.dart:149`)
+  - `appLinks.uriLinkStream` (`lib/main.dart:160`)
+- The 7.0 release aligns with Flutter's UIScene lifecycle updates (platform-side only; no Dart code changes required)
+
+**iOS deployment target verification:**
+- File: `ios/Runner.xcodeproj/project.pbxproj`
+- Value found: `IPHONEOS_DEPLOYMENT_TARGET = 13.0` (all occurrences, 3 lines checked)
+- Status: **Meets requirement** — no Podfile changes needed
+
+**`flutter pub upgrade app_links`:**
+- Result: Resolved to 7.0.0
+- Note: No direct dependency changes reported (7.0.0 was already selected by caret constraint)
+- Command succeeded (0 errors)
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+- No new app_links-related warnings or errors
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**`flutter build apk --debug`:**
+- Result: succeeded (22.6 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk`
+- Warnings: Pre-existing `[options] source/target value 8 obsolete` (transitive deps, unrelated to app_links)
+
+**Regression testing notes:**
+- Manual email-confirmation deep-link regression (iOS/Android/web) TBD in Phase H1 (after all F-phase commits land).
+- Dart APIs used in this project are unchanged — no functional regression expected.
+
+**Status:** DONE

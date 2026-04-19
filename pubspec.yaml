@@ -67,7 +67,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
 
   # Deep linking for email confirmation
-  app_links: ^6.4.1
+  app_links: ^7.0.0
 
   # HTTP client for API calls
   http: ^1.1.0
