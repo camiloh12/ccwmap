@@ -107,3 +107,56 @@ Exact diff (3 lines changed):
 - 109/109 passing — No regression
 
 **Status:** DONE
+
+## Phase D2 (Kotlin 2.1.0 → 2.3.20)
+
+**Change:** Bumped Kotlin plugin from 2.1.0 to 2.3.20 in `android/settings.gradle.kts` (line 23).
+  - Also required migrating from deprecated `kotlinOptions { jvmTarget }` to new `kotlin { compilerOptions { jvmTarget } }` DSL in `android/app/build.gradle.kts`.
+
+Exact diffs:
+
+**settings.gradle.kts (1 line):**
+```
+-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
++    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+```
+
+**app/build.gradle.kts (4 lines removed, 6 lines added):**
+```
+# Removed:
+-    kotlinOptions {
+-        jvmTarget = JavaVersion.VERSION_21.toString()
+-    }
+
+# Added (after android block closes):
++kotlin {
++    compilerOptions {
++        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
++    }
++}
+```
+
+**Toolchain at time of change:**
+- Local Java: 21.0.9 LTS
+- AGP: 8.9.1
+- Gradle wrapper: 8.12
+- Kotlin: 2.3.20 (upgraded from 2.1.0)
+
+**Kotlin 2.3.20 compatibility:**
+- Kotlin 2.3.x requires AGP ≥8.7.0 (we have 8.9.1 ✓)
+- Kotlin 2.3.x supports Gradle 7.6.3–9.4.0 (we have 8.12 ✓)
+- Breaking change: Old `kotlinOptions.jvmTarget` DSL deprecated; requires `kotlin.compilerOptions.jvmTarget` with enum value
+
+**`flutter build apk --debug`:**
+- Result: succeeded (78.9 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk` (216 MB)
+- Warnings (pre-existing, unrelated):
+  - `[options] source value 8 is obsolete and will be removed in a future release` (transitive dependency, not our code)
+  - `[options] target value 8 is obsolete and will be removed in a future release` (transitive dependency, not our code)
+  - 2 deprecation notes from compiled dependencies (not our code)
+- No Kotlin 2.3.20 warnings; no incompatibility errors
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Status:** DONE
