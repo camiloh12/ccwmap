@@ -15,6 +15,7 @@ import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
@@ -1313,6 +1314,23 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _onCompassTapped() async {
+    final controller = _mapController;
+    final current = controller?.cameraPosition;
+    if (controller == null || current == null) return;
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: current.target,
+          zoom: current.zoom,
+          bearing: 0.0,
+          tilt: 0.0,
+        ),
+      ),
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
   Future<void> _onExitTapped() async {
     debugPrint('Exit button tapped');
 
@@ -1431,7 +1449,7 @@ class _MapScreenState extends State<MapScreen> {
               onMapLongClick: _onMapLongClick,
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
-              compassEnabled: true,
+              compassEnabled: false,
               rotateGesturesEnabled: true,
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
@@ -1562,6 +1580,18 @@ class _MapScreenState extends State<MapScreen> {
                 color: Colors.black87,
                 semanticLabel: 'Re-center map',
               ),
+            ),
+          ),
+
+          // Compass reset FAB (stacked above re-center FAB).
+          Positioned(
+            bottom: 160,
+            right: 16,
+            child: CompassButton(
+              listenable: _mapController,
+              bearingGetter: () =>
+                  _mapController?.cameraPosition?.bearing ?? 0.0,
+              onReset: _onCompassTapped,
             ),
           ),
 
