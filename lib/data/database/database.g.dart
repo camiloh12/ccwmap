@@ -2231,10 +2231,36 @@ class $AppDatabaseManager {
 
 mixin _$PinDaoMixin on DatabaseAccessor<AppDatabase> {
   $PinsTable get pins => attachedDatabase.pins;
+  PinDaoManager get managers => PinDaoManager(this);
 }
+
+class PinDaoManager {
+  final _$PinDaoMixin _db;
+  PinDaoManager(this._db);
+  $$PinsTableTableManager get pins =>
+      $$PinsTableTableManager(_db.attachedDatabase, _db.pins);
+}
+
 mixin _$SyncQueueDaoMixin on DatabaseAccessor<AppDatabase> {
   $SyncQueueTable get syncQueue => attachedDatabase.syncQueue;
+  SyncQueueDaoManager get managers => SyncQueueDaoManager(this);
 }
+
+class SyncQueueDaoManager {
+  final _$SyncQueueDaoMixin _db;
+  SyncQueueDaoManager(this._db);
+  $$SyncQueueTableTableManager get syncQueue =>
+      $$SyncQueueTableTableManager(_db.attachedDatabase, _db.syncQueue);
+}
+
 mixin _$PinTombstoneDaoMixin on DatabaseAccessor<AppDatabase> {
   $PinTombstonesTable get pinTombstones => attachedDatabase.pinTombstones;
+  PinTombstoneDaoManager get managers => PinTombstoneDaoManager(this);
+}
+
+class PinTombstoneDaoManager {
+  final _$PinTombstoneDaoMixin _db;
+  PinTombstoneDaoManager(this._db);
+  $$PinTombstonesTableTableManager get pinTombstones =>
+      $$PinTombstonesTableTableManager(_db.attachedDatabase, _db.pinTombstones);
 }
