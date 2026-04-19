@@ -63,7 +63,9 @@ class _CompassButtonState extends State<CompassButton> {
       elevation: 4,
       tooltip: 'Reset map orientation to north',
       child: Transform.rotate(
-        angle: -_bearing * math.pi / 180.0,
+        // Icons.explore is drawn with its N-pointer at the NE corner;
+        // the extra -45° rotates visual-N to straight up at bearing 0.
+        angle: -(_bearing + 45.0) * math.pi / 180.0,
         child: const Icon(
           Icons.explore,
           color: Colors.black87,

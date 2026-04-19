@@ -1,10 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 
 void main() {
   group('CompassButton', () {
-    testWidgets('icon rotation matches -bearing * pi / 180 radians',
+    testWidgets('icon rotation matches -(bearing + 45) * pi / 180 radians',
         (tester) async {
       final bearing = ValueNotifier<double>(0.0);
 
@@ -20,33 +21,21 @@ void main() {
         ),
       );
 
-      // At bearing 0, the Transform.rotate angle should be 0.
-      Transform rotateWidget = tester.widget<Transform>(
-        find.descendant(
-          of: find.byType(CompassButton),
-          matching: find.byType(Transform),
-        ),
-      );
-      // Transform.rotate stores rotation in entry [0][0] = cos(angle);
-      // easier to pump and read the angle we configured. Re-read via key.
-      // Instead: verify by changing bearing and checking the matrix updates.
-
-      // Change bearing to 90 degrees.
       bearing.value = 90.0;
       await tester.pump();
 
-      rotateWidget = tester.widget<Transform>(
+      final rotateWidget = tester.widget<Transform>(
         find.descendant(
           of: find.byType(CompassButton),
           matching: find.byType(Transform),
         ),
       );
 
-      // At bearing 90, icon rotation = -90 * pi / 180 = -pi/2.
-      // Matrix4 Z-rotation at angle theta has [0][0] = cos(theta).
-      // cos(-pi/2) ≈ 0; sin(-pi/2) = -1. Verify [0][0] is close to 0.
-      expect(rotateWidget.transform.entry(0, 0), closeTo(0.0, 1e-9));
-      expect(rotateWidget.transform.entry(1, 0), closeTo(-1.0, 1e-9));
+      const expectedAngle = -(90.0 + 45.0) * math.pi / 180.0;
+      expect(rotateWidget.transform.entry(0, 0),
+          closeTo(math.cos(expectedAngle), 1e-9));
+      expect(rotateWidget.transform.entry(1, 0),
+          closeTo(math.sin(expectedAngle), 1e-9));
 
       bearing.dispose();
     });
@@ -91,14 +80,18 @@ void main() {
       expect(find.byType(CompassButton), findsOneWidget);
       expect(find.byIcon(Icons.explore), findsOneWidget);
 
-      // No bearing → rotation angle 0 → matrix [0][0] = cos(0) = 1.
+      // Null getter → bearing 0 → angle = -45° (icon-offset only).
+      const expectedAngle = -45.0 * math.pi / 180.0;
       final rotateWidget = tester.widget<Transform>(
         find.descendant(
           of: find.byType(CompassButton),
           matching: find.byType(Transform),
         ),
       );
-      expect(rotateWidget.transform.entry(0, 0), closeTo(1.0, 1e-9));
+      expect(rotateWidget.transform.entry(0, 0),
+          closeTo(math.cos(expectedAngle), 1e-9));
+      expect(rotateWidget.transform.entry(1, 0),
+          closeTo(math.sin(expectedAngle), 1e-9));
     });
   });
 }
