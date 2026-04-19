@@ -36,6 +36,7 @@ class _MapScreenState extends State<MapScreen> {
   Position? _currentLocation;
   bool _isLoadingLocation = false;
   bool _locationComponentEnabled = false;
+  bool _styleLoaded = false;
 
   // ViewModel and pins
   MapViewModel? _viewModel;
@@ -126,10 +127,8 @@ class _MapScreenState extends State<MapScreen> {
         });
         debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
 
-        // Enable location component if map is already ready
-        if (_mapController != null) {
-          _enableLocationComponent();
-        }
+        // Try to enable — no-ops until map controller + style are ready.
+        _tryEnableLocationComponent();
       }
     } catch (e) {
       debugPrint('Error requesting location: $e');
@@ -151,10 +150,9 @@ class _MapScreenState extends State<MapScreen> {
     // onFeatureTapped is the only way to detect direct clicks on features
     controller.onFeatureTapped.add(_onFeatureTapped);
 
-    // Enable location component if we have a location
-    if (_currentLocation != null) {
-      _enableLocationComponent();
-    }
+    // Actual location-component enable waits for style load — camera
+    // operations before the style is ready can silently no-op on iOS.
+    _tryEnableLocationComponent();
   }
 
   /// Called when a feature (circle) is directly tapped
@@ -182,13 +180,31 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Find the pin by ID
+    // Find the pin by ID. On web, maplibre-gl-js doesn't always surface the
+    // GeoJSON feature id to onFeatureTapped (without an explicit promoteId),
+    // so fall back to nearest-pin-by-pixel-distance if the id lookup misses.
     Pin? pin;
     try {
       pin = _pins.firstWhere((p) => p.id == id);
-    } catch (e) {
-      debugPrint('Pin not found by ID, ignoring feature tap');
-      return;
+    } catch (_) {
+      pin = null;
+    }
+
+    if (pin == null) {
+      double minDist = double.infinity;
+      for (final p in _pins) {
+        final d = await _pixelDistanceToPin(p, point);
+        if (d == null) continue;
+        if (d < _pinHitPixelThreshold && d < minDist) {
+          minDist = d;
+          pin = p;
+        }
+      }
+      if (pin == null) {
+        debugPrint('No pin matched feature tap (id=$id, no nearby pin)');
+        _setDebugDetection('feature-tap: id miss, no nearby pin');
+        return;
+      }
     }
 
     // Verify the tap actually landed near this pin on-screen. iOS's native
@@ -219,10 +235,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onStyleLoadedCallback() {
-    // Enable location component after style loads
-    if (_currentLocation != null) {
-      _enableLocationComponent();
-    }
+    _styleLoaded = true;
+
+    // Now that the style is loaded, camera animations will stick on iOS.
+    _tryEnableLocationComponent();
 
     // Add pins layer to map
     _updatePinsLayer();
@@ -266,8 +282,16 @@ class _MapScreenState extends State<MapScreen> {
         // Source doesn't exist yet, that's ok
       }
 
-      // Add GeoJSON source
-      await _mapController!.addGeoJsonSource('pins-source', geojson);
+      // Add GeoJSON source. promoteId ensures maplibre-gl-js (web) surfaces
+      // our UUID to onFeatureTapped; without it web falls back to auto-
+      // generated numeric ids and the feature-id lookup in _onFeatureTapped
+      // misses (the pixel-distance fallback there covers this case too, but
+      // promoteId makes the ID path work correctly on all platforms).
+      await _mapController!.addGeoJsonSource(
+        'pins-source',
+        geojson,
+        promoteId: 'id',
+      );
 
       // Add circle layer - even though it blocks clicks, our geographic distance
       // detection will find the closest pin
@@ -355,43 +379,50 @@ class _MapScreenState extends State<MapScreen> {
     };
   }
 
-  /// Enable the location indicator on the map
-  Future<void> _enableLocationComponent() async {
-    if (_mapController != null && _currentLocation != null && !_locationComponentEnabled) {
-      try {
-        debugPrint('Enabling location component at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+  /// Enable the location indicator on the map and pan to the user's location.
+  ///
+  /// Preconditions: map controller present, style loaded, location obtained,
+  /// not already enabled. Called from three places (map created, style loaded,
+  /// location arrived) — whichever one completes the trio triggers the work.
+  ///
+  /// Previously this toggled `updateMyLocationTrackingMode(tracking → none)`
+  /// around the animateCamera call, but on iOS the tracking-mode animation
+  /// raced with the explicit animateCamera and the camera ended up back at
+  /// the initial US center. `myLocationEnabled: true` on the MapLibreMap
+  /// widget already renders the puck on native, so tracking mode isn't
+  /// needed for a one-shot pan.
+  Future<void> _tryEnableLocationComponent() async {
+    if (_mapController == null) return;
+    if (!_styleLoaded) return;
+    if (_currentLocation == null) return;
+    if (_locationComponentEnabled) return;
 
-        if (kIsWeb) {
-          // Web: Use custom circle layer for user location (myLocationEnabled doesn't work reliably on web)
-          await _addUserLocationMarker();
-        } else {
-          // Native: Use built-in location component
-          await _mapController!.updateMyLocationTrackingMode(
-            MyLocationTrackingMode.tracking,
-          );
-        }
+    _locationComponentEnabled = true;
 
-        // Animate to user's location on first enable
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
-            16.0,
-          ),
-          duration: const Duration(milliseconds: 1500),
-        );
+    try {
+      debugPrint(
+          'Enabling location component at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
 
-        if (!kIsWeb) {
-          // Native: After animation, set to none so camera doesn't auto-follow
-          await _mapController!.updateMyLocationTrackingMode(
-            MyLocationTrackingMode.none,
-          );
-        }
-
-        _locationComponentEnabled = true;
-        debugPrint('Location component enabled successfully');
-      } catch (e) {
-        debugPrint('Error enabling location component: $e');
+      if (kIsWeb) {
+        // Web: myLocationEnabled doesn't render a puck reliably, so draw our
+        // own circle layer.
+        await _addUserLocationMarker();
       }
+
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
+          16.0,
+        ),
+        duration: const Duration(milliseconds: 1500),
+      );
+
+      debugPrint('Location component enabled successfully');
+    } catch (e) {
+      // On failure, allow a retry — e.g. if the controller was torn down
+      // between the guard and the call.
+      _locationComponentEnabled = false;
+      debugPrint('Error enabling location component: $e');
     }
   }
 

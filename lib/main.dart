@@ -55,6 +55,7 @@ Future<void> main() async {
   final syncManager = SyncManager(
     syncQueueDao: database.syncQueueDao,
     pinDao: database.pinDao,
+    tombstoneDao: database.pinTombstoneDao,
     remoteDataSource: remoteDataSource,
     networkMonitor: networkMonitor,
   );
@@ -63,6 +64,7 @@ Future<void> main() async {
   final pinRepository = PinRepositoryImpl(
     database.pinDao,
     database.syncQueueDao,
+    database.pinTombstoneDao,
     syncManager: syncManager,
   );
   final authRepository = SupabaseAuthRepository(supabaseClient);

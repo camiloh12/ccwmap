@@ -12,12 +12,14 @@ import '../sync/sync_manager.dart';
 class PinRepositoryImpl implements PinRepository {
   final PinDao _pinDao;
   final SyncQueueDao _syncQueueDao;
+  final PinTombstoneDao _tombstoneDao;
   final SyncManager? _syncManager;
   final Uuid _uuid = const Uuid();
 
   PinRepositoryImpl(
     this._pinDao,
-    this._syncQueueDao, {
+    this._syncQueueDao,
+    this._tombstoneDao, {
     SyncManager? syncManager,
   }) : _syncManager = syncManager;
 
@@ -82,6 +84,12 @@ class PinRepositoryImpl implements PinRepository {
   Future<void> deletePin(String id) async {
     // Delete from local database immediately (offline-first)
     await _pinDao.deletePin(id);
+
+    // Record a persistent tombstone so the download phase of any future sync
+    // cycle knows not to re-insert this pin from remote — even if the remote
+    // delete is silently blocked by RLS or the DELETE operation is dequeued
+    // before the download runs.
+    await _tombstoneDao.insertTombstone(id, DateTime.now());
 
     // Delete any existing queued operations for this pin (optimization)
     await _syncQueueDao.deleteOperationsForPin(id);

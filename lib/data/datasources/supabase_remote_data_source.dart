@@ -67,19 +67,34 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
     }
   }
 
-  /// Delete a pin from Supabase
+  /// Delete a pin from Supabase.
   ///
-  /// Throws exception on API error.
-  /// Idempotent - no error if pin doesn't exist.
+  /// Postgrest's `delete()` does not throw when a row survives the DELETE
+  /// (e.g. RLS filtered it, network glitch, or another client recreated it
+  /// mid-flight) — it just returns 0 rows affected. To detect that, we do a
+  /// follow-up `select('id')` and throw if the row survived. Under the
+  /// current "any authenticated user can delete any pin" policy this check
+  /// should only trip on genuine errors, but it's cheap defense-in-depth.
+  ///
+  /// Idempotent: if the row was already gone before the call, the follow-up
+  /// check returns null and the method succeeds.
   @override
   Future<void> deletePin(String pinId) async {
     try {
+      await _supabase.from('pins').delete().eq('id', pinId);
 
-      await _supabase
+      final survivor = await _supabase
           .from('pins')
-          .delete()
-          .eq('id', pinId);
+          .select('id')
+          .eq('id', pinId)
+          .maybeSingle();
 
+      if (survivor != null) {
+        throw Exception(
+          'Remote delete did not remove pin $pinId — row still exists after '
+          'DELETE. Check network connectivity and Supabase RLS policy.',
+        );
+      }
     } catch (e) {
       rethrow;
     }

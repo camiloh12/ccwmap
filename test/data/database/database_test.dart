@@ -298,4 +298,36 @@ void main() {
       expect(pending.length, 5);
     });
   });
+
+  group('PinTombstoneDao', () {
+    test('insert and retrieve tombstone', () async {
+      await database.pinTombstoneDao.insertTombstone('pin-t1', DateTime.now());
+
+      final ids = await database.pinTombstoneDao.getAllTombstonedPinIds();
+      expect(ids, contains('pin-t1'));
+      expect(await database.pinTombstoneDao.isTombstoned('pin-t1'), isTrue);
+    });
+
+    test('isTombstoned returns false for unknown pin', () async {
+      expect(await database.pinTombstoneDao.isTombstoned('never-seen'), isFalse);
+    });
+
+    test('removeTombstone deletes the entry', () async {
+      await database.pinTombstoneDao.insertTombstone('pin-t2', DateTime.now());
+      await database.pinTombstoneDao.removeTombstone('pin-t2');
+
+      expect(await database.pinTombstoneDao.isTombstoned('pin-t2'), isFalse);
+    });
+
+    test('insertTombstone is idempotent', () async {
+      final t1 = DateTime.now();
+      final t2 = t1.add(const Duration(seconds: 5));
+
+      await database.pinTombstoneDao.insertTombstone('pin-t3', t1);
+      await database.pinTombstoneDao.insertTombstone('pin-t3', t2);
+
+      final ids = await database.pinTombstoneDao.getAllTombstonedPinIds();
+      expect(ids.where((id) => id == 'pin-t3').length, 1);
+    });
+  });
 }

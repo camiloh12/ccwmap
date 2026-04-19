@@ -16,6 +16,7 @@ import 'package:ccwmap/domain/repositories/pin_repository.dart';
 class SyncManager {
   final SyncQueueDao _syncQueueDao;
   final PinDao _pinDao;
+  final PinTombstoneDao _tombstoneDao;
   final RemoteDataSourceInterface _remoteDataSource;
   final NetworkMonitor _networkMonitor;
 
@@ -24,10 +25,12 @@ class SyncManager {
   SyncManager({
     required SyncQueueDao syncQueueDao,
     required PinDao pinDao,
+    required PinTombstoneDao tombstoneDao,
     required RemoteDataSourceInterface remoteDataSource,
     required NetworkMonitor networkMonitor,
   })  : _syncQueueDao = syncQueueDao,
         _pinDao = pinDao,
+        _tombstoneDao = tombstoneDao,
         _remoteDataSource = remoteDataSource,
         _networkMonitor = networkMonitor;
 
@@ -285,8 +288,19 @@ class SyncManager {
           .map((op) => op.pinId)
           .toSet();
 
-      // Combine pending deletes with recently deleted pins from this sync cycle
-      final allDeletedPinIds = {...pendingDeletePinIds, ...recentlyDeletedPinIds};
+      // Persistent tombstones: pins the user deleted locally, regardless of
+      // whether the remote delete has completed (or was silently blocked by
+      // RLS). Consulting these on every download prevents the "deleted pin
+      // reappears after next sync" bug.
+      final tombstonedPinIds = await _tombstoneDao.getAllTombstonedPinIds();
+
+      // Combine all three sources: pending queue deletes, just-processed
+      // deletes from this cycle, and persistent tombstones.
+      final allDeletedPinIds = {
+        ...pendingDeletePinIds,
+        ...recentlyDeletedPinIds,
+        ...tombstonedPinIds,
+      };
 
       for (final remoteDto in remotePins) {
         try {
