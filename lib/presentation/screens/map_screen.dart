@@ -1032,13 +1032,13 @@ class _MapScreenState extends State<MapScreen> {
   ) async {
     if (_mapController == null) return null;
 
-    // Layer IDs to query for POIs from the base map tiles
+    // Layer IDs to query for POIs from the base map tiles. Deliberately
+    // excludes place_label/place-label (country/state/city/town/village/
+    // suburb/neighbourhood) — those areas are too large to pin meaningfully.
     const poiLayerIds = [
       'poi',               // Common base map layer
       'poi_label',         // MapTiler POI labels
       'poi-label',         // Alternative naming
-      'place_label',       // Place labels
-      'place-label',       // Alternative naming
     ];
 
     // Screen pixel offsets to check (for catching offset labels)
@@ -1131,6 +1131,16 @@ class _MapScreenState extends State<MapScreen> {
             // field so layerId is '', making the contains('pins') check unreliable.
             if (layerId.contains('pins')) continue;
             if (feature['properties']?['status'] != null) continue;
+            // Only base-map POIs are pinnable. MapTiler's source-layer names
+            // are stable semantic ids ('poi_food', 'poi_education', etc.) —
+            // the human-readable layer.id ('City labels', 'Country labels')
+            // varies and isn't reliable for filtering. Anything not in a
+            // poi_* source-layer (countries/states/cities/towns/villages,
+            // roads, water, etc.) is either too large to pin meaningfully
+            // or not a place a user would mark. Labels remain visible; only
+            // the click is ignored.
+            final sourceLayer = (feature['layer']?['source-layer']?.toString() ?? '').toLowerCase();
+            if (!sourceLayer.startsWith('poi_')) continue;
 
             if (name != null && name.isNotEmpty) {
               namedFeatures++;
