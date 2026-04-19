@@ -1370,7 +1370,7 @@ class _MapScreenState extends State<MapScreen> {
               onMapLongClick: _onMapLongClick,
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
-              compassEnabled: false,
+              compassEnabled: true,
               rotateGesturesEnabled: true,
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
