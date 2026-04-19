@@ -537,3 +537,44 @@ Resolved version in `pubspec.lock`: `0.9.0+3`.
 - Deprecation warning for `isInDebugMode` will be addressed in H1 if workmanager's replacement (WorkmanagerDebug handlers) is deemed necessary.
 
 **Status:** DONE
+
+## Phase G1 (sqlite3_flutter_libs investigation and removal)
+
+**`flutter pub deps --style=compact | grep -i sqlite` output:**
+```
+- drift 2.32.1 [async convert collection meta stream_channel sqlite3 path stack_trace web]
+- sqlite3_flutter_libs 0.5.42 [flutter]
+- drift_dev 2.32.1 [... sqlite3 sqlparser ...]
+- sqlite3 3.3.1 [collection ffi meta path web typed_data hooks code_assets native_toolchain_c crypto]
+```
+
+sqlite3 is at **3.3.1** (3.x confirmed). drift transitively pulls it; `sqlite3_flutter_libs` was a direct dependency we declared.
+
+**sqlite3_flutter_libs 0.6.0+eol changelog:**
+> "Deprecate this package. Starting from versions 3.x of the `sqlite3` package, `sqlite3_flutter_libs` is no longer necessary."
+> "This version removes all code from this package. It can be used to require that the old Flutter-specific scripts are no longer used."
+
+**Drift platforms docs (https://drift.simonbinder.eu/platforms/):**
+> "It is no longer necessary to depend on `sqlite3_flutter_libs` or `sqlcipher_flutter_libs`, you can remove these dependencies."
+> "Starting with version 3.0.0 of the `sqlite3` package (that drift depends on), a recent version of SQLite is automatically bundled with your Flutter app."
+
+**Upgrade guide (UPGRADING_TO_V3.md):**
+> "calls to `applyWorkaroundToOpenSqlite3OnOldAndroidVersions` which can be removed after upgrading."
+
+**Code audit:**
+- No call to `applyWorkaroundToOpenSqlite3OnOldAndroidVersions` anywhere in this codebase (confirmed by grep).
+- `database_connection_io.dart` uses only `NativeDatabase` from `package:drift/native.dart` — no sqlite3_flutter_libs import.
+- `database_connection_web.dart` uses only `DriftWebStorage.volatile()` from `package:drift/web.dart`.
+
+**Decision: Case B — removed.**
+Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: sqlite3 3.x bundles its own Flutter native libraries (via Dart hooks / `native_toolchain_c`), and the separate `sqlite3_flutter_libs` wrapper is no longer needed.
+
+**pubspec.yaml change:** Removed `sqlite3_flutter_libs: ^0.5.0` from the `# Database` block.
+
+**Post-removal verification:**
+- `flutter pub get`: clean resolution, no errors
+- `flutter analyze --no-fatal-infos`: **17 infos** (unchanged from F5 baseline — no new issues)
+- `flutter test`: **109/109 passing** — no regression
+- `flutter build apk --debug`: **succeeded** (26.6 s) — `app-debug.apk` built cleanly; no missing native symbol errors
+
+**Status:** DONE
