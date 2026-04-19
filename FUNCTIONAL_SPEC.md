@@ -145,14 +145,14 @@ A mobile app with an interactive map where authenticated users can:
   - Restriction tag (if applicable)
   - Security screening/signage checkboxes
   - "Save", "Delete", and "Cancel" buttons
-- Only pin creator can delete a pin
+- Any authenticated user can delete any pin (crowd-sourced cleanup)
 - Any authenticated user can update status (crowd-sourced corrections)
 - Changes sync to cloud immediately
 
 **Technical Details**:
 - Edit triggers database update with new `last_modified` timestamp
-- Delete only allowed if `created_by == current_user_id`
-- RLS policy on backend enforces deletion permissions
+- Delete permitted for any authenticated user
+- RLS policy on backend enforces authentication (not ownership)
 
 ### 4. User Authentication
 
@@ -815,8 +815,8 @@ Background: SyncManager uploads to Supabase
 
 **Row Level Security (RLS)**:
 - Enforced at database level
-- Users can only delete their own pins (`created_by == auth.uid()`)
-- Users can update any pin (crowd-sourced corrections)
+- Any authenticated user can delete any pin (crowd-sourced cleanup)
+- Any authenticated user can update any pin (crowd-sourced corrections)
 - Anyone can read pins (public map data)
 
 ---
@@ -1525,10 +1525,10 @@ CREATE POLICY "Users can update any pin"
   USING (auth.role() = 'authenticated')
   WITH CHECK (auth.role() = 'authenticated');
 
--- Policy: Users can only delete their own pins
-CREATE POLICY "Users can delete own pins"
+-- Policy: Any authenticated user can delete any pin (crowd-sourced cleanup)
+CREATE POLICY "Authenticated users can delete any pin"
   ON pins FOR DELETE
-  USING (auth.uid() = created_by);
+  USING (auth.role() = 'authenticated');
 ```
 
 ---

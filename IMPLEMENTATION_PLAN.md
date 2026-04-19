@@ -1473,11 +1473,11 @@ CREATE POLICY "Users can update any pin"
   WITH CHECK (auth.role() = 'authenticated');
 ```
 
-**DELETE Policy** (users can only delete their own pins):
+**DELETE Policy** (any authenticated user can delete any pin — crowd-sourced cleanup):
 ```sql
-CREATE POLICY "Users can delete own pins"
+CREATE POLICY "Authenticated users can delete any pin"
   ON pins FOR DELETE
-  USING (auth.uid() = created_by);
+  USING (auth.role() = 'authenticated');
 ```
 
 - [x] Test policies using SQL Editor or API
