@@ -217,3 +217,26 @@ The `services.gradle.org/versions/current` endpoint returned 9.4.1 (Gradle 9.x c
 **No escape hatches added** to `android/gradle.properties`.
 
 **Status:** DONE
+
+## Phase E1 (flutter_lints 5 → 6)
+
+**Change:** Bumped `flutter_lints` from `^5.0.0` to `^6.0.0` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `6.0.0`.
+
+**New lints introduced by flutter_lints 6:**
+- `strict_top_level_inference` — requires explicit type annotations on top-level variables/fields that rely on inference
+- `unnecessary_underscores` — flags `_`/`__` unused-parameter names that can be simplified
+
+**New-lint issues surfaced:** 0
+Neither `strict_top_level_inference` nor `unnecessary_underscores` triggered on any file in this codebase. No code changes required.
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Status:** DONE
