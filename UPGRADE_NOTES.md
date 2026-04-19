@@ -240,3 +240,35 @@ Neither `strict_top_level_inference` nor `unnecessary_underscores` triggered on 
 - 109/109 passing — No regression
 
 **Status:** DONE
+
+## Phase E2 (flutter_launcher_icons 0.13.1 → 0.14.4)
+
+**Change:** Bumped `flutter_launcher_icons` from `^0.13.1` to `^0.14.4` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `0.14.4`.
+
+**New features in 0.14.x:**
+- Monochrome icons for Android (adaptive icon enhancements)
+- Dark/tinted icons for iOS 18+
+
+**Icon regeneration:**
+Command: `dart run flutter_launcher_icons`
+- Result: succeeded
+- Output: Created default icons (Android), created adaptive icons (Android), overwriting default iOS launcher icon with new icon
+
+**Files modified/regenerated:**
+- `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml` — updated (6 insertions)
+- `android/app/src/main/res/mipmap-hdpi/ic_launcher.png` — binary regenerated
+- `ios/Runner.xcodeproj/project.pbxproj` — updated
+- `ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json` — updated (123 deletions, simplified)
+- `ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png` — binary regenerated
+- `ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-72x72@1x.png` — binary regenerated
+- `ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png` — binary regenerated
+
+**`flutter build apk --debug`:**
+- Result: succeeded (17.8 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk` (216 MB)
+
+**Tests:**
+- 109/109 passing — No regression
+
+**Status:** DONE
