@@ -1126,22 +1126,36 @@ class _MapScreenState extends State<MapScreen> {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our own pin layers. Also filter by the 'status' property:
-            // our pins always carry a numeric status (0/1/2) that no base-map
-            // POI feature has. On iOS, queryRenderedFeatures omits the layer.id
-            // field so layerId is '', making the contains('pins') check unreliable.
+            // Skip our own pins. The maplibre Flutter wrapper drops layer
+            // info on Android and web (only iOS sometimes retains it), so
+            // layerId is usually '' — the 'status' property is what reliably
+            // identifies our pins (only our pins carry the numeric 0/1/2).
             if (layerId.contains('pins')) continue;
             if (feature['properties']?['status'] != null) continue;
-            // Only base-map POIs are pinnable. MapTiler's source-layer names
-            // are stable semantic ids ('poi_food', 'poi_education', etc.) —
-            // the human-readable layer.id ('City labels', 'Country labels')
-            // varies and isn't reliable for filtering. Anything not in a
-            // poi_* source-layer (countries/states/cities/towns/villages,
-            // roads, water, etc.) is either too large to pin meaningfully
-            // or not a place a user would mark. Labels remain visible; only
-            // the click is ignored.
-            final sourceLayer = (feature['layer']?['source-layer']?.toString() ?? '').toLowerCase();
-            if (!sourceLayer.startsWith('poi_')) continue;
+
+            // Filter out place features (continents/countries/states/cities/
+            // towns/villages/etc.) — too large to pin meaningfully. We can't
+            // filter by source-layer because the Flutter wrapper drops it on
+            // Android and web. Instead use the OpenMapTiles per-feature
+            // properties observed in real tiles:
+            //   - place_label  -> class ∈ {village, neighbourhood, suburb, ...}
+            //   - state_label  -> admin_level set
+            //   - country_label-> only iso_a2/name/rank, no class, no subclass
+            //   - continent_label-> only name
+            //   - poi_*        -> always has either a non-place class or a subclass
+            const placeClasses = {
+              'continent', 'country', 'state', 'province', 'region',
+              'city', 'town', 'village', 'hamlet',
+              'suburb', 'quarter', 'neighbourhood', 'isolated_dwelling',
+              'island', 'archipelago',
+            };
+            final props = feature['properties'] as Map?;
+            final featureClass = props?['class']?.toString();
+            final hasSubclass = props?['subclass'] != null;
+            if (featureClass != null && placeClasses.contains(featureClass)) continue;
+            if (props?['admin_level'] != null) continue;
+            // Catches countries (iso_a2 only) and continents (name only).
+            if (featureClass == null && !hasSubclass) continue;
 
             if (name != null && name.isNotEmpty) {
               namedFeatures++;
