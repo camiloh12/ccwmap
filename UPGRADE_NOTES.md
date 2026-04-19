@@ -431,3 +431,49 @@ Resolved version in `pubspec.lock`: `7.0.0`.
 - Dart APIs used in this project are unchanged — no functional regression expected.
 
 **Status:** DONE
+
+## Phase F4 (connectivity_plus 6 → 7)
+
+**Change:** Bumped `connectivity_plus` from `^6.1.5` to `^7.1.1` in `pubspec.yaml`.
+Resolved version in `pubspec.lock`: `7.1.1`.
+
+**connectivity_plus 7.0 breaking changes review:**
+- Android toolchain floors ONLY (no Dart API breakage):
+  - Minimum AGP: 8.12.1 (we have 8.13.0 ✓)
+  - Minimum Gradle: 8.13 (we have 8.14 ✓)
+  - Minimum Kotlin: 2.2 (we have 2.3.20 ✓)
+- All Dart APIs unchanged from 6.x:
+  - `Connectivity()` constructor (`lib/data/services/network_monitor.dart:6`)
+  - `Connectivity.checkConnectivity()` returns `Future<List<ConnectivityResult>>` (`line 21`)
+  - `Connectivity.onConnectivityChanged` returns `Stream<List<ConnectivityResult>>` (`line 26`)
+  - `ConnectivityResult.none` enum (`line 40`)
+
+**`flutter pub upgrade connectivity_plus`:**
+- Result: Already at 7.1.1 in lock file (caret constraint `^7.1.1` selected it immediately)
+- Command succeeded (0 errors)
+
+**Analyzer:**
+- 16 issues (all infos) — **No change from baseline**
+  - 1 deprecated_member_use: `package:drift/web.dart`
+  - 2 empty_catches: `lib/data/sync/background_sync.dart`
+  - 13 constant_identifier_names: PinStatus and RestrictionTag enums
+- No new connectivity_plus-related warnings or errors
+
+**Tests:**
+- 109/109 passing — **No regression**
+
+**`flutter build apk --debug`:**
+- Result: succeeded (32.0 s)
+- Output: `build/app/outputs/flutter-apk/app-debug.apk` (219 MB)
+- Warnings: Pre-existing `[options] source/target value 8 obsolete` (transitive deps, unrelated to connectivity_plus)
+
+**`flutter build apk --release`:**
+- Result: succeeded (74.2 s)
+- Output: `build/app/outputs/flutter-apk/app-release.apk` (92.8 MB)
+- Warnings: Font tree-shaking notice (expected, not a regression). Pre-existing `[options]` warnings from transitive deps.
+
+**Regression testing notes:**
+- Manual offline→online sync regression TBD in Phase H1 (after all F-phase commits land).
+- All Dart API call sites in `lib/data/services/network_monitor.dart` remain unchanged; no functional regression expected.
+
+**Status:** DONE

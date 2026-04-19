@@ -45,7 +45,7 @@ dependencies:
   geolocator: ^14.0.2
 
   # Network connectivity monitoring
-  connectivity_plus: ^6.0.0
+  connectivity_plus: ^7.1.1
 
   # Background task scheduling
   workmanager: ^0.6.0
