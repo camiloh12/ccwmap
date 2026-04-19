@@ -614,3 +614,25 @@ Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: 
 - [ ] BUG-002: Android/iOS/web — Delete a pin → pin stays deleted after sync / re-render
 - [ ] BUG-003: iOS — Cold-start auto-pan to user location works
 - [ ] BUG-004: Web — Tap an existing pin → edit dialog opens
+
+## Phase H1 hotfix (iOS deployment target 13 → 14)
+
+**Root cause:** `workmanager_apple` (the federated iOS plugin introduced by workmanager 0.9's federated architecture) requires iOS 14.0+. The project previously targeted iOS 13.0, causing CocoaPods to fail with "could not find compatible versions for pod workmanager_apple" during iOS CI. CocoaPods also noted the Podfile had no explicit `platform :ios` line and auto-derived 13.0 from the pbxproj.
+
+**Fix:**
+- `ios/Podfile` does not exist in this project (Flutter regenerates it on build from pbxproj values). No Podfile edit required — Flutter's generated Podfile reads the deployment target directly from `ios/Runner.xcodeproj/project.pbxproj`.
+- **`ios/Runner.xcodeproj/project.pbxproj`:** All 3 occurrences of `IPHONEOS_DEPLOYMENT_TARGET = 13.0;` bumped to `IPHONEOS_DEPLOYMENT_TARGET = 14.0;`.
+  - Line 353 — Project Profile config
+  - Line 483 — Project Debug config
+  - Line 534 — Project Release config
+
+**Sample before/after:**
+```
+- IPHONEOS_DEPLOYMENT_TARGET = 13.0;
++ IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+```
+
+**Android side (unchanged, still green):**
+- `flutter analyze --no-fatal-infos`: 17 issues (all infos) — no change from H1 baseline
+- `flutter test`: 109/109 passing — no regression
+- `flutter build apk --debug`: succeeded
