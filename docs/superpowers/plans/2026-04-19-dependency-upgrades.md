@@ -4,9 +4,11 @@
 
 **Goal:** Bring Flutter SDK, Dart packages, and the Android toolchain (Kotlin / Gradle / AGP) up to their current stable versions as of April 2026, keeping all existing tests green and all four fixed bugs (BUG-001 through BUG-004) working on Android, iOS (via TestFlight), and web.
 
-**Architecture:** Upgrades are sequenced to satisfy transitive constraints. Android toolchain (Kotlin 2.3.20 + Gradle 9.4.1 + AGP 9.1.1 + Java 21 LTS) must land **before** `workmanager 0.9` and `connectivity_plus 7`, because those packages hard-require Kotlin ≥2.2, AGP ≥8.12.1, Gradle ≥8.13, and Java ≥17 at the Android layer. Within each phase, one package is upgraded per task with its own commit so any regression is trivially revertable via `git revert`.
+**Architecture:** Upgrades are sequenced to satisfy transitive constraints. Android toolchain (Kotlin 2.3.20 + Gradle 8.14 + AGP 8.13.0 + Java 21 LTS) must land **before** `workmanager 0.9` and `connectivity_plus 7`, because those packages hard-require Kotlin ≥2.2, AGP ≥8.12.1, Gradle ≥8.13, and Java ≥17 at the Android layer. Within each phase, one package is upgraded per task with its own commit so any regression is trivially revertable via `git revert`.
 
-**Tech Stack:** Flutter 3.41.x stable, Dart 3.11+, Drift ORM (SQLite via `sqlite3_flutter_libs`), Supabase, MapLibre GL, WorkManager, Gradle 9 + Kotlin 2.3.20 + AGP 9.1.1 + Java 21 on Android.
+**Note on AGP 9:** AGP 9.1.1 is the current "latest" major but is blocked for this project — `maplibre_gl` (0.24.1 and 0.25.0) still applies `kotlin-android` plugin in its own `android/build.gradle`, which AGP 9 hard-rejects. Flutter's bundled Gradle plugin also requires the temporary `android.newDsl=false` opt-out for AGP 9. Per tracking issue flutter/flutter#181383, the plugin ecosystem needs time to catch up. We target the last stable AGP 8 line (8.13.0, September 2025) which supports Kotlin 2.3 and still satisfies every F-phase package floor. Revisit AGP 9 after maplibre_gl publishes an AGP-9-compatible release.
+
+**Tech Stack:** Flutter 3.41.x stable, Dart 3.11+, Drift ORM (SQLite via `sqlite3_flutter_libs`), Supabase, MapLibre GL, WorkManager, Gradle 8.14 + Kotlin 2.3.20 + AGP 8.13.0 + Java 21 on Android.
 
 ---
 
