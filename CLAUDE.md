@@ -12,6 +12,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 _No open bugs._
 
+### BUG-004 (FIXED): Tapping a pin on web did not open the edit dialog
+- **Platform:** Web only (Android and iOS were unaffected).
+- **Original symptom:** Clicking on an existing pin on the web platform did nothing — the edit dialog never opened. This was a regression introduced by the BUG-001 fix (commit `9eb3739`), which removed the geographic-distance fallback that `_onFeatureTapped` used when the feature-id lookup missed.
+- **Root cause:** On web, maplibre-gl-js does not automatically surface our GeoJSON string feature ids (UUIDs) to `onFeatureTapped` without an explicit `promoteId`. The lookup `_pins.firstWhere((p) => p.id == id)` always threw, and with no fallback the tap was dropped.
+- **Fix:** Two parts in `lib/presentation/screens/map_screen.dart`.
+  1. **Pixel-distance fallback restored** in `_onFeatureTapped`: when id-lookup fails, iterate all pins and pick the nearest within `_pinHitPixelThreshold` (30 px). Still honors the BUG-001 guard — taps >30 px from every pin are ignored.
+  2. **`promoteId: 'id'`** added to the `addGeoJsonSource('pins-source', ...)` call so maplibre-gl-js maps our property `id` to the feature id, making the ID path work on all platforms.
+
+### BUG-003 (FIXED): iOS did not auto-navigate to user's location on app open
+- **Platform:** iOS only (Android and web were unaffected).
+- **Original symptom:** On iOS cold-start the map stayed at the continental-US center. Tapping the compass FAB correctly panned to the user — so location permission and `Geolocator` were working — but the automatic initial pan did not.
+- **Root cause:** `_enableLocationComponent` called `updateMyLocationTrackingMode(tracking)` → `animateCamera(userLatLng)` → `updateMyLocationTrackingMode(none)` on native. On iOS the tracking-mode animation raced with the explicit `animateCamera`, and the immediate `none` cancelled the in-flight animation before the camera settled. Android tolerated the race; web never ran these calls. Secondary issue: the work could run before the style had loaded, and `_locationComponentEnabled` was set to `true` even when the underlying calls silently no-op'd, preventing any retry.
+- **Fix:** In `lib/presentation/screens/map_screen.dart`:
+  1. Renamed to `_tryEnableLocationComponent` and gated on four preconditions — controller present, `_styleLoaded` true, `_currentLocation` non-null, not already enabled. Called from three places (`_onMapCreated`, `_onStyleLoadedCallback`, `_requestLocationPermission` completion); whichever satisfies the trio triggers the one-shot pan.
+  2. Dropped the tracking-mode toggle entirely. `myLocationEnabled: true` on `MapLibreMap` already shows the puck on native; tracking mode is only needed for continuous follow, which this app does not do. Now just a single `animateCamera` call.
+  3. On failure the flag is reset so a retry can succeed later.
+
+### BUG-002 (FIXED): Deleted pin reappeared after screen re-render
+- **Platform:** Android, iOS, web.
+- **Original symptom:** Tapping delete showed "deletion successful" and the pin vanished, but after any other pin action (or re-render that triggered a sync) the deleted pin came back.
+- **Root cause:** The original Supabase RLS delete policy was `USING (auth.uid() = created_by)` — only the pin's creator could delete it. Supabase Postgrest's `delete().eq('id', pinId)` does **not** throw when the RLS policy silently filters the row; it returns 200 with 0 rows affected. So deleting a pin the current user didn't create (including pins created under a previous account, or pre-auth pins stored as `'anonymous'`) looked like success on the client but the row survived on the server, and the next sync-download re-inserted it locally.
+- **Fix:** Three parts.
+  1. **RLS policy changed** from "only creators delete" to "any authenticated user deletes" — matches the existing UPDATE policy and the spec's crowd-sourced model. User runs in Supabase SQL editor:
+     ```sql
+     DROP POLICY IF EXISTS "Users can delete own pins" ON pins;
+     CREATE POLICY "Authenticated users can delete any pin"
+       ON pins FOR DELETE
+       USING (auth.role() = 'authenticated');
+     ```
+     Spec updated in `FUNCTIONAL_SPEC.md` (sections 3, Data Model, and Row Level Security).
+  2. **`SupabaseRemoteDataSource.deletePin`** performs a follow-up `select('id').eq('id', pinId).maybeSingle()` and throws if the row survived the delete. Belt-and-suspenders: surfaces any unexpected server rejection (network glitch, future policy changes, race where another client recreated the row) as a real error through `SyncManager`'s normal retry path.
+  3. **`PinTombstones` table** (`lib/data/database/database.dart`, schema v2; DAO in `lib/data/database/pin_tombstone_dao.dart`) is kept as defense-in-depth. `SyncManager._downloadRemoteChanges` consults it alongside current queue DELETEs and just-processed IDs. With the new RLS policy, tombstones are no longer load-bearing for the primary bug, but they make offline-delete-then-sync bulletproof against mid-cycle failures.
+- **Tests:** `test/data/database/database_test.dart` adds four tests for `PinTombstoneDao` (insert/retrieve, idempotent insert, isTombstoned, remove).
+- **Web note:** The web build uses `DriftWebStorage.volatile()` (in-memory SQLite) per `lib/data/database/database_connection_web.dart`. Tombstones don't survive a page refresh on web. With the new RLS policy this no longer matters for correctness — the remote DELETE actually removes the row, so refresh sees a remote table without the pin — but do not rely on tombstones persisting across refreshes in the web build.
+
 ### BUG-001 (FIXED): Tapping POI label on iOS opened edit dialog instead of create dialog
 - **Platform:** iOS only (Android was already working correctly).
 - **Original symptom:** Tapping a POI label opened the edit dialog for the nearest existing pin — often a pin far off-screen — instead of a create-pin dialog with the POI name. If no pin was nearby, nothing happened.
@@ -130,7 +165,7 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 
 - Same schema as local with PostgreSQL types (UUID, DOUBLE PRECISION, TIMESTAMPTZ)
 - Additional: `location` column (PostGIS GEOGRAPHY for spatial queries)
-- RLS policies enforce: anyone read, authenticated users create/update, only creators delete
+- RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy)
 - Automatic `last_modified` trigger on updates
 
 ## Authentication

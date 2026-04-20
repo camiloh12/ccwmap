@@ -54,6 +54,7 @@ void callbackDispatcher() {
       final syncManager = SyncManager(
         syncQueueDao: database.syncQueueDao,
         pinDao: database.pinDao,
+        tombstoneDao: database.pinTombstoneDao,
         remoteDataSource: remoteDataSource,
         networkMonitor: networkMonitor,
       );

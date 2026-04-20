@@ -15,6 +15,7 @@ import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
@@ -36,6 +37,7 @@ class _MapScreenState extends State<MapScreen> {
   Position? _currentLocation;
   bool _isLoadingLocation = false;
   bool _locationComponentEnabled = false;
+  bool _styleLoaded = false;
 
   // ViewModel and pins
   MapViewModel? _viewModel;
@@ -50,6 +52,8 @@ class _MapScreenState extends State<MapScreen> {
   bool _debugMode = false;
   String? _debugLastTap;
   String? _debugLastDetection;
+  String? _debugLocationPipeline;
+  int _locationComponentCallCount = 0;
 
   // Initial camera position - center of US
   static const double _initialLatitude = 39.8283;
@@ -126,10 +130,8 @@ class _MapScreenState extends State<MapScreen> {
         });
         debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
 
-        // Enable location component if map is already ready
-        if (_mapController != null) {
-          _enableLocationComponent();
-        }
+        // Try to enable — no-ops until map controller + style are ready.
+        _tryEnableLocationComponent(from: 'loc-arrived');
       }
     } catch (e) {
       debugPrint('Error requesting location: $e');
@@ -151,10 +153,9 @@ class _MapScreenState extends State<MapScreen> {
     // onFeatureTapped is the only way to detect direct clicks on features
     controller.onFeatureTapped.add(_onFeatureTapped);
 
-    // Enable location component if we have a location
-    if (_currentLocation != null) {
-      _enableLocationComponent();
-    }
+    // Actual location-component enable waits for style load — camera
+    // operations before the style is ready can silently no-op on iOS.
+    _tryEnableLocationComponent(from: 'map-created');
   }
 
   /// Called when a feature (circle) is directly tapped
@@ -182,13 +183,31 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Find the pin by ID
+    // Find the pin by ID. On web, maplibre-gl-js doesn't always surface the
+    // GeoJSON feature id to onFeatureTapped (without an explicit promoteId),
+    // so fall back to nearest-pin-by-pixel-distance if the id lookup misses.
     Pin? pin;
     try {
       pin = _pins.firstWhere((p) => p.id == id);
-    } catch (e) {
-      debugPrint('Pin not found by ID, ignoring feature tap');
-      return;
+    } catch (_) {
+      pin = null;
+    }
+
+    if (pin == null) {
+      double minDist = double.infinity;
+      for (final p in _pins) {
+        final d = await _pixelDistanceToPin(p, point);
+        if (d == null) continue;
+        if (d < _pinHitPixelThreshold && d < minDist) {
+          minDist = d;
+          pin = p;
+        }
+      }
+      if (pin == null) {
+        debugPrint('No pin matched feature tap (id=$id, no nearby pin)');
+        _setDebugDetection('feature-tap: id miss, no nearby pin');
+        return;
+      }
     }
 
     // Verify the tap actually landed near this pin on-screen. iOS's native
@@ -219,10 +238,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onStyleLoadedCallback() {
-    // Enable location component after style loads
-    if (_currentLocation != null) {
-      _enableLocationComponent();
-    }
+    _styleLoaded = true;
+
+    // Now that the style is loaded, camera animations will stick on iOS.
+    _tryEnableLocationComponent(from: 'style-loaded');
 
     // Add pins layer to map
     _updatePinsLayer();
@@ -266,8 +285,16 @@ class _MapScreenState extends State<MapScreen> {
         // Source doesn't exist yet, that's ok
       }
 
-      // Add GeoJSON source
-      await _mapController!.addGeoJsonSource('pins-source', geojson);
+      // Add GeoJSON source. promoteId ensures maplibre-gl-js (web) surfaces
+      // our UUID to onFeatureTapped; without it web falls back to auto-
+      // generated numeric ids and the feature-id lookup in _onFeatureTapped
+      // misses (the pixel-distance fallback there covers this case too, but
+      // promoteId makes the ID path work correctly on all platforms).
+      await _mapController!.addGeoJsonSource(
+        'pins-source',
+        geojson,
+        promoteId: 'id',
+      );
 
       // Add circle layer - even though it blocks clicks, our geographic distance
       // detection will find the closest pin
@@ -355,43 +382,99 @@ class _MapScreenState extends State<MapScreen> {
     };
   }
 
-  /// Enable the location indicator on the map
-  Future<void> _enableLocationComponent() async {
-    if (_mapController != null && _currentLocation != null && !_locationComponentEnabled) {
-      try {
-        debugPrint('Enabling location component at: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
+  /// Enable the location indicator on the map and pan to the user's location.
+  ///
+  /// Preconditions: map controller present, style loaded, location obtained,
+  /// not already enabled. Called from three places (map created, style loaded,
+  /// location arrived) — whichever one completes the trio triggers the work.
+  ///
+  /// iOS belt-and-suspenders: after the initial animateCamera we schedule a
+  /// delayed moveCamera. Theory is that onStyleLoadedCallback can fire while
+  /// MapLibre iOS is still applying initialCameraPosition, and our
+  /// animateCamera gets clobbered mid-flight. The follow-up moveCamera is a
+  /// no-op if the first call stuck, and corrects the camera if it didn't.
+  ///
+  /// Every call records its guard state into _debugLocationPipeline so the
+  /// on-device debug overlay (bug icon, top-right) shows exactly which guard
+  /// is failing on iOS TestFlight without needing a Mac.
+  Future<void> _tryEnableLocationComponent({String from = 'unknown'}) async {
+    _locationComponentCallCount++;
+    _setLocationPipelineDebug(
+        '#$_locationComponentCallCount $from '
+        'ctrl=${_mapController != null ? "Y" : "N"} '
+        'style=${_styleLoaded ? "Y" : "N"} '
+        'loc=${_currentLocation != null ? "Y" : "N"} '
+        'done=${_locationComponentEnabled ? "Y" : "N"}');
 
-        if (kIsWeb) {
-          // Web: Use custom circle layer for user location (myLocationEnabled doesn't work reliably on web)
-          await _addUserLocationMarker();
-        } else {
-          // Native: Use built-in location component
-          await _mapController!.updateMyLocationTrackingMode(
-            MyLocationTrackingMode.tracking,
-          );
-        }
+    if (_mapController == null) return;
+    if (!_styleLoaded) return;
+    if (_currentLocation == null) return;
+    if (_locationComponentEnabled) return;
 
-        // Animate to user's location on first enable
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(
-            LatLng(_currentLocation!.latitude, _currentLocation!.longitude),
-            16.0,
-          ),
-          duration: const Duration(milliseconds: 1500),
-        );
+    _locationComponentEnabled = true;
 
-        if (!kIsWeb) {
-          // Native: After animation, set to none so camera doesn't auto-follow
-          await _mapController!.updateMyLocationTrackingMode(
-            MyLocationTrackingMode.none,
-          );
-        }
+    final target = LatLng(
+      _currentLocation!.latitude,
+      _currentLocation!.longitude,
+    );
 
-        _locationComponentEnabled = true;
-        debugPrint('Location component enabled successfully');
-      } catch (e) {
-        debugPrint('Error enabling location component: $e');
+    try {
+      debugPrint(
+          'Enabling location component at: ${target.latitude}, ${target.longitude}');
+
+      if (kIsWeb) {
+        // Web: myLocationEnabled doesn't render a puck reliably, so draw our
+        // own circle layer.
+        await _addUserLocationMarker();
       }
+
+      _setLocationPipelineDebug(
+          'animating ${target.latitude.toStringAsFixed(3)},${target.longitude.toStringAsFixed(3)}');
+
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(target, 16.0),
+        duration: const Duration(milliseconds: 1500),
+      );
+
+      _setLocationPipelineDebug('animate done');
+      debugPrint('Location component enabled successfully');
+    } catch (e) {
+      // On failure, allow a retry — e.g. if the controller was torn down
+      // between the guard and the call.
+      _locationComponentEnabled = false;
+      _setLocationPipelineDebug('animate err');
+      debugPrint('Error enabling location component: $e');
+      return;
+    }
+
+    // iOS retry: if the animate was clobbered by MapLibre iOS's own
+    // initial-camera pass, re-apply with an instant moveCamera. No-op if
+    // the animate already landed at target.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted || _mapController == null) return;
+      try {
+        _setLocationPipelineDebug('ios retry');
+        await _mapController!.moveCamera(
+          CameraUpdate.newLatLngZoom(target, 16.0),
+        );
+        _setLocationPipelineDebug('ios retry done');
+      } catch (e) {
+        _setLocationPipelineDebug('ios retry err');
+        debugPrint('iOS retry moveCamera failed: $e');
+      }
+    }
+  }
+
+  /// Record the latest location-pipeline state for the on-device debug
+  /// overlay. Always updates the underlying field; setState only runs when
+  /// debug mode is active, so subsequently toggling debug on reveals the
+  /// most recent state regardless of when it was recorded.
+  void _setLocationPipelineDebug(String info) {
+    debugPrint('LocationPipeline: $info');
+    _debugLocationPipeline = info;
+    if (_debugMode && mounted) {
+      setState(() {});
     }
   }
 
@@ -950,13 +1033,13 @@ class _MapScreenState extends State<MapScreen> {
   ) async {
     if (_mapController == null) return null;
 
-    // Layer IDs to query for POIs from the base map tiles
+    // Layer IDs to query for POIs from the base map tiles. Deliberately
+    // excludes place_label/place-label (country/state/city/town/village/
+    // suburb/neighbourhood) — those areas are too large to pin meaningfully.
     const poiLayerIds = [
       'poi',               // Common base map layer
       'poi_label',         // MapTiler POI labels
       'poi-label',         // Alternative naming
-      'place_label',       // Place labels
-      'place-label',       // Alternative naming
     ];
 
     // Screen pixel offsets to check (for catching offset labels)
@@ -1043,12 +1126,36 @@ class _MapScreenState extends State<MapScreen> {
             final name = feature['properties']?['name']?.toString();
             final layerId = feature['layer']?['id']?.toString() ?? '';
 
-            // Skip our own pin layers. Also filter by the 'status' property:
-            // our pins always carry a numeric status (0/1/2) that no base-map
-            // POI feature has. On iOS, queryRenderedFeatures omits the layer.id
-            // field so layerId is '', making the contains('pins') check unreliable.
+            // Skip our own pins. The maplibre Flutter wrapper drops layer
+            // info on Android and web (only iOS sometimes retains it), so
+            // layerId is usually '' — the 'status' property is what reliably
+            // identifies our pins (only our pins carry the numeric 0/1/2).
             if (layerId.contains('pins')) continue;
             if (feature['properties']?['status'] != null) continue;
+
+            // Filter out place features (continents/countries/states/cities/
+            // towns/villages/etc.) — too large to pin meaningfully. We can't
+            // filter by source-layer because the Flutter wrapper drops it on
+            // Android and web. Instead use the OpenMapTiles per-feature
+            // properties observed in real tiles:
+            //   - place_label  -> class ∈ {village, neighbourhood, suburb, ...}
+            //   - state_label  -> admin_level set
+            //   - country_label-> only iso_a2/name/rank, no class, no subclass
+            //   - continent_label-> only name
+            //   - poi_*        -> always has either a non-place class or a subclass
+            const placeClasses = {
+              'continent', 'country', 'state', 'province', 'region',
+              'city', 'town', 'village', 'hamlet',
+              'suburb', 'quarter', 'neighbourhood', 'isolated_dwelling',
+              'island', 'archipelago',
+            };
+            final props = feature['properties'] as Map?;
+            final featureClass = props?['class']?.toString();
+            final hasSubclass = props?['subclass'] != null;
+            if (featureClass != null && placeClasses.contains(featureClass)) continue;
+            if (props?['admin_level'] != null) continue;
+            // Catches countries (iso_a2 only) and continents (name only).
+            if (featureClass == null && !hasSubclass) continue;
 
             if (name != null && name.isNotEmpty) {
               namedFeatures++;
@@ -1221,6 +1328,23 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  Future<void> _onCompassTapped() async {
+    final controller = _mapController;
+    final current = controller?.cameraPosition;
+    if (controller == null || current == null) return;
+    await controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: current.target,
+          zoom: current.zoom,
+          bearing: 0.0,
+          tilt: 0.0,
+        ),
+      ),
+      duration: const Duration(milliseconds: 300),
+    );
+  }
+
   Future<void> _onExitTapped() async {
     debugPrint('Exit button tapped');
 
@@ -1340,6 +1464,11 @@ class _MapScreenState extends State<MapScreen> {
               myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: false,
+              // Required for cameraPosition to reflect user pan/zoom/rotate
+              // on Android/iOS. Without this, the native MapLibre SDKs do not
+              // emit camera-move events to Flutter and controller.cameraPosition
+              // stays frozen at initialCameraPosition. Web is unaffected.
+              trackCameraPosition: true,
               rotateGesturesEnabled: true,
               scrollGesturesEnabled: true,
               tiltGesturesEnabled: true,
@@ -1473,6 +1602,18 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
+          // Compass reset FAB (stacked above re-center FAB).
+          Positioned(
+            bottom: 160,
+            right: 16,
+            child: CompassButton(
+              listenable: _mapController,
+              bearingGetter: () =>
+                  _mapController?.cameraPosition?.bearing ?? 0.0,
+              onReset: _onCompassTapped,
+            ),
+          ),
+
           // Debug info panel. Gated on kShowDebugUI so it is tree-shaken
           // out of production release builds. See lib/core/build_flags.dart.
           if (kShowDebugUI && _debugMode)
@@ -1507,6 +1648,17 @@ class _MapScreenState extends State<MapScreen> {
                         'det: ${_debugLastDetection!}',
                         style: const TextStyle(
                           color: Colors.lightGreenAccent,
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                    if (_debugLocationPipeline != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'loc: ${_debugLocationPipeline!}',
+                        style: const TextStyle(
+                          color: Colors.yellowAccent,
                           fontSize: 11,
                           fontFamily: 'monospace',
                         ),

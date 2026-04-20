@@ -39,6 +39,7 @@ MAPTILER_API_KEY=test_key
     final pinRepository = PinRepositoryImpl(
       testDatabase.pinDao,
       testDatabase.syncQueueDao,
+      testDatabase.pinTombstoneDao,
     );
     final authRepository = FakeAuthRepository();
 
@@ -87,6 +88,7 @@ MAPTILER_API_KEY=test_key
     final pinRepository = PinRepositoryImpl(
       testDatabase.pinDao,
       testDatabase.syncQueueDao,
+      testDatabase.pinTombstoneDao,
     );
     final authRepository = FakeAuthRepository();
 

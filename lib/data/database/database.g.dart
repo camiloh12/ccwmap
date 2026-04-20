@@ -1238,18 +1238,243 @@ class SyncQueueCompanion extends UpdateCompanion<SyncQueueEntity> {
   }
 }
 
+class $PinTombstonesTable extends PinTombstones
+    with TableInfo<$PinTombstonesTable, PinTombstoneEntity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PinTombstonesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _pinIdMeta = const VerificationMeta('pinId');
+  @override
+  late final GeneratedColumn<String> pinId = GeneratedColumn<String>(
+    'pin_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAt = GeneratedColumn<int>(
+    'deleted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [pinId, deletedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'pin_tombstones';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<PinTombstoneEntity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('pin_id')) {
+      context.handle(
+        _pinIdMeta,
+        pinId.isAcceptableOrUnknown(data['pin_id']!, _pinIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pinIdMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deletedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {pinId};
+  @override
+  PinTombstoneEntity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return PinTombstoneEntity(
+      pinId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pin_id'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PinTombstonesTable createAlias(String alias) {
+    return $PinTombstonesTable(attachedDatabase, alias);
+  }
+}
+
+class PinTombstoneEntity extends DataClass
+    implements Insertable<PinTombstoneEntity> {
+  final String pinId;
+  final int deletedAt;
+  const PinTombstoneEntity({required this.pinId, required this.deletedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['pin_id'] = Variable<String>(pinId);
+    map['deleted_at'] = Variable<int>(deletedAt);
+    return map;
+  }
+
+  PinTombstonesCompanion toCompanion(bool nullToAbsent) {
+    return PinTombstonesCompanion(
+      pinId: Value(pinId),
+      deletedAt: Value(deletedAt),
+    );
+  }
+
+  factory PinTombstoneEntity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return PinTombstoneEntity(
+      pinId: serializer.fromJson<String>(json['pinId']),
+      deletedAt: serializer.fromJson<int>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'pinId': serializer.toJson<String>(pinId),
+      'deletedAt': serializer.toJson<int>(deletedAt),
+    };
+  }
+
+  PinTombstoneEntity copyWith({String? pinId, int? deletedAt}) =>
+      PinTombstoneEntity(
+        pinId: pinId ?? this.pinId,
+        deletedAt: deletedAt ?? this.deletedAt,
+      );
+  PinTombstoneEntity copyWithCompanion(PinTombstonesCompanion data) {
+    return PinTombstoneEntity(
+      pinId: data.pinId.present ? data.pinId.value : this.pinId,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PinTombstoneEntity(')
+          ..write('pinId: $pinId, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(pinId, deletedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is PinTombstoneEntity &&
+          other.pinId == this.pinId &&
+          other.deletedAt == this.deletedAt);
+}
+
+class PinTombstonesCompanion extends UpdateCompanion<PinTombstoneEntity> {
+  final Value<String> pinId;
+  final Value<int> deletedAt;
+  final Value<int> rowid;
+  const PinTombstonesCompanion({
+    this.pinId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  PinTombstonesCompanion.insert({
+    required String pinId,
+    required int deletedAt,
+    this.rowid = const Value.absent(),
+  }) : pinId = Value(pinId),
+       deletedAt = Value(deletedAt);
+  static Insertable<PinTombstoneEntity> custom({
+    Expression<String>? pinId,
+    Expression<int>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (pinId != null) 'pin_id': pinId,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  PinTombstonesCompanion copyWith({
+    Value<String>? pinId,
+    Value<int>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return PinTombstonesCompanion(
+      pinId: pinId ?? this.pinId,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (pinId.present) {
+      map['pin_id'] = Variable<String>(pinId.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PinTombstonesCompanion(')
+          ..write('pinId: $pinId, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $PinsTable pins = $PinsTable(this);
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
+  late final $PinTombstonesTable pinTombstones = $PinTombstonesTable(this);
   late final PinDao pinDao = PinDao(this as AppDatabase);
   late final SyncQueueDao syncQueueDao = SyncQueueDao(this as AppDatabase);
+  late final PinTombstoneDao pinTombstoneDao = PinTombstoneDao(
+    this as AppDatabase,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [pins, syncQueue];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    pins,
+    syncQueue,
+    pinTombstones,
+  ];
 }
 
 typedef $$PinsTableCreateCompanionBuilder =
@@ -1846,6 +2071,153 @@ typedef $$SyncQueueTableProcessedTableManager =
       SyncQueueEntity,
       PrefetchHooks Function()
     >;
+typedef $$PinTombstonesTableCreateCompanionBuilder =
+    PinTombstonesCompanion Function({
+      required String pinId,
+      required int deletedAt,
+      Value<int> rowid,
+    });
+typedef $$PinTombstonesTableUpdateCompanionBuilder =
+    PinTombstonesCompanion Function({
+      Value<String> pinId,
+      Value<int> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$PinTombstonesTableFilterComposer
+    extends Composer<_$AppDatabase, $PinTombstonesTable> {
+  $$PinTombstonesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get pinId => $composableBuilder(
+    column: $table.pinId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$PinTombstonesTableOrderingComposer
+    extends Composer<_$AppDatabase, $PinTombstonesTable> {
+  $$PinTombstonesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get pinId => $composableBuilder(
+    column: $table.pinId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$PinTombstonesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PinTombstonesTable> {
+  $$PinTombstonesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get pinId =>
+      $composableBuilder(column: $table.pinId, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$PinTombstonesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PinTombstonesTable,
+          PinTombstoneEntity,
+          $$PinTombstonesTableFilterComposer,
+          $$PinTombstonesTableOrderingComposer,
+          $$PinTombstonesTableAnnotationComposer,
+          $$PinTombstonesTableCreateCompanionBuilder,
+          $$PinTombstonesTableUpdateCompanionBuilder,
+          (
+            PinTombstoneEntity,
+            BaseReferences<
+              _$AppDatabase,
+              $PinTombstonesTable,
+              PinTombstoneEntity
+            >,
+          ),
+          PinTombstoneEntity,
+          PrefetchHooks Function()
+        > {
+  $$PinTombstonesTableTableManager(_$AppDatabase db, $PinTombstonesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PinTombstonesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PinTombstonesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PinTombstonesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> pinId = const Value.absent(),
+                Value<int> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => PinTombstonesCompanion(
+                pinId: pinId,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String pinId,
+                required int deletedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => PinTombstonesCompanion.insert(
+                pinId: pinId,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$PinTombstonesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PinTombstonesTable,
+      PinTombstoneEntity,
+      $$PinTombstonesTableFilterComposer,
+      $$PinTombstonesTableOrderingComposer,
+      $$PinTombstonesTableAnnotationComposer,
+      $$PinTombstonesTableCreateCompanionBuilder,
+      $$PinTombstonesTableUpdateCompanionBuilder,
+      (
+        PinTombstoneEntity,
+        BaseReferences<_$AppDatabase, $PinTombstonesTable, PinTombstoneEntity>,
+      ),
+      PinTombstoneEntity,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1853,6 +2225,8 @@ class $AppDatabaseManager {
   $$PinsTableTableManager get pins => $$PinsTableTableManager(_db, _db.pins);
   $$SyncQueueTableTableManager get syncQueue =>
       $$SyncQueueTableTableManager(_db, _db.syncQueue);
+  $$PinTombstonesTableTableManager get pinTombstones =>
+      $$PinTombstonesTableTableManager(_db, _db.pinTombstones);
 }
 
 mixin _$PinDaoMixin on DatabaseAccessor<AppDatabase> {
@@ -1860,4 +2234,7 @@ mixin _$PinDaoMixin on DatabaseAccessor<AppDatabase> {
 }
 mixin _$SyncQueueDaoMixin on DatabaseAccessor<AppDatabase> {
   $SyncQueueTable get syncQueue => attachedDatabase.syncQueue;
+}
+mixin _$PinTombstoneDaoMixin on DatabaseAccessor<AppDatabase> {
+  $PinTombstonesTable get pinTombstones => attachedDatabase.pinTombstones;
 }
