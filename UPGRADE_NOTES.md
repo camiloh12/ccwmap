@@ -658,3 +658,31 @@ Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: 
 **Commit SHA:** _filled in after commit_
 
 **Status:** DONE
+
+---
+
+## Phase H1 hotfix #3 (UIScene migration)
+
+**Date:** 2026-04-19
+
+**Problem:** TestFlight builds installed on device crash immediately at launch ("CCW Map has Crashed"). Flutter 3.41's auto-migration (triggered by app_links 7 + workmanager_apple linking UIScene-aware plugins) updates `ios/Flutter/AppFrameworkInfo.plist` and `ios/Podfile` on each CI build but does NOT modify `ios/Runner/Info.plist` or `ios/Runner/AppDelegate.swift` (Flutter's auto-migrator is conservative — it won't overwrite user-customizable files). Without `UIApplicationSceneManifest` in Info.plist, plugins expecting the UIScene lifecycle crash the app at launch.
+
+**Root cause:** `ios/Runner/Info.plist` had no `UIApplicationSceneManifest` key; `ios/Runner/AppDelegate.swift` used the legacy pattern (`GeneratedPluginRegistrant.register(with: self)` in `didFinishLaunchingWithOptions`).
+
+**Fix — two file changes:**
+
+1. **`ios/Runner/Info.plist`** — added `UIApplicationSceneManifest` top-level key pointing at Flutter's built-in `FlutterSceneDelegate`. No custom `SceneDelegate.swift` required; `FlutterAppDelegate` routes scene events to `FlutterSceneDelegate` automatically.
+
+2. **`ios/Runner/AppDelegate.swift`** — added `FlutterImplicitEngineDelegate` conformance; moved plugin registration from `didFinishLaunchingWithOptions` to the new `didInitializeImplicitFlutterEngine(_ engineBridge:)` callback, registering against `engineBridge.pluginRegistry`. The old `GeneratedPluginRegistrant.register(with: self)` call was removed to prevent double-registration crash.
+
+**Documentation:** https://docs.flutter.dev/release/breaking-changes/uiscenedelegate
+
+**Verification:**
+- `python -c "import plistlib; plistlib.load(...)"`: **plist OK** (well-formed XML)
+- `flutter analyze --no-fatal-infos`: **17 infos** — no change
+- `flutter test`: **109/109 passing** — no regression
+- `flutter build apk --debug`: **succeeded**
+
+**Commit SHA:** _filled in after commit_
+
+**Status:** pending iOS CI + on-device verification by user
