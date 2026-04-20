@@ -24,7 +24,7 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     // Load test environment variables or use empty config
-    dotenv.testLoad(fileInput: '''
+    dotenv.loadFromString(envString: '''
 MAPTILER_API_KEY=test_key
 ''');
   });

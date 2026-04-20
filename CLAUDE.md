@@ -8,6 +8,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Secondary machine:** MacBook Air 2017 (macOS 12.7.6, hardware-limited) — Xcode 14.2 for certificate/provisioning profile management only; cannot run Flutter (requires macOS 14+)
 - **iOS builds:** GitHub Actions only (`macos-latest` runner with Xcode 16+)
 
+### Toolchain versions (as of 2026-04)
+
+- **Flutter** 3.41.7 stable / **Dart** 3.11.5
+- **Android**: AGP 8.13.0, Gradle 8.14, Kotlin 2.3.20, Java 21 LTS, compileSdk 36, targetSdk 35
+- **iOS**: deployment target 14.0, UIScene lifecycle (AppDelegate implements `FlutterImplicitEngineDelegate`; `Info.plist` has `UIApplicationSceneManifest` pointing at `FlutterSceneDelegate`)
+- **Test count**: 109 (previous CLAUDE.md line said 74/74 — outdated)
+
+#### Upgrades deferred (known blockers)
+
+- **AGP 9.1.1** — blocked. `maplibre_gl` and other Flutter plugins still apply the `org.jetbrains.kotlin.android` plugin in their own `android/build.gradle`, which AGP 9 hard-rejects. Flutter's own Gradle plugin also requires `android.newDsl=false` opt-out for AGP 9. Track [flutter/flutter#181383](https://github.com/flutter/flutter/issues/181383); revisit once the plugin ecosystem catches up. AGP 8.13.0 is the last stable AGP 8 line.
+- **maplibre_gl 0.25+** — blocked. 0.25 bumps the underlying MapLibre Native iOS SDK to v6.5.0 (new Metal renderer). On iOS 18 the SDK throws an uncaught C++ exception during the first `MapLibreMapController.onMethodCall`, causing `SIGABRT` before the map renders. Reverted to 0.24.1. Upstream fix is tracked for 0.26.0 in [flutter-maplibre-gl#710](https://github.com/maplibre/flutter-maplibre-gl/issues/710) — revisit when 0.26 publishes.
+- **connectivity_plus 7+** — blocked. 7.1.1 calls `NWPath.isUltraConstrained` without an `@available` guard, requiring iOS 17 deployment target. Bumping from iOS 14 → 17 drops ~12% of active iPhones. Reverted to 6.1.5 — our usage is limited to `checkConnectivity` / `onConnectivityChanged` / `ConnectivityResult.none`, all stable across 6.x and 7.x.
+
 ## Known Bugs (Do Not Fix Without Being Asked)
 
 _No open bugs._
@@ -94,7 +107,7 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ US boundary validation
 - ✅ Pin dialogs with color-coded status and restriction tags
 - ✅ Web pin click detection (dual-detection system)
-- ✅ 74/74 tests passing (100% success rate)
+- ✅ 109/109 tests passing (100% success rate)
 
 ## Architecture
 
