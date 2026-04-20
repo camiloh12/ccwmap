@@ -686,3 +686,36 @@ Both the drift docs and the sqlite3_flutter_libs EOL changelog are unambiguous: 
 **Commit SHA:** _filled in after commit_
 
 **Status:** pending iOS CI + on-device verification by user
+
+---
+
+## Phase H1 hotfix #4 (revert maplibre_gl 0.25 → 0.24.1)
+
+**Date:** 2026-04-19
+
+**Reason:** maplibre_gl 0.25.0 bundles MapLibre Native iOS v6.5.0 (new Metal renderer with updated OpenGL ES 3.0 path). On iOS 18, the new native SDK throws an uncaught C++ exception during the first Flutter method channel call to `MapLibreMapController`. Crash signature: `EXC_CRASH` / `SIGABRT` via `abort()` from `__cxa_throw` → `std::terminate`. The crash fires at ~160ms uptime on a TestFlight build (iPhone 13 Pro Max, iOS 18.7.7), before the map renders, making the app completely non-functional on iOS.
+
+The crash is most likely triggered by our BUG-003 fix which calls `animateCamera` from `onStyleLoadedCallback` — the first method channel call in that path hits the faulty native code path in the Metal renderer.
+
+**Upstream fix:** maplibre_gl 0.26.0 is scheduled to fix "iOS crash when animating after onStyleLoadedCallback" (tracked in flutter-maplibre-gl#710), but 0.26.0 is not yet published on pub.dev as of 2026-04-19.
+
+**Decision:** Revert maplibre_gl from 0.25.0 back to 0.24.1. This is the pre-upgrade known-good version that ran for months with all four bug fixes (BUG-001 through BUG-004) verified working on iOS, Android, and web. This reverts the maplibre_gl portion of commit 682cb17 (Phase F1) only — all other F1-onwards changes are retained.
+
+**Revisit:** Monitor pub.dev/packages/maplibre_gl for 0.26.0 release. When published, upgrade and verify on TestFlight before merging.
+
+**Changes:**
+- `pubspec.yaml`: `maplibre_gl: ^0.25.0` → `^0.24.1`
+- `pubspec.lock`: maplibre_gl 0.24.1, maplibre_gl_platform_interface 0.24.1, maplibre_gl_web 0.24.1
+
+**Transitive side-effects:** None — no other packages changed version as a result of the downgrade.
+
+**Verification:**
+- `flutter analyze --no-fatal-infos`: **17 infos** — no change from H1 baseline
+- `flutter test`: **109/109 passing** — no regression
+- `flutter build apk --debug`: **succeeded**
+
+**Commit SHA:** _filled in after commit_
+
+**Status:** pending iOS TestFlight verification by user
+
+**Status:** pending iOS CI + on-device verification by user
