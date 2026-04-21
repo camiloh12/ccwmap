@@ -1,0 +1,155 @@
+name: Production
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: production-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-ios-appstore:
+    name: iOS → App Store
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: sudo xcode-select -s $(ls -d /Applications/Xcode_26*.app | head -1)
+
+      - uses: ./.github/actions/setup-flutter
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
+
+      - name: Stamp version (semver from tag + run_number build)
+        run: |
+          SEMVER="${GITHUB_REF_NAME#v}"
+          BUILD=${{ github.run_number }}
+          sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
+          echo "Stamped: $(grep '^version:' pubspec.yaml)"
+
+      - name: Import code signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CERTIFICATES_P12 }}
+          p12-password: ${{ secrets.CERTIFICATES_PASSWORD }}
+
+      - name: Import provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.PROVISIONING_PROFILE }}" | \
+            base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Build IPA (NO SHOW_DEBUG_UI — production)
+        run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+
+      - name: Upload to App Store Connect
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: build/ios/ipa/ccwmap.ipa
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+
+      - name: Upload IPA as run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-${{ github.ref_name }}
+          path: build/ios/ipa/ccwmap.ipa
+          retention-days: 90
+
+  deploy-android-production:
+    name: Android → Play Production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: ./.github/actions/setup-flutter
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
+
+      - name: Stamp version (semver from tag + run_number build)
+        run: |
+          SEMVER="${GITHUB_REF_NAME#v}"
+          BUILD=${{ github.run_number }}
+          sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
+          echo "Stamped: $(grep '^version:' pubspec.yaml)"
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+
+      - name: Build AAB (NO SHOW_DEBUG_UI — production)
+        env:
+          ANDROID_KEYSTORE_PATH: app/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build appbundle --release
+
+      - name: Authenticate with Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'access_token'
+          access_token_lifetime: '3600s'
+
+      - name: Upload to Play Production (halted rollout)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          packageName: com.ccwmap.app
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: production
+          status: draft
+
+      - name: Upload AAB as run artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-${{ github.ref_name }}
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 90
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [deploy-ios-appstore, deploy-android-production]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-ipa-${{ github.ref_name }}
+          path: ./artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-aab-${{ github.ref_name }}
+          path: ./artifacts
+      - name: Publish release + attach artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          BUILD: ${{ github.run_number }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft=false
+          else
+            gh release create "$TAG" --title "$TAG" --notes "Production release $TAG (build $BUILD)."
+          fi
+          gh release upload "$TAG" ./artifacts/ccwmap.ipa ./artifacts/app-release.aab --clobber
