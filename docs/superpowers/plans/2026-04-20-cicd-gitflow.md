@@ -32,11 +32,16 @@ Base64-encode for the GitHub secret:
 base64 -w 0 ccwmap-release.jks > ccwmap-release.jks.b64
 ```
 
-### P2. Create Google Play Console service account
+### P2. Reuse existing service account via Workload Identity Federation
 
-1. In Google Cloud Console, create a service account (any name, e.g. `ccwmap-ci`).
-2. Download its JSON key.
-3. In Play Console → Users and permissions, invite the service account email; grant app-level permissions for `com.ccwmap.app`: **Release apps to testing tracks**, **Release apps to production**, **View app information**.
+This repo authenticates to Google Cloud using the same Workload Identity Federation (WIF) setup as `camiloh12/CarryZoneMap-Android`. JSON keys are disabled org-wide by `iam.disableServiceAccountKeyCreation`, so WIF is the only path. The SA, the WIF pool, and the provider already exist — only repo-level bindings and Play Console app permissions are new.
+
+1. **Grant the existing SA app-level permissions** for `com.ccwmap.app` in Play Console → Users and permissions → invite the SA email → grant: **Release apps to testing tracks**, **Release apps to production**, **View app information**.
+2. **Allow this repo to impersonate the SA.** GCP → IAM → Service Accounts → the SA → Permissions. Ensure a `roles/iam.workloadIdentityUser` binding exists for principal set:
+   ```
+   principalSet://iam.googleapis.com/<POOL_RESOURCE>/attribute.repository/camiloh12/ccwmap
+   ```
+   If the binding only currently covers `camiloh12/CarryZoneMap-Android`, add a second binding for `camiloh12/ccwmap`. If the WIF **provider** has an `attribute_condition` restricting `attribute.repository`, broaden it to allow both repos (e.g. `assertion.repository == 'camiloh12/CarryZoneMap-Android' || assertion.repository == 'camiloh12/ccwmap'`).
 
 ### P3. Add the following GitHub Actions secrets
 
@@ -48,9 +53,10 @@ Repo → Settings → Secrets and variables → Actions:
 | `ANDROID_KEYSTORE_PASSWORD` | Password chosen in P1 |
 | `ANDROID_KEY_ALIAS` | `ccwmap` |
 | `ANDROID_KEY_PASSWORD` | Password chosen in P1 (same as keystore password unless you set a separate key password) |
-| `PLAY_SERVICE_ACCOUNT_JSON` | Full contents of the JSON downloaded in P2 |
+| `WORKLOAD_IDENTITY_PROVIDER` | Full provider resource name, e.g. `projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/<POOL_ID>/providers/<PROVIDER_ID>`. Reuse the value from `camiloh12/CarryZoneMap-Android`. |
+| `SERVICE_ACCOUNT_EMAIL` | The SA email, e.g. `<name>@<project>.iam.gserviceaccount.com`. Reuse the value from `camiloh12/CarryZoneMap-Android`. |
 
-(Existing iOS and Supabase/MapTiler secrets are already present. Do not modify them.)
+(Existing iOS and Supabase/MapTiler secrets are already present. Do not modify them. No `PLAY_SERVICE_ACCOUNT_JSON` is needed — WIF replaces it.)
 
 ### P4. Opt the Android app into Internal testing track
 
@@ -459,6 +465,9 @@ jobs:
   deploy-android-internal:
     name: Android → Play Internal
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -492,10 +501,18 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build appbundle --release --dart-define=SHOW_DEBUG_UI=true
 
+      - name: Authenticate with Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'access_token'
+          access_token_lifetime: '3600s'
+
       - name: Upload to Play Internal
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJson: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           packageName: com.ccwmap.app
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: internal
@@ -560,7 +577,8 @@ Watch the Actions tab. Expected result:
 
 **If any job fails:** do NOT merge the release branch. Diagnose and fix. Common failures:
 - iOS code signing → verify `CERTIFICATES_P12`, `PROVISIONING_PROFILE` secrets haven't expired.
-- Play upload "Package not found" → Prerequisite P4 (opt into Internal testing track) not done.
+- `google-github-actions/auth@v2` fails with `Permission 'iam.serviceAccounts.getAccessToken' denied` or `unauthorized_client` → the WIF binding doesn't allow `camiloh12/ccwmap` to impersonate the SA. Re-check Prerequisite P2 step 2 (both the per-repo IAM binding on the SA AND the provider's `attribute_condition`).
+- Play upload "Package not found" → Prerequisite P4 (opt into Internal testing track) not done, OR the SA lacks app-level permissions on `com.ccwmap.app` (Prerequisite P2 step 1).
 - AAB signing failure → verify `ANDROID_KEY_ALIAS` matches what's in the keystore: `keytool -list -v -keystore ccwmap-release.jks | grep Alias`.
 
 - [ ] **Step 4: Clean up the smoke-test release**
@@ -662,6 +680,9 @@ jobs:
   deploy-android-production:
     name: Android → Play Production
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -695,10 +716,18 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: flutter build appbundle --release
 
+      - name: Authenticate with Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'access_token'
+          access_token_lifetime: '3600s'
+
       - name: Upload to Play Production (halted rollout)
         uses: r0adkll/upload-google-play@v1
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJson: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
           packageName: com.ccwmap.app
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: production
