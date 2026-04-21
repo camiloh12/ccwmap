@@ -1,0 +1,142 @@
+name: Release (Beta)
+
+on:
+  push:
+    branches:
+      - 'release/v*'
+      - 'hotfix/v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-ios-testflight:
+    name: iOS → TestFlight
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        run: sudo xcode-select -s $(ls -d /Applications/Xcode_26*.app | head -1)
+
+      - uses: ./.github/actions/setup-flutter
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
+
+      - name: Stamp version (semver from pubspec + run_number build)
+        run: |
+          SEMVER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1 | tr -d ' ')
+          BUILD=${{ github.run_number }}
+          sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
+          echo "Stamped: $(grep '^version:' pubspec.yaml)"
+
+      - name: Import code signing certificate
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.CERTIFICATES_P12 }}
+          p12-password: ${{ secrets.CERTIFICATES_PASSWORD }}
+
+      - name: Import provisioning profile
+        run: |
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "${{ secrets.PROVISIONING_PROFILE }}" | \
+            base64 --decode > ~/Library/MobileDevice/Provisioning\ Profiles/profile.mobileprovision
+
+      - name: Build IPA (SHOW_DEBUG_UI=true for beta)
+        run: flutter build ipa --release --dart-define=SHOW_DEBUG_UI=true --export-options-plist=ios/ExportOptions.plist
+
+      - name: Upload to TestFlight
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: build/ios/ipa/ccwmap.ipa
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+
+  deploy-android-internal:
+    name: Android → Play Internal
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: ./.github/actions/setup-flutter
+        with:
+          supabase-url: ${{ secrets.SUPABASE_URL }}
+          supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
+          maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
+
+      - name: Stamp version (semver from pubspec + run_number build)
+        run: |
+          SEMVER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1 | tr -d ' ')
+          BUILD=${{ github.run_number }}
+          sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
+          echo "Stamped: $(grep '^version:' pubspec.yaml)"
+
+      - name: Decode keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+
+      - name: Build AAB (SHOW_DEBUG_UI=true for beta)
+        env:
+          ANDROID_KEYSTORE_PATH: app/release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build appbundle --release --dart-define=SHOW_DEBUG_UI=true
+
+      - name: Authenticate with Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          token_format: 'access_token'
+          access_token_lifetime: '3600s'
+
+      - name: Upload to Play Internal
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          packageName: com.ccwmap.app
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+
+  create-draft-release:
+    name: Create/update draft GitHub Release
+    needs: [deploy-ios-testflight, deploy-android-internal]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract version tag from branch name
+        id: ver
+        run: |
+          # release/v0.3.0 -> v0.3.0 ; hotfix/v0.3.1 -> v0.3.1
+          TAG="${GITHUB_REF_NAME#release/}"
+          TAG="${TAG#hotfix/}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          BUILD: ${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          BODY="Testing in TestFlight (build ${BUILD}) and Play Internal (build ${BUILD}). Tag this commit \`${TAG}\` after beta verification to promote to production."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$BODY" --target "$SHA" --draft=true
+          else
+            gh release create "$TAG" --draft --title "$TAG" --notes "$BODY" --target "$SHA"
+          fi
