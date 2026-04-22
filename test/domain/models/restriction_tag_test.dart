@@ -6,13 +6,25 @@ void main() {
     test('displayName returns correct values', () {
       expect(RestrictionTag.FEDERAL_PROPERTY.displayName, 'Federal Property');
       expect(RestrictionTag.AIRPORT_SECURE.displayName, 'Airport Secure Area');
-      expect(RestrictionTag.STATE_LOCAL_GOVT.displayName, 'State/Local Government');
+      expect(
+        RestrictionTag.STATE_LOCAL_GOVT.displayName,
+        'State/Local Government',
+      );
       expect(RestrictionTag.SCHOOL_K12.displayName, 'School (K-12)');
-      expect(RestrictionTag.COLLEGE_UNIVERSITY.displayName, 'College/University');
-      expect(RestrictionTag.BAR_ALCOHOL.displayName, 'Bar/Alcohol Establishment');
+      expect(
+        RestrictionTag.COLLEGE_UNIVERSITY.displayName,
+        'College/University',
+      );
+      expect(
+        RestrictionTag.BAR_ALCOHOL.displayName,
+        'Bar/Alcohol Establishment',
+      );
       expect(RestrictionTag.HEALTHCARE.displayName, 'Healthcare Facility');
       expect(RestrictionTag.PLACE_OF_WORSHIP.displayName, 'Place of Worship');
-      expect(RestrictionTag.SPORTS_ENTERTAINMENT.displayName, 'Sports/Entertainment Venue');
+      expect(
+        RestrictionTag.SPORTS_ENTERTAINMENT.displayName,
+        'Sports/Entertainment Venue',
+      );
       expect(RestrictionTag.PRIVATE_PROPERTY.displayName, 'Private Property');
     });
 

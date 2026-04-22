@@ -47,23 +47,19 @@ class MapViewModel extends ChangeNotifier {
 
       // Listen to network connectivity changes
       _wasOffline = !_networkMonitor.isOnline;
-      _networkSubscription = _networkMonitor.isOnlineStream.listen(
-        (isOnline) {
+      _networkSubscription = _networkMonitor.isOnlineStream.listen((isOnline) {
+        // Trigger sync when coming back online
+        if (isOnline && _wasOffline) {
+          syncWithRemote();
+        }
 
-          // Trigger sync when coming back online
-          if (isOnline && _wasOffline) {
-            syncWithRemote();
-          }
-
-          _wasOffline = !isOnline;
-        },
-      );
+        _wasOffline = !isOnline;
+      });
 
       // Trigger initial sync with remote to download existing pins (if online)
       if (_networkMonitor.isOnline) {
         syncWithRemote();
-      } else {
-      }
+      } else {}
 
       _setLoading(false);
     } catch (e) {

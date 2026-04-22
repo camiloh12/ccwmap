@@ -25,9 +25,7 @@ class Pin {
   }) {
     // Business rule: If status is NO_GUN, restrictionTag must not be null
     if (status == PinStatus.NO_GUN && restrictionTag == null) {
-      throw ArgumentError(
-        'Pin with NO_GUN status must have a restriction tag',
-      );
+      throw ArgumentError('Pin with NO_GUN status must have a restriction tag');
     }
   }
 
@@ -43,9 +41,7 @@ class Pin {
           : null,
       hasSecurityScreening: hasSecurityScreening,
       hasPostedSignage: hasPostedSignage,
-      metadata: metadata.copyWith(
-        lastModified: DateTime.now(),
-      ),
+      metadata: metadata.copyWith(lastModified: DateTime.now()),
     );
   }
 
@@ -56,13 +52,13 @@ class Pin {
       location: location,
       status: newStatus,
       restrictionTag: newStatus == PinStatus.NO_GUN
-          ? (newRestrictionTag ?? restrictionTag ?? RestrictionTag.PRIVATE_PROPERTY)
+          ? (newRestrictionTag ??
+                restrictionTag ??
+                RestrictionTag.PRIVATE_PROPERTY)
           : null,
       hasSecurityScreening: hasSecurityScreening,
       hasPostedSignage: hasPostedSignage,
-      metadata: metadata.copyWith(
-        lastModified: DateTime.now(),
-      ),
+      metadata: metadata.copyWith(lastModified: DateTime.now()),
     );
   }
 

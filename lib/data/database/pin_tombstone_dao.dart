@@ -25,9 +25,9 @@ class PinTombstoneDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<bool> isTombstoned(String pinId) async {
-    final row = await (select(pinTombstones)
-          ..where((tbl) => tbl.pinId.equals(pinId)))
-        .getSingleOrNull();
+    final row = await (select(
+      pinTombstones,
+    )..where((tbl) => tbl.pinId.equals(pinId))).getSingleOrNull();
     return row != null;
   }
 }

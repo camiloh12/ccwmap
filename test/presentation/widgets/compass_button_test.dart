@@ -5,8 +5,9 @@ import 'package:ccwmap/presentation/widgets/compass_button.dart';
 
 void main() {
   group('CompassButton', () {
-    testWidgets('icon rotation matches -(bearing + 45) * pi / 180 radians',
-        (tester) async {
+    testWidgets('icon rotation matches -(bearing + 45) * pi / 180 radians', (
+      tester,
+    ) async {
       final bearing = ValueNotifier<double>(0.0);
 
       await tester.pumpWidget(
@@ -32,10 +33,14 @@ void main() {
       );
 
       const expectedAngle = -(90.0 + 45.0) * math.pi / 180.0;
-      expect(rotateWidget.transform.entry(0, 0),
-          closeTo(math.cos(expectedAngle), 1e-9));
-      expect(rotateWidget.transform.entry(1, 0),
-          closeTo(math.sin(expectedAngle), 1e-9));
+      expect(
+        rotateWidget.transform.entry(0, 0),
+        closeTo(math.cos(expectedAngle), 1e-9),
+      );
+      expect(
+        rotateWidget.transform.entry(1, 0),
+        closeTo(math.sin(expectedAngle), 1e-9),
+      );
 
       bearing.dispose();
     });
@@ -63,8 +68,9 @@ void main() {
       bearing.dispose();
     });
 
-    testWidgets('renders safely with null listenable and null getter',
-        (tester) async {
+    testWidgets('renders safely with null listenable and null getter', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -88,10 +94,14 @@ void main() {
           matching: find.byType(Transform),
         ),
       );
-      expect(rotateWidget.transform.entry(0, 0),
-          closeTo(math.cos(expectedAngle), 1e-9));
-      expect(rotateWidget.transform.entry(1, 0),
-          closeTo(math.sin(expectedAngle), 1e-9));
+      expect(
+        rotateWidget.transform.entry(0, 0),
+        closeTo(math.cos(expectedAngle), 1e-9),
+      );
+      expect(
+        rotateWidget.transform.entry(1, 0),
+        closeTo(math.sin(expectedAngle), 1e-9),
+      );
     });
   });
 }

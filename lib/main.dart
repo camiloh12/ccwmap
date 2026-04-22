@@ -73,12 +73,7 @@ Future<void> main() async {
   final mapViewModel = MapViewModel(pinRepository, networkMonitor);
   final authViewModel = AuthViewModel(authRepository);
 
-  runApp(
-    CCWMapApp(
-      mapViewModel: mapViewModel,
-      authViewModel: authViewModel,
-    ),
-  );
+  runApp(CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel));
 }
 
 class CCWMapApp extends StatelessWidget {
@@ -107,10 +102,7 @@ class CCWMapApp extends StatelessWidget {
             seedColor: const Color(0xFF6200EE), // Purple primary color
             brightness: Brightness.light,
           ),
-          appBarTheme: const AppBarTheme(
-            centerTitle: true,
-            elevation: 0,
-          ),
+          appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         ),
         home: const AuthGate(),
       ),
@@ -182,9 +174,7 @@ class _AuthGateState extends State<AuthGate> {
         // Show loading while initializing
         if (authViewModel.currentUser == null && authViewModel.isLoading) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 

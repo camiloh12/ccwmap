@@ -22,7 +22,6 @@ const String syncTaskUniqueName = 'sync-pins';
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
-
       // Load environment variables
       await dotenv.load(fileName: ".env");
 
@@ -95,15 +94,12 @@ Future<void> initializeBackgroundSync() async {
       backoffPolicy: BackoffPolicy.exponential,
       backoffPolicyDelay: const Duration(seconds: 10),
     );
-
-  } catch (e) {
-  }
+  } catch (e) {}
 }
 
 /// Cancel background sync
 Future<void> cancelBackgroundSync() async {
   try {
     await Workmanager().cancelByUniqueName(syncTaskUniqueName);
-  } catch (e) {
-  }
+  } catch (e) {}
 }

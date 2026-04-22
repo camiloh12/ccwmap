@@ -309,7 +309,10 @@ void main() {
     });
 
     test('isTombstoned returns false for unknown pin', () async {
-      expect(await database.pinTombstoneDao.isTombstoned('never-seen'), isFalse);
+      expect(
+        await database.pinTombstoneDao.isTombstoned('never-seen'),
+        isFalse,
+      );
     });
 
     test('removeTombstone deletes the entry', () async {

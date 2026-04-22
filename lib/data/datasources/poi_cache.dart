@@ -38,10 +38,7 @@ class PoiCache {
     final key = _generateKey(bounds);
 
     // Add to cache
-    _cache[key] = _CachedPOIs(
-      pois: pois,
-      cachedAt: DateTime.now(),
-    );
+    _cache[key] = _CachedPOIs(pois: pois, cachedAt: DateTime.now());
 
     // Update access order
     _updateAccessOrder(key);
@@ -102,8 +99,5 @@ class _CachedPOIs {
   final List<Poi> pois;
   final DateTime cachedAt;
 
-  _CachedPOIs({
-    required this.pois,
-    required this.cachedAt,
-  });
+  _CachedPOIs({required this.pois, required this.cachedAt});
 }

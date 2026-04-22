@@ -28,11 +28,11 @@ class SyncManager {
     required PinTombstoneDao tombstoneDao,
     required RemoteDataSourceInterface remoteDataSource,
     required NetworkMonitor networkMonitor,
-  })  : _syncQueueDao = syncQueueDao,
-        _pinDao = pinDao,
-        _tombstoneDao = tombstoneDao,
-        _remoteDataSource = remoteDataSource,
-        _networkMonitor = networkMonitor;
+  }) : _syncQueueDao = syncQueueDao,
+       _pinDao = pinDao,
+       _tombstoneDao = tombstoneDao,
+       _remoteDataSource = remoteDataSource,
+       _networkMonitor = networkMonitor;
 
   /// Perform a full sync: upload queued operations, then download remote changes
   Future<SyncResult> sync() async {
@@ -64,7 +64,9 @@ class SyncManager {
 
       // Step 3: Download and merge remote changes
       // Pass deleted pin IDs to avoid re-inserting them
-      final downloadResult = await _downloadRemoteChanges(uploadResult.deletedPinIds);
+      final downloadResult = await _downloadRemoteChanges(
+        uploadResult.deletedPinIds,
+      );
       downloaded = downloadResult.downloaded;
       errors += downloadResult.errors;
       errorMessage ??= downloadResult.errorMessage;
@@ -121,7 +123,9 @@ class SyncManager {
         }
       } else {
         // No DELETE - keep only the latest UPDATE (if multiple exist)
-        final updates = operations.where((op) => op.operationType == 'UPDATE').toList();
+        final updates = operations
+            .where((op) => op.operationType == 'UPDATE')
+            .toList();
         if (updates.length > 1) {
           // Sort by timestamp, keep latest
           updates.sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -244,7 +248,8 @@ class SyncManager {
       await _remoteDataSource.updatePin(dto);
     } catch (e) {
       // Check if pin doesn't exist remotely (treat as success - it was deleted remotely)
-      if (e.toString().contains('not found') || e.toString().contains('no rows')) {
+      if (e.toString().contains('not found') ||
+          e.toString().contains('no rows')) {
         return; // Treat as success (pin deleted remotely)
       }
       rethrow;
@@ -257,7 +262,8 @@ class SyncManager {
       await _remoteDataSource.deletePin(pinId);
     } catch (e) {
       // Check if pin doesn't exist remotely (idempotent operation)
-      if (e.toString().contains('not found') || e.toString().contains('no rows')) {
+      if (e.toString().contains('not found') ||
+          e.toString().contains('no rows')) {
         return; // Treat as success (idempotent operation)
       }
       rethrow;
@@ -269,7 +275,9 @@ class SyncManager {
   /// Uses batched operations to minimize stream emissions and improve performance.
   /// [recentlyDeletedPinIds] contains IDs of pins that were just deleted in
   /// the upload phase - these should not be re-inserted.
-  Future<SyncResult> _downloadRemoteChanges(Set<String> recentlyDeletedPinIds) async {
+  Future<SyncResult> _downloadRemoteChanges(
+    Set<String> recentlyDeletedPinIds,
+  ) async {
     int downloaded = 0;
     int errors = 0;
     String? errorMessage;
@@ -321,7 +329,9 @@ class SyncManager {
           } else {
             // Pin exists locally - compare timestamps
             final localPin = PinMapper.fromEntity(localEntity);
-            if (remotePinDomain.metadata.lastModified.isAfter(localPin.metadata.lastModified)) {
+            if (remotePinDomain.metadata.lastModified.isAfter(
+              localPin.metadata.lastModified,
+            )) {
               // Remote is newer - update local
               pinsToUpdate.add(remoteEntity);
               downloaded++;

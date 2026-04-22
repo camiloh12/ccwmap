@@ -2,10 +2,7 @@ class User {
   final String id;
   final String? email;
 
-  User({
-    required this.id,
-    this.email,
-  });
+  User({required this.id, this.email});
 
   @override
   bool operator ==(Object other) =>

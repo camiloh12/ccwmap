@@ -52,7 +52,8 @@ class MaptilerGeocodingClient {
 
       if (response.statusCode != 200) {
         debugPrint(
-            'MaptilerGeocodingClient: HTTP ${response.statusCode} for $lng,$lat');
+          'MaptilerGeocodingClient: HTTP ${response.statusCode} for $lng,$lat',
+        );
         return null;
       }
 

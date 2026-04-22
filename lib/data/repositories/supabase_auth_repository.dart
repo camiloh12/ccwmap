@@ -12,10 +12,7 @@ class SupabaseAuthRepository implements AuthRepository {
   domain.User? _mapUser(supabase.User? supabaseUser) {
     if (supabaseUser == null) return null;
 
-    return domain.User(
-      id: supabaseUser.id,
-      email: supabaseUser.email,
-    );
+    return domain.User(id: supabaseUser.id, email: supabaseUser.email);
   }
 
   @override

@@ -100,9 +100,7 @@ class _PinDialogState extends State<PinDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -123,10 +121,7 @@ class _PinDialogState extends State<PinDialog> {
               // Name Text Field
               Text(
                 'Location name:',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -150,27 +145,33 @@ class _PinDialogState extends State<PinDialog> {
               // Status Selection
               Text(
                 'Select carry zone status:',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
               ),
               const SizedBox(height: 12),
-              _buildStatusOption(PinStatus.ALLOWED, 'Allowed', const Color(0xFF4CAF50)),
+              _buildStatusOption(
+                PinStatus.ALLOWED,
+                'Allowed',
+                const Color(0xFF4CAF50),
+              ),
               const SizedBox(height: 10),
-              _buildStatusOption(PinStatus.UNCERTAIN, 'Uncertain', const Color(0xFFFFC107)),
+              _buildStatusOption(
+                PinStatus.UNCERTAIN,
+                'Uncertain',
+                const Color(0xFFFFC107),
+              ),
               const SizedBox(height: 10),
-              _buildStatusOption(PinStatus.NO_GUN, 'No Guns', const Color(0xFFF44336)),
+              _buildStatusOption(
+                PinStatus.NO_GUN,
+                'No Guns',
+                const Color(0xFFF44336),
+              ),
               const SizedBox(height: 24),
 
               // Restriction Section (conditional)
               if (_selectedStatus == PinStatus.NO_GUN) ...[
                 Text(
                   'Why is carry restricted?',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[700],
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.grey[700]),
                 ),
                 const SizedBox(height: 12),
                 _buildRestrictionDropdown(),
@@ -180,16 +181,14 @@ class _PinDialogState extends State<PinDialog> {
               // Optional Details
               Text(
                 'Optional details:',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
               ),
               const SizedBox(height: 12),
               _buildCheckbox(
                 'Active security screening',
                 _hasSecurityScreening,
-                (value) => setState(() => _hasSecurityScreening = value ?? false),
+                (value) =>
+                    setState(() => _hasSecurityScreening = value ?? false),
               ),
               const SizedBox(height: 12),
               _buildCheckbox(
@@ -227,9 +226,7 @@ class _PinDialogState extends State<PinDialog> {
                     onPressed: widget.onCancel,
                     child: Text(
                       'Cancel',
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(color: Colors.grey[700]),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -289,10 +286,7 @@ class _PinDialogState extends State<PinDialog> {
             Container(
               width: 24,
               height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color,
-              ),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: color),
             ),
             const SizedBox(width: 16),
             Text(
@@ -326,9 +320,7 @@ class _PinDialogState extends State<PinDialog> {
               value: tag,
               child: Text(
                 tag.displayName,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
               ),
             );
           }).toList(),
@@ -338,7 +330,11 @@ class _PinDialogState extends State<PinDialog> {
     );
   }
 
-  Widget _buildCheckbox(String label, bool value, ValueChanged<bool?> onChanged) {
+  Widget _buildCheckbox(
+    String label,
+    bool value,
+    ValueChanged<bool?> onChanged,
+  ) {
     return InkWell(
       onTap: () => onChanged(!value),
       child: Row(
@@ -353,10 +349,7 @@ class _PinDialogState extends State<PinDialog> {
             ),
           ),
           const SizedBox(width: 12),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 15),
-          ),
+          Text(label, style: const TextStyle(fontSize: 15)),
         ],
       ),
     );

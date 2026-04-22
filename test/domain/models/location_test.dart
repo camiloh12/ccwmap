@@ -16,31 +16,19 @@ void main() {
     });
 
     test('throws on invalid latitude (too low)', () {
-      expect(
-        () => Location.fromLatLng(-91, 0),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => Location.fromLatLng(-91, 0), throwsA(isA<ArgumentError>()));
     });
 
     test('throws on invalid latitude (too high)', () {
-      expect(
-        () => Location.fromLatLng(91, 0),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => Location.fromLatLng(91, 0), throwsA(isA<ArgumentError>()));
     });
 
     test('throws on invalid longitude (too low)', () {
-      expect(
-        () => Location.fromLatLng(0, -181),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => Location.fromLatLng(0, -181), throwsA(isA<ArgumentError>()));
     });
 
     test('throws on invalid longitude (too high)', () {
-      expect(
-        () => Location.fromLatLng(0, 181),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => Location.fromLatLng(0, 181), throwsA(isA<ArgumentError>()));
     });
 
     test('accepts boundary latitude values', () {

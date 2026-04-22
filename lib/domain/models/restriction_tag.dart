@@ -38,9 +38,7 @@ enum RestrictionTag {
   static RestrictionTag? fromString(String? value) {
     if (value == null) return null;
     try {
-      return RestrictionTag.values.firstWhere(
-        (tag) => tag.name == value,
-      );
+      return RestrictionTag.values.firstWhere((tag) => tag.name == value);
     } catch (e) {
       return null;
     }
