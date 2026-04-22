@@ -9,12 +9,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Load keystore properties
+// Load keystore properties from local file for dev builds. CI overrides
+// these at runtime via environment variables (see release.yml / production.yml).
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
+val isCi = System.getenv("CI") == "true"
 
 android {
     namespace = "com.ccwmap.ccwmap"
@@ -36,10 +38,18 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-            storeFile = keystoreProperties.getProperty("storeFile")?.let { File(it) }
-            storePassword = keystoreProperties.getProperty("storePassword")
+            if (isCi) {
+                val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: "app/release.jks"
+                storeFile = rootProject.file(keystorePath)
+                storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            } else {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = keystoreProperties.getProperty("storeFile")?.let { File(it) }
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
 

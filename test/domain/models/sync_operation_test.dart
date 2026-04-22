@@ -10,14 +10,22 @@ void main() {
     });
 
     test('fromStorageString parses correctly (case-insensitive)', () {
-      expect(SyncOperationType.fromStorageString('CREATE'),
-          SyncOperationType.create);
-      expect(SyncOperationType.fromStorageString('create'),
-          SyncOperationType.create);
-      expect(SyncOperationType.fromStorageString('UPDATE'),
-          SyncOperationType.update);
-      expect(SyncOperationType.fromStorageString('DELETE'),
-          SyncOperationType.delete);
+      expect(
+        SyncOperationType.fromStorageString('CREATE'),
+        SyncOperationType.create,
+      );
+      expect(
+        SyncOperationType.fromStorageString('create'),
+        SyncOperationType.create,
+      );
+      expect(
+        SyncOperationType.fromStorageString('UPDATE'),
+        SyncOperationType.update,
+      );
+      expect(
+        SyncOperationType.fromStorageString('DELETE'),
+        SyncOperationType.delete,
+      );
     });
 
     test('fromStorageString throws on invalid value', () {

@@ -128,7 +128,9 @@ class _MapScreenState extends State<MapScreen> {
           _currentLocation = position;
           _isLoadingLocation = false;
         });
-        debugPrint('Location obtained: ${position.latitude}, ${position.longitude}');
+        debugPrint(
+          'Location obtained: ${position.latitude}, ${position.longitude}',
+        );
 
         // Try to enable — no-ops until map controller + style are ready.
         _tryEnableLocationComponent(from: 'loc-arrived');
@@ -171,7 +173,13 @@ class _MapScreenState extends State<MapScreen> {
   /// - id: Feature ID (should match pin.id from our GeoJSON)
   /// - layerId: Layer ID (should be 'pins-layer')
   /// - annotation: Additional annotation data (unused)
-  void _onFeatureTapped(Point<double> point, LatLng coordinates, String id, String layerId, dynamic annotation) async {
+  void _onFeatureTapped(
+    Point<double> point,
+    LatLng coordinates,
+    String id,
+    String layerId,
+    dynamic annotation,
+  ) async {
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
       return;
@@ -217,15 +225,18 @@ class _MapScreenState extends State<MapScreen> {
     final pixelDist = await _pixelDistanceToPin(pin, point);
     if (pixelDist != null && pixelDist > _pinHitPixelThreshold) {
       debugPrint(
-          'Feature tap rejected: ${pin.name} is ${pixelDist.toStringAsFixed(0)}px from tap');
+        'Feature tap rejected: ${pin.name} is ${pixelDist.toStringAsFixed(0)}px from tap',
+      );
       _setDebugDetection(
-          'feature-tap rejected: ${pin.name} ${pixelDist.toStringAsFixed(0)}px > $_pinHitPixelThreshold');
+        'feature-tap rejected: ${pin.name} ${pixelDist.toStringAsFixed(0)}px > $_pinHitPixelThreshold',
+      );
       return;
     }
 
     debugPrint('Found pin: ${pin.name}');
     _setDebugDetection(
-        'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}');
+      'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}',
+    );
     _showPinDialog(
       isEditMode: true,
       poiName: pin.name,
@@ -340,7 +351,6 @@ class _MapScreenState extends State<MapScreen> {
         ),
         enableInteraction: false,
       );
-
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
     } finally {
@@ -376,10 +386,7 @@ class _MapScreenState extends State<MapScreen> {
       };
     }).toList();
 
-    return {
-      'type': 'FeatureCollection',
-      'features': features,
-    };
+    return {'type': 'FeatureCollection', 'features': features};
   }
 
   /// Enable the location indicator on the map and pan to the user's location.
@@ -400,11 +407,12 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _tryEnableLocationComponent({String from = 'unknown'}) async {
     _locationComponentCallCount++;
     _setLocationPipelineDebug(
-        '#$_locationComponentCallCount $from '
-        'ctrl=${_mapController != null ? "Y" : "N"} '
-        'style=${_styleLoaded ? "Y" : "N"} '
-        'loc=${_currentLocation != null ? "Y" : "N"} '
-        'done=${_locationComponentEnabled ? "Y" : "N"}');
+      '#$_locationComponentCallCount $from '
+      'ctrl=${_mapController != null ? "Y" : "N"} '
+      'style=${_styleLoaded ? "Y" : "N"} '
+      'loc=${_currentLocation != null ? "Y" : "N"} '
+      'done=${_locationComponentEnabled ? "Y" : "N"}',
+    );
 
     if (_mapController == null) return;
     if (!_styleLoaded) return;
@@ -420,7 +428,8 @@ class _MapScreenState extends State<MapScreen> {
 
     try {
       debugPrint(
-          'Enabling location component at: ${target.latitude}, ${target.longitude}');
+        'Enabling location component at: ${target.latitude}, ${target.longitude}',
+      );
 
       if (kIsWeb) {
         // Web: myLocationEnabled doesn't render a puck reliably, so draw our
@@ -429,7 +438,8 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       _setLocationPipelineDebug(
-          'animating ${target.latitude.toStringAsFixed(3)},${target.longitude.toStringAsFixed(3)}');
+        'animating ${target.latitude.toStringAsFixed(3)},${target.longitude.toStringAsFixed(3)}',
+      );
 
       await _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(target, 16.0),
@@ -496,9 +506,7 @@ class _MapScreenState extends State<MapScreen> {
                 _currentLocation!.latitude,
               ],
             },
-            'properties': {
-              'type': 'user-location',
-            },
+            'properties': {'type': 'user-location'},
           },
         ],
       };
@@ -587,7 +595,9 @@ class _MapScreenState extends State<MapScreen> {
     if (_lastDialogCloseTime != null) {
       final timeSinceClose = DateTime.now().difference(_lastDialogCloseTime!);
       if (timeSinceClose.inMilliseconds < 300) {
-        debugPrint('Cooldown period active (${timeSinceClose.inMilliseconds}ms), ignoring map click');
+        debugPrint(
+          'Cooldown period active (${timeSinceClose.inMilliseconds}ms), ignoring map click',
+        );
         return;
       }
     }
@@ -600,7 +610,9 @@ class _MapScreenState extends State<MapScreen> {
       if (_isDialogOpen) return;
 
       if (poiResult != null) {
-        debugPrint('POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}');
+        debugPrint(
+          'POI detected: ${poiResult['name']} at ${poiResult['lat']}, ${poiResult['lng']}',
+        );
 
         final poiLat = poiResult['lat'] as double;
         final poiLng = poiResult['lng'] as double;
@@ -648,7 +660,8 @@ class _MapScreenState extends State<MapScreen> {
 
         debugPrint('Pin ${pin.name}: ${pixelDist.toStringAsFixed(0)}px away');
 
-        if (pixelDist < _nearPinPixelThreshold && pixelDist < minPixelDistance) {
+        if (pixelDist < _nearPinPixelThreshold &&
+            pixelDist < minPixelDistance) {
           minPixelDistance = pixelDist;
           clickedPin = pin;
         }
@@ -658,9 +671,11 @@ class _MapScreenState extends State<MapScreen> {
 
       if (clickedPin != null) {
         debugPrint(
-            'Found clicked pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px away)');
+          'Found clicked pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px away)',
+        );
         _setDebugDetection(
-            'near-pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px)');
+          'near-pin: ${clickedPin.name} (${minPixelDistance.toStringAsFixed(0)}px)',
+        );
         final Pin pin = clickedPin;
         final properties = {
           'id': pin.id,
@@ -676,8 +691,10 @@ class _MapScreenState extends State<MapScreen> {
           final pinName = properties['name'] as String? ?? 'Unknown Location';
           final statusCode = properties['status'] as int?;
           final restrictionTagStr = properties['restrictionTag'] as String?;
-          final hasSecurityScreening = properties['hasSecurityScreening'] as bool? ?? false;
-          final hasPostedSignage = properties['hasPostedSignage'] as bool? ?? false;
+          final hasSecurityScreening =
+              properties['hasSecurityScreening'] as bool? ?? false;
+          final hasPostedSignage =
+              properties['hasPostedSignage'] as bool? ?? false;
 
           // Parse status and restriction tag
           final status = statusCode != null
@@ -702,7 +719,9 @@ class _MapScreenState extends State<MapScreen> {
       } else {
         // No pin or POI clicked - do nothing on single click
         // User must long-press to create a pin at empty location
-        debugPrint('No pin or POI found at click location. Use long-press to create pin here.');
+        debugPrint(
+          'No pin or POI found at click location. Use long-press to create pin here.',
+        );
         _setDebugDetection('no POI, no nearby pin — tap ignored');
       }
     } catch (e) {
@@ -713,7 +732,9 @@ class _MapScreenState extends State<MapScreen> {
   /// Handle long-press on map - always creates a new pin with custom name
   Future<void> _onMapLongClick(Point<double> point, LatLng coordinates) async {
     debugPrint('=== MAP LONG-PRESS DEBUG ===');
-    debugPrint('Long-press at: ${coordinates.latitude}, ${coordinates.longitude}');
+    debugPrint(
+      'Long-press at: ${coordinates.latitude}, ${coordinates.longitude}',
+    );
 
     if (_mapController == null) {
       debugPrint('Map controller is null, returning');
@@ -799,7 +820,9 @@ class _MapScreenState extends State<MapScreen> {
         Point(localPosition.dx, localPosition.dy),
       );
 
-      debugPrint('Right-click at: ${coordinates.latitude}, ${coordinates.longitude}');
+      debugPrint(
+        'Right-click at: ${coordinates.latitude}, ${coordinates.longitude}',
+      );
 
       // Validate coordinates are within US bounds
       if (!_isWithinUSBounds(coordinates.latitude, coordinates.longitude)) {
@@ -839,8 +862,8 @@ class _MapScreenState extends State<MapScreen> {
     required RestrictionTag? initialRestrictionTag,
     required bool initialHasSecurityScreening,
     required bool initialHasPostedSignage,
-    String? pinId,  // For edit mode
-    LatLng? coordinates,  // For create mode
+    String? pinId, // For edit mode
+    LatLng? coordinates, // For create mode
   }) async {
     // Set flag to prevent multiple dialogs
     _isDialogOpen = true;
@@ -858,7 +881,9 @@ class _MapScreenState extends State<MapScreen> {
         onConfirm: (result) async {
           debugPrint('Pin dialog confirmed:');
           debugPrint('  Status: ${result.status.displayName}');
-          debugPrint('  Restriction: ${result.restrictionTag?.displayName ?? 'None'}');
+          debugPrint(
+            '  Restriction: ${result.restrictionTag?.displayName ?? 'None'}',
+          );
           debugPrint('  Security Screening: ${result.hasSecurityScreening}');
           debugPrint('  Posted Signage: ${result.hasPostedSignage}');
 
@@ -893,7 +918,10 @@ class _MapScreenState extends State<MapScreen> {
               }
             } else if (!isEditMode && coordinates != null) {
               // Create new pin
-              final authViewModel = Provider.of<AuthViewModel>(context, listen: false);
+              final authViewModel = Provider.of<AuthViewModel>(
+                context,
+                listen: false,
+              );
               final currentUser = authViewModel.currentUser;
 
               final newPin = Pin(
@@ -929,7 +957,9 @@ class _MapScreenState extends State<MapScreen> {
           } catch (e) {
             debugPrint('Error saving pin: $e');
             if (mounted) {
-              final friendlyMessage = ErrorMessages.getUserFriendlyMessage(e.toString());
+              final friendlyMessage = ErrorMessages.getUserFriendlyMessage(
+                e.toString(),
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text(friendlyMessage),
@@ -940,70 +970,77 @@ class _MapScreenState extends State<MapScreen> {
             }
           }
         },
-        onDelete: isEditMode && pinId != null ? () async {
-          debugPrint('Pin delete requested for ID: $pinId');
+        onDelete: isEditMode && pinId != null
+            ? () async {
+                debugPrint('Pin delete requested for ID: $pinId');
 
-          // Capture navigator before async operation
-          final navigator = Navigator.of(dialogContext, rootNavigator: true);
+                // Capture navigator before async operation
+                final navigator = Navigator.of(
+                  dialogContext,
+                  rootNavigator: true,
+                );
 
-          // Show confirmation dialog
-          final confirmed = await showDialog<bool>(
-            context: dialogContext,
-            builder: (confirmContext) => AlertDialog(
-              title: const Text('Delete Pin?'),
-              content: const Text(
-                'Are you sure you want to delete this pin? This action cannot be undone.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(confirmContext).pop(false),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(confirmContext).pop(true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: const Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          );
-
-          if (confirmed == true) {
-            // User confirmed deletion
-            navigator.pop();
-
-            try {
-              await _viewModel?.deletePin(pinId);
-
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Pin deleted successfully'),
-                    duration: Duration(seconds: 2),
-                    backgroundColor: Colors.orange,
+                // Show confirmation dialog
+                final confirmed = await showDialog<bool>(
+                  context: dialogContext,
+                  builder: (confirmContext) => AlertDialog(
+                    title: const Text('Delete Pin?'),
+                    content: const Text(
+                      'Are you sure you want to delete this pin? This action cannot be undone.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.of(confirmContext).pop(false),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(confirmContext).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ],
                   ),
                 );
+
+                if (confirmed == true) {
+                  // User confirmed deletion
+                  navigator.pop();
+
+                  try {
+                    await _viewModel?.deletePin(pinId);
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Pin deleted successfully'),
+                          duration: Duration(seconds: 2),
+                          backgroundColor: Colors.orange,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    debugPrint('Error deleting pin: $e');
+                    if (mounted) {
+                      final friendlyMessage =
+                          ErrorMessages.getUserFriendlyMessage(e.toString());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(friendlyMessage),
+                          duration: const Duration(seconds: 3),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                }
               }
-            } catch (e) {
-              debugPrint('Error deleting pin: $e');
-              if (mounted) {
-                final friendlyMessage = ErrorMessages.getUserFriendlyMessage(e.toString());
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(friendlyMessage),
-                    duration: const Duration(seconds: 3),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          }
-        } : null,
+            : null,
         onCancel: () {
           debugPrint('Pin dialog cancelled');
           try {
@@ -1037,19 +1074,19 @@ class _MapScreenState extends State<MapScreen> {
     // excludes place_label/place-label (country/state/city/town/village/
     // suburb/neighbourhood) — those areas are too large to pin meaningfully.
     const poiLayerIds = [
-      'poi',               // Common base map layer
-      'poi_label',         // MapTiler POI labels
-      'poi-label',         // Alternative naming
+      'poi', // Common base map layer
+      'poi_label', // MapTiler POI labels
+      'poi-label', // Alternative naming
     ];
 
     // Screen pixel offsets to check (for catching offset labels)
     // Labels are often offset from their anchor point
     const offsets = [
-      [0.0, 0.0],     // Center
-      [0.0, -20.0],   // Above (labels often below point)
-      [0.0, 20.0],    // Below
-      [-20.0, 0.0],   // Left
-      [20.0, 0.0],    // Right
+      [0.0, 0.0], // Center
+      [0.0, -20.0], // Above (labels often below point)
+      [0.0, 20.0], // Below
+      [-20.0, 0.0], // Left
+      [20.0, 0.0], // Right
       [-15.0, -15.0], // Diagonal offsets
       [15.0, -15.0],
       [-15.0, 15.0],
@@ -1102,8 +1139,7 @@ class _MapScreenState extends State<MapScreen> {
                 lng ??= coordinates.longitude;
 
                 debugPrint('Found POI in layer $layerId: $name');
-                _setDebugDetection(
-                    'QRF hit layer=$layerId name=$name');
+                _setDebugDetection('QRF hit layer=$layerId name=$name');
                 return {'name': name, 'lat': lat, 'lng': lng};
               }
             }
@@ -1144,15 +1180,27 @@ class _MapScreenState extends State<MapScreen> {
             //   - continent_label-> only name
             //   - poi_*        -> always has either a non-place class or a subclass
             const placeClasses = {
-              'continent', 'country', 'state', 'province', 'region',
-              'city', 'town', 'village', 'hamlet',
-              'suburb', 'quarter', 'neighbourhood', 'isolated_dwelling',
-              'island', 'archipelago',
+              'continent',
+              'country',
+              'state',
+              'province',
+              'region',
+              'city',
+              'town',
+              'village',
+              'hamlet',
+              'suburb',
+              'quarter',
+              'neighbourhood',
+              'isolated_dwelling',
+              'island',
+              'archipelago',
             };
             final props = feature['properties'] as Map?;
             final featureClass = props?['class']?.toString();
             final hasSubclass = props?['subclass'] != null;
-            if (featureClass != null && placeClasses.contains(featureClass)) continue;
+            if (featureClass != null && placeClasses.contains(featureClass))
+              continue;
             if (props?['admin_level'] != null) continue;
             // Catches countries (iso_a2 only) and continents (name only).
             if (featureClass == null && !hasSubclass) continue;
@@ -1175,7 +1223,8 @@ class _MapScreenState extends State<MapScreen> {
 
               debugPrint('Found named feature in layer $layerId: $name');
               _setDebugDetection(
-                  'QRF hit layer=${layerId.isEmpty ? "?" : layerId} name=$name');
+                'QRF hit layer=${layerId.isEmpty ? "?" : layerId} name=$name',
+              );
               return {'name': name, 'lat': lat, 'lng': lng};
             }
           }
@@ -1195,7 +1244,8 @@ class _MapScreenState extends State<MapScreen> {
       if (fallback != null) return fallback;
     } else {
       _setDebugDetection(
-          'QRF miss (features=$totalFeatures named=$namedFeatures)');
+        'QRF miss (features=$totalFeatures named=$namedFeatures)',
+      );
     }
 
     return null;
@@ -1225,26 +1275,30 @@ class _MapScreenState extends State<MapScreen> {
     }
     if (!result.isPoi) {
       _setDebugDetection(
-          'geocode: not POI (types=${result.placeType.join(",")})');
+        'geocode: not POI (types=${result.placeType.join(",")})',
+      );
       return null;
     }
 
     // Verify the POI's anchor is visually close to where the user tapped.
     try {
-      final poiScreen = await _mapController!
-          .toScreenLocation(LatLng(result.lat, result.lng));
+      final poiScreen = await _mapController!.toScreenLocation(
+        LatLng(result.lat, result.lng),
+      );
       final dx = poiScreen.x - point.x;
       final dy = poiScreen.y - point.y;
       final pixelDist = math.sqrt(dx * dx + dy * dy);
 
       if (pixelDist > 60.0) {
         _setDebugDetection(
-            'geocode: ${result.name} too far (${pixelDist.toStringAsFixed(0)}px)');
+          'geocode: ${result.name} too far (${pixelDist.toStringAsFixed(0)}px)',
+        );
         return null;
       }
 
       _setDebugDetection(
-          'geocode hit: ${result.name} (${pixelDist.toStringAsFixed(0)}px)');
+        'geocode hit: ${result.name} (${pixelDist.toStringAsFixed(0)}px)',
+      );
       return {'name': result.name, 'lat': result.lat, 'lng': result.lng};
     } catch (e) {
       debugPrint('_reverseGeocodePoiAtPoint: toScreenLocation failed: $e');
@@ -1281,15 +1335,15 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Check if coordinates are within continental US bounds
   bool _isWithinUSBounds(double latitude, double longitude) {
-    const double minLat = 24.396308;  // Southern border
-    const double maxLat = 49.384358;  // Northern border
-    const double minLng = -125.0;     // Western border
-    const double maxLng = -66.93457;  // Eastern border
+    const double minLat = 24.396308; // Southern border
+    const double maxLat = 49.384358; // Northern border
+    const double minLng = -125.0; // Western border
+    const double maxLng = -66.93457; // Eastern border
 
     return latitude >= minLat &&
-           latitude <= maxLat &&
-           longitude >= minLng &&
-           longitude <= maxLng;
+        latitude <= maxLat &&
+        longitude >= minLng &&
+        longitude <= maxLng;
   }
 
   /// Re-center map to user's current location
@@ -1444,298 +1498,314 @@ class _MapScreenState extends State<MapScreen> {
           body: Stack(
             children: [
               // MapLibre map widget wrapped in Listener for right-click on web
-          Listener(
-            onPointerDown: (event) {
-              // Detect right-click (secondary button) on web for creating pins
-              if (kIsWeb && event.buttons == kSecondaryMouseButton) {
-                _handleRightClick(event.localPosition);
-              }
-            },
-            child: MapLibreMap(
-              styleString: _getMapStyleUrl(),
-              initialCameraPosition: const CameraPosition(
-                target: LatLng(_initialLatitude, _initialLongitude),
-                zoom: _initialZoom,
-              ),
-              onMapCreated: _onMapCreated,
-              onStyleLoadedCallback: _onStyleLoadedCallback,
-              onMapClick: _onMapClick,
-              onMapLongClick: _onMapLongClick,
-              myLocationEnabled: !kIsWeb, // Disable on web (use custom marker instead)
-              myLocationTrackingMode: MyLocationTrackingMode.none,
-              compassEnabled: false,
-              // Required for cameraPosition to reflect user pan/zoom/rotate
-              // on Android/iOS. Without this, the native MapLibre SDKs do not
-              // emit camera-move events to Flutter and controller.cameraPosition
-              // stays frozen at initialCameraPosition. Web is unaffected.
-              trackCameraPosition: true,
-              rotateGesturesEnabled: true,
-              scrollGesturesEnabled: true,
-              tiltGesturesEnabled: true,
-              zoomGesturesEnabled: true,
-            ),
-          ),
-
-          // Title bar overlay (top-left)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 16,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+              Listener(
+                onPointerDown: (event) {
+                  // Detect right-click (secondary button) on web for creating pins
+                  if (kIsWeb && event.buttons == kSecondaryMouseButton) {
+                    _handleRightClick(event.localPosition);
+                  }
+                },
+                child: MapLibreMap(
+                  styleString: _getMapStyleUrl(),
+                  initialCameraPosition: const CameraPosition(
+                    target: LatLng(_initialLatitude, _initialLongitude),
+                    zoom: _initialZoom,
                   ),
-                ],
-              ),
-              child: Semantics(
-                label: 'CCW Map - Concealed Carry Weapon Map Application',
-                child: Text(
-                  kShowDebugUI && _debugMode ? 'CCW Map · DEBUG' : 'CCW Map',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: kShowDebugUI && _debugMode
-                        ? Colors.red
-                        : Colors.black87,
-                  ),
+                  onMapCreated: _onMapCreated,
+                  onStyleLoadedCallback: _onStyleLoadedCallback,
+                  onMapClick: _onMapClick,
+                  onMapLongClick: _onMapLongClick,
+                  myLocationEnabled:
+                      !kIsWeb, // Disable on web (use custom marker instead)
+                  myLocationTrackingMode: MyLocationTrackingMode.none,
+                  compassEnabled: false,
+                  // Required for cameraPosition to reflect user pan/zoom/rotate
+                  // on Android/iOS. Without this, the native MapLibre SDKs do not
+                  // emit camera-move events to Flutter and controller.cameraPosition
+                  // stays frozen at initialCameraPosition. Web is unaffected.
+                  trackCameraPosition: true,
+                  rotateGesturesEnabled: true,
+                  scrollGesturesEnabled: true,
+                  tiltGesturesEnabled: true,
+                  zoomGesturesEnabled: true,
                 ),
               ),
-            ),
-          ),
 
-          // Debug toggle (top-right, left of exit button). Gated on
-          // kShowDebugUI so it is tree-shaken out of production release
-          // builds. See lib/core/build_flags.dart.
-          if (kShowDebugUI)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              right: 72,
-              child: Material(
-                color: _debugMode
-                    ? Colors.red.withValues(alpha: 0.9)
-                    : Colors.white.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(8),
-                elevation: 2,
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      _debugMode = !_debugMode;
-                      if (!_debugMode) {
-                        _debugLastTap = null;
-                        _debugLastDetection = null;
-                      }
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(_debugMode
-                            ? 'Debug mode ON — tap anywhere to see detection info'
-                            : 'Debug mode OFF'),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(8),
-                  child: Tooltip(
-                    message: 'Toggle debug overlay',
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      child: Icon(
-                        Icons.bug_report_outlined,
-                        color: _debugMode ? Colors.white : Colors.black87,
-                        size: 24,
-                        semanticLabel: 'Debug overlay toggle',
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // Exit/sign out icon (top-right)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 16,
-            child: Material(
-              color: Colors.white.withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(8),
-              elevation: 2,
-              child: InkWell(
-                onTap: _onExitTapped,
-                borderRadius: BorderRadius.circular(8),
-                child: Tooltip(
-                  message: 'Sign out',
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    child: const Icon(
-                      Icons.exit_to_app,
-                      color: Colors.black87,
-                      size: 24,
-                      semanticLabel: 'Sign out button',
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Re-center FAB (bottom-right, positioned above MapLibre controls)
-          Positioned(
-            bottom: 96, // Moved up to avoid MapLibre's location button
-            right: 16,
-            child: FloatingActionButton(
-              onPressed: _onRecenterTapped,
-              backgroundColor: const Color(0xFFE8DEF8), // Light purple/lavender
-              elevation: 4,
-              tooltip: 'Re-center map to your location',
-              child: const Icon(
-                Icons.my_location,
-                color: Colors.black87,
-                semanticLabel: 'Re-center map',
-              ),
-            ),
-          ),
-
-          // Compass reset FAB (stacked above re-center FAB).
-          Positioned(
-            bottom: 160,
-            right: 16,
-            child: CompassButton(
-              listenable: _mapController,
-              bearingGetter: () =>
-                  _mapController?.cameraPosition?.bearing ?? 0.0,
-              onReset: _onCompassTapped,
-            ),
-          ),
-
-          // Debug info panel. Gated on kShowDebugUI so it is tree-shaken
-          // out of production release builds. See lib/core/build_flags.dart.
-          if (kShowDebugUI && _debugMode)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 60,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.78),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _debugLastTap == null
-                          ? 'Tap somewhere to test POI detection'
-                          : 'tap: ${_debugLastTap!}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                    if (_debugLastDetection != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'det: ${_debugLastDetection!}',
-                        style: const TextStyle(
-                          color: Colors.lightGreenAccent,
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                    if (_debugLocationPipeline != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'loc: ${_debugLocationPipeline!}',
-                        style: const TextStyle(
-                          color: Colors.yellowAccent,
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-          // Sync indicator (top-center, below title bar)
-          if (viewModel.isSyncing)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 60,
-              left: 0,
-              right: 0,
-              child: Center(
+              // Title bar overlay (top-left)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 16,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 4,
                         offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
+                  child: Semantics(
+                    label: 'CCW Map - Concealed Carry Weapon Map Application',
+                    child: Text(
+                      kShowDebugUI && _debugMode
+                          ? 'CCW Map · DEBUG'
+                          : 'CCW Map',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: kShowDebugUI && _debugMode
+                            ? Colors.red
+                            : Colors.black87,
                       ),
-                      SizedBox(width: 8),
-                      Text(
-                        'Syncing...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
 
-          // Initial loading overlay
-          if (viewModel.isLoading)
-            Container(
-              color: Colors.white.withValues(alpha: 0.9),
-              child: const Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text(
-                      'Loading map...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+              // Debug toggle (top-right, left of exit button). Gated on
+              // kShowDebugUI so it is tree-shaken out of production release
+              // builds. See lib/core/build_flags.dart.
+              if (kShowDebugUI)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 8,
+                  right: 72,
+                  child: Material(
+                    color: _debugMode
+                        ? Colors.red.withValues(alpha: 0.9)
+                        : Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    elevation: 2,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _debugMode = !_debugMode;
+                          if (!_debugMode) {
+                            _debugLastTap = null;
+                            _debugLastDetection = null;
+                          }
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              _debugMode
+                                  ? 'Debug mode ON — tap anywhere to see detection info'
+                                  : 'Debug mode OFF',
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Tooltip(
+                        message: 'Toggle debug overlay',
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.bug_report_outlined,
+                            color: _debugMode ? Colors.white : Colors.black87,
+                            size: 24,
+                            semanticLabel: 'Debug overlay toggle',
+                          ),
+                        ),
                       ),
                     ),
-                  ],
+                  ),
+                ),
+
+              // Exit/sign out icon (top-right)
+              Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                right: 16,
+                child: Material(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(8),
+                  elevation: 2,
+                  child: InkWell(
+                    onTap: _onExitTapped,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Tooltip(
+                      message: 'Sign out',
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        child: const Icon(
+                          Icons.exit_to_app,
+                          color: Colors.black87,
+                          size: 24,
+                          semanticLabel: 'Sign out button',
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            ),
+
+              // Re-center FAB (bottom-right, positioned above MapLibre controls)
+              Positioned(
+                bottom: 96, // Moved up to avoid MapLibre's location button
+                right: 16,
+                child: FloatingActionButton(
+                  onPressed: _onRecenterTapped,
+                  backgroundColor: const Color(
+                    0xFFE8DEF8,
+                  ), // Light purple/lavender
+                  elevation: 4,
+                  tooltip: 'Re-center map to your location',
+                  child: const Icon(
+                    Icons.my_location,
+                    color: Colors.black87,
+                    semanticLabel: 'Re-center map',
+                  ),
+                ),
+              ),
+
+              // Compass reset FAB (stacked above re-center FAB).
+              Positioned(
+                bottom: 160,
+                right: 16,
+                child: CompassButton(
+                  listenable: _mapController,
+                  bearingGetter: () =>
+                      _mapController?.cameraPosition?.bearing ?? 0.0,
+                  onReset: _onCompassTapped,
+                ),
+              ),
+
+              // Debug info panel. Gated on kShowDebugUI so it is tree-shaken
+              // out of production release builds. See lib/core/build_flags.dart.
+              if (kShowDebugUI && _debugMode)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 60,
+                  left: 16,
+                  right: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.78),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _debugLastTap == null
+                              ? 'Tap somewhere to test POI detection'
+                              : 'tap: ${_debugLastTap!}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        if (_debugLastDetection != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'det: ${_debugLastDetection!}',
+                            style: const TextStyle(
+                              color: Colors.lightGreenAccent,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                        if (_debugLocationPipeline != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'loc: ${_debugLocationPipeline!}',
+                            style: const TextStyle(
+                              color: Colors.yellowAccent,
+                              fontSize: 11,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Sync indicator (top-center, below title bar)
+              if (viewModel.isSyncing)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 60,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Syncing...',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+              // Initial loading overlay
+              if (viewModel.isLoading)
+                Container(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text(
+                          'Loading map...',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         );

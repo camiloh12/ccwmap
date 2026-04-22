@@ -12,8 +12,8 @@ class PoiRepositoryImpl implements PoiRepository {
   PoiRepositoryImpl({
     required OverpassApiClient apiClient,
     required PoiCache cache,
-  })  : _apiClient = apiClient,
-        _cache = cache;
+  }) : _apiClient = apiClient,
+       _cache = cache;
 
   @override
   Future<List<Poi>> getPOIs(OverpassBounds bounds) async {
@@ -26,53 +26,74 @@ class PoiRepositoryImpl implements PoiRepository {
 
     // Cache miss - fetch from API
     try {
-      developer.log('Fetching POIs from Overpass API for bounds: $bounds',
-          name: 'PoiRepository');
+      developer.log(
+        'Fetching POIs from Overpass API for bounds: $bounds',
+        name: 'PoiRepository',
+      );
 
       final pois = await _apiClient.fetchPOIs(bounds);
 
       // Cache the results
       _cache.cache(bounds, pois);
 
-      developer.log('Fetched and cached ${pois.length} POIs',
-          name: 'PoiRepository');
+      developer.log(
+        'Fetched and cached ${pois.length} POIs',
+        name: 'PoiRepository',
+      );
 
       return pois;
     } on OverpassRateLimitException catch (e) {
-      developer.log('Rate limit exceeded: ${e.message}',
-          name: 'PoiRepository', level: 900);
+      developer.log(
+        'Rate limit exceeded: ${e.message}',
+        name: 'PoiRepository',
+        level: 900,
+      );
 
       // Return stale cache if available, otherwise empty list
       final staleCache = _cache.getCached(bounds);
       if (staleCache != null) {
-        developer.log('Returning stale cache with ${staleCache.length} POIs',
-            name: 'PoiRepository');
+        developer.log(
+          'Returning stale cache with ${staleCache.length} POIs',
+          name: 'PoiRepository',
+        );
         return staleCache;
       }
 
       return [];
     } on OverpassApiException catch (e) {
-      developer.log('API error: ${e.message}',
-          name: 'PoiRepository', level: 900);
+      developer.log(
+        'API error: ${e.message}',
+        name: 'PoiRepository',
+        level: 900,
+      );
 
       // Return stale cache if available, otherwise empty list
       final staleCache = _cache.getCached(bounds);
       if (staleCache != null) {
-        developer.log('Returning stale cache with ${staleCache.length} POIs',
-            name: 'PoiRepository');
+        developer.log(
+          'Returning stale cache with ${staleCache.length} POIs',
+          name: 'PoiRepository',
+        );
         return staleCache;
       }
 
       return [];
     } catch (e, stackTrace) {
-      developer.log('Unexpected error fetching POIs: $e',
-          name: 'PoiRepository', error: e, stackTrace: stackTrace, level: 1000);
+      developer.log(
+        'Unexpected error fetching POIs: $e',
+        name: 'PoiRepository',
+        error: e,
+        stackTrace: stackTrace,
+        level: 1000,
+      );
 
       // Return stale cache if available, otherwise empty list
       final staleCache = _cache.getCached(bounds);
       if (staleCache != null) {
-        developer.log('Returning stale cache with ${staleCache.length} POIs',
-            name: 'PoiRepository');
+        developer.log(
+          'Returning stale cache with ${staleCache.length} POIs',
+          name: 'PoiRepository',
+        );
         return staleCache;
       }
 

@@ -81,12 +81,12 @@ _No open bugs._
   - `flutter build ... --release --dart-define=SHOW_DEBUG_UI=true` → `true`.
   - `flutter build ... --release` (no flag) → `false`. Dart's compiler tree-shakes the gated widgets out entirely — no bytecode for the debug UI ships.
 - **Current workflow state:**
-  - `.github/workflows/ios-testflight.yml` — **includes** `--dart-define=SHOW_DEBUG_UI=true` (manual trigger, internal TestFlight only).
-  - `.github/workflows/ios.yml` — build validation only (no deployment), flag not needed.
-- **TODO when wiring full production CI/CD:**
-  - Any workflow that uploads to **App Store Connect for public release** (as opposed to internal TestFlight) must **OMIT** `--dart-define=SHOW_DEBUG_UI=true` so the debug UI does not ship to end users.
-  - Same rule for Play Store production workflows.
-  - Reasonable convention: keep the flag on `workflow_dispatch` / internal-tester workflows, omit it on any workflow triggered by a release tag or release branch merge.
+  - `.github/workflows/pr-checks.yml` — PR-gated checks (format, analyze+test, android build, ios build, gitleaks secret scan). Flag not applicable (no deploy).
+  - `.github/workflows/release.yml` — fires on push to `release/v*` or `hotfix/v*`. **Includes** `--dart-define=SHOW_DEBUG_UI=true` for both iOS TestFlight and Android Play Internal.
+  - `.github/workflows/production.yml` — fires on push of `v*.*.*` tag. **Omits** the flag entirely. Debug UI is tree-shaken out of every public-store build by construction.
+  - `.github/workflows/weekly-scans.yml` — scheduled OSV dep scan + CodeQL Kotlin. Flag not applicable.
+
+- **Production guarantee:** The only trigger for a public-store build is a `v*.*.*` tag push, which can only run `production.yml`, which does not pass `SHOW_DEBUG_UI`. There is no path from developer action to a public build that carries the debug UI. See `docs/GIT_FLOW.md` for the full release playbook.
 
 ## Project Overview
 

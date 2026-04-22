@@ -18,8 +18,10 @@ class Pins extends Table {
   RealColumn get longitude => real()();
   IntColumn get status => integer()();
   TextColumn get restrictionTag => text().nullable()();
-  BoolColumn get hasSecurityScreening => boolean().withDefault(const Constant(false))();
-  BoolColumn get hasPostedSignage => boolean().withDefault(const Constant(false))();
+  BoolColumn get hasSecurityScreening =>
+      boolean().withDefault(const Constant(false))();
+  BoolColumn get hasPostedSignage =>
+      boolean().withDefault(const Constant(false))();
   TextColumn get createdBy => text().nullable()();
   IntColumn get createdAt => integer()(); // milliseconds since epoch
   IntColumn get lastModified => integer()(); // milliseconds since epoch
@@ -84,13 +86,13 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (Migrator m) => m.createAll(),
-        onUpgrade: (Migrator m, int from, int to) async {
-          if (from < 2) {
-            await m.createTable(pinTombstones);
-          }
-        },
-      );
+    onCreate: (Migrator m) => m.createAll(),
+    onUpgrade: (Migrator m, int from, int to) async {
+      if (from < 2) {
+        await m.createTable(pinTombstones);
+      }
+    },
+  );
 
   static LazyDatabase _openConnection() {
     return openConnection();

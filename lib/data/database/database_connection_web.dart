@@ -5,8 +5,6 @@ LazyDatabase openConnection() {
   return LazyDatabase(() async {
     // Use in-memory storage for web (demo mode)
     // Note: Data won't persist across page reloads
-    return WebDatabase.withStorage(
-      DriftWebStorage.volatile(),
-    );
+    return WebDatabase.withStorage(DriftWebStorage.volatile());
   });
 }

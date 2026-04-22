@@ -18,7 +18,6 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   @override
   Future<List<SupabasePinDto>> getAllPins() async {
     try {
-
       final response = await _supabase
           .from('pins')
           .select()
@@ -40,11 +39,7 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   @override
   Future<void> insertPin(SupabasePinDto pin) async {
     try {
-
-      await _supabase
-          .from('pins')
-          .insert(pin.toJson());
-
+      await _supabase.from('pins').insert(pin.toJson());
     } catch (e) {
       rethrow;
     }
@@ -56,12 +51,7 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   @override
   Future<void> updatePin(SupabasePinDto pin) async {
     try {
-
-      await _supabase
-          .from('pins')
-          .update(pin.toJson())
-          .eq('id', pin.id);
-
+      await _supabase.from('pins').update(pin.toJson()).eq('id', pin.id);
     } catch (e) {
       rethrow;
     }
@@ -107,7 +97,6 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   @override
   Future<SupabasePinDto?> getPinById(String pinId) async {
     try {
-
       final response = await _supabase
           .from('pins')
           .select()

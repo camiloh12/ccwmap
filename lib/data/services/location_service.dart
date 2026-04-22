@@ -74,7 +74,9 @@ class LocationService {
         ),
       );
 
-      debugPrint('Current location: ${position.latitude}, ${position.longitude}');
+      debugPrint(
+        'Current location: ${position.latitude}, ${position.longitude}',
+      );
       return position;
     } catch (e) {
       debugPrint('Error getting current location: $e');

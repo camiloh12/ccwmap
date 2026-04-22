@@ -1,7 +1,8 @@
 part of 'database.dart';
 
 @DriftAccessor(tables: [SyncQueue])
-class SyncQueueDao extends DatabaseAccessor<AppDatabase> with _$SyncQueueDaoMixin {
+class SyncQueueDao extends DatabaseAccessor<AppDatabase>
+    with _$SyncQueueDaoMixin {
   SyncQueueDao(super.db);
 
   Future<void> enqueue(SyncQueueEntity operation) async {
@@ -18,7 +19,9 @@ class SyncQueueDao extends DatabaseAccessor<AppDatabase> with _$SyncQueueDaoMixi
 
   /// Get pending operations sorted by timestamp (FIFO)
   Future<List<SyncQueueEntity>> getPendingOperationsSorted() {
-    return (select(syncQueue)..orderBy([(tbl) => OrderingTerm(expression: tbl.timestamp)])).get();
+    return (select(
+      syncQueue,
+    )..orderBy([(tbl) => OrderingTerm(expression: tbl.timestamp)])).get();
   }
 
   /// Get all operations for a specific pin
@@ -32,7 +35,9 @@ class SyncQueueDao extends DatabaseAccessor<AppDatabase> with _$SyncQueueDaoMixi
   }
 
   Future<void> incrementRetryCount(String id, String error) async {
-    final operation = await (select(syncQueue)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    final operation = await (select(
+      syncQueue,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
     if (operation != null) {
       await update(syncQueue).replace(
         operation.copyWith(
@@ -49,11 +54,11 @@ class SyncQueueDao extends DatabaseAccessor<AppDatabase> with _$SyncQueueDaoMixi
 
   /// Update the timestamp of an operation (used when re-queueing)
   Future<void> updateTimestamp(String id, int timestamp) async {
-    final operation = await (select(syncQueue)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+    final operation = await (select(
+      syncQueue,
+    )..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
     if (operation != null) {
-      await update(syncQueue).replace(
-        operation.copyWith(timestamp: timestamp),
-      );
+      await update(syncQueue).replace(operation.copyWith(timestamp: timestamp));
     }
   }
 }

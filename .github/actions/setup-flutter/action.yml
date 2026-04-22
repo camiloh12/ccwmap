@@ -1,0 +1,47 @@
+name: Setup Flutter
+description: Install Flutter, cache pub deps, write .env, run pub get.
+inputs:
+  supabase-url:
+    description: Supabase URL
+    required: true
+  supabase-anon-key:
+    description: Supabase anon key
+    required: true
+  maptiler-api-key:
+    description: MapTiler API key
+    required: true
+  flutter-version:
+    description: Optional Flutter version override. Empty uses channel latest.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: stable
+        flutter-version: ${{ inputs.flutter-version }}
+    - name: Cache pub download dir
+      uses: actions/cache@v4
+      with:
+        # Only cache the pub download dir. Do NOT cache .dart_tool/ —
+        # it holds Flutter build state (including NativeAssetsManifest.json
+        # entries for packages like `objective_c`), and restoring it
+        # without the matching build/ outputs breaks the iOS embed step
+        # with "native asset X not found in build/native_assets/ios/".
+        path: ~/.pub-cache
+        key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+        restore-keys: |
+          pub-${{ runner.os }}-
+    - name: Write .env
+      shell: bash
+      run: |
+        cat > .env <<EOF
+        SUPABASE_URL=${{ inputs.supabase-url }}
+        SUPABASE_ANON_KEY=${{ inputs.supabase-anon-key }}
+        MAPTILER_API_KEY=${{ inputs.maptiler-api-key }}
+        EOF
+    - name: flutter pub get
+      shell: bash
+      run: flutter pub get

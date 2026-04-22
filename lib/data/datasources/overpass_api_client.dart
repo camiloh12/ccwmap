@@ -12,7 +12,7 @@ class OverpassApiClient {
   final http.Client _httpClient;
 
   OverpassApiClient({http.Client? httpClient})
-      : _httpClient = httpClient ?? http.Client();
+    : _httpClient = httpClient ?? http.Client();
 
   /// Fetches POIs within the given geographic bounds
   ///
@@ -32,12 +32,14 @@ class OverpassApiClient {
 
       if (response.statusCode == 429) {
         throw OverpassRateLimitException(
-            'Rate limit exceeded. Please wait before making more requests.');
+          'Rate limit exceeded. Please wait before making more requests.',
+        );
       }
 
       if (response.statusCode != 200) {
         throw OverpassApiException(
-            'Failed to fetch POIs: ${response.statusCode} ${response.reasonPhrase}');
+          'Failed to fetch POIs: ${response.statusCode} ${response.reasonPhrase}',
+        );
       }
 
       final jsonData = json.decode(response.body) as Map<String, dynamic>;
@@ -53,7 +55,9 @@ class OverpassApiClient {
           .map((e) => Poi.fromOverpassJson(e))
           .toList();
     } on TimeoutException {
-      throw OverpassApiException('Request timed out after ${_timeout.inSeconds} seconds');
+      throw OverpassApiException(
+        'Request timed out after ${_timeout.inSeconds} seconds',
+      );
     } on http.ClientException catch (e) {
       throw OverpassApiException('Network error: ${e.message}');
     } on FormatException catch (e) {
@@ -85,7 +89,8 @@ out center;
   bool _isValidPoi(Map<String, dynamic> element) {
     // Must have either direct coordinates or center coordinates
     final hasDirectCoords = element['lat'] != null && element['lon'] != null;
-    final hasCenterCoords = element['center'] != null &&
+    final hasCenterCoords =
+        element['center'] != null &&
         element['center']['lat'] != null &&
         element['center']['lon'] != null;
 

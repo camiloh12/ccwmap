@@ -41,7 +41,8 @@ class Poi {
     // Determine type (amenity, tourism, leisure, etc.)
     String? type;
     if (tags != null) {
-      type = tags['amenity'] as String? ??
+      type =
+          tags['amenity'] as String? ??
           tags['tourism'] as String? ??
           tags['leisure'] as String? ??
           tags['shop'] as String? ??
@@ -75,9 +76,11 @@ class Poi {
         .replaceAll('_', ' ')
         .replaceAll('-', ' ')
         .split(' ')
-        .map((word) => word.isEmpty
-            ? ''
-            : word[0].toUpperCase() + word.substring(1).toLowerCase())
+        .map(
+          (word) => word.isEmpty
+              ? ''
+              : word[0].toUpperCase() + word.substring(1).toLowerCase(),
+        )
         .join(' ');
   }
 

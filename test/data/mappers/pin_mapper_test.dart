@@ -78,7 +78,10 @@ void main() {
       expect(pin.hasSecurityScreening, isFalse);
       expect(pin.hasPostedSignage, isFalse);
       expect(pin.metadata.createdBy, 'user-456');
-      expect(pin.metadata.createdAt, DateTime.fromMillisecondsSinceEpoch(now.millisecondsSinceEpoch));
+      expect(
+        pin.metadata.createdAt,
+        DateTime.fromMillisecondsSinceEpoch(now.millisecondsSinceEpoch),
+      );
       expect(pin.metadata.photoUri, isNull);
       expect(pin.metadata.notes, isNull);
       expect(pin.metadata.votes, 0);
@@ -105,7 +108,10 @@ void main() {
       expect(convertedPin.location, originalPin.location);
       expect(convertedPin.status, originalPin.status);
       expect(convertedPin.restrictionTag, originalPin.restrictionTag);
-      expect(convertedPin.hasSecurityScreening, originalPin.hasSecurityScreening);
+      expect(
+        convertedPin.hasSecurityScreening,
+        originalPin.hasSecurityScreening,
+      );
       expect(convertedPin.hasPostedSignage, originalPin.hasPostedSignage);
       expect(convertedPin.metadata.createdBy, originalPin.metadata.createdBy);
       expect(convertedPin.metadata.votes, originalPin.metadata.votes);
@@ -152,10 +158,7 @@ void main() {
           restrictionTag: status == PinStatus.NO_GUN
               ? RestrictionTag.PRIVATE_PROPERTY
               : null,
-          metadata: PinMetadata(
-            createdAt: now,
-            lastModified: now,
-          ),
+          metadata: PinMetadata(createdAt: now, lastModified: now),
         );
 
         final entity = PinMapper.toEntity(pin);
@@ -175,10 +178,7 @@ void main() {
           location: Location.fromLatLng(0, 0),
           status: PinStatus.NO_GUN,
           restrictionTag: tag,
-          metadata: PinMetadata(
-            createdAt: now,
-            lastModified: now,
-          ),
+          metadata: PinMetadata(createdAt: now, lastModified: now),
         );
 
         final entity = PinMapper.toEntity(pin);

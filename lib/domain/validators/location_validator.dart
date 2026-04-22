@@ -16,8 +16,8 @@ class LocationValidator {
   /// - Longitude: -125.0 to -66.93457
   static bool isWithinUSBounds(double latitude, double longitude) {
     return latitude >= minLatitude &&
-           latitude <= maxLatitude &&
-           longitude >= minLongitude &&
-           longitude <= maxLongitude;
+        latitude <= maxLatitude &&
+        longitude >= minLongitude &&
+        longitude <= maxLongitude;
   }
 }

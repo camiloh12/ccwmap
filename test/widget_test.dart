@@ -24,13 +24,16 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     // Load test environment variables or use empty config
-    dotenv.loadFromString(envString: '''
+    dotenv.loadFromString(
+      envString: '''
 MAPTILER_API_KEY=test_key
-''');
+''',
+    );
   });
 
-  testWidgets('App launches and shows CCW Map title when authenticated',
-      (WidgetTester tester) async {
+  testWidgets('App launches and shows CCW Map title when authenticated', (
+    WidgetTester tester,
+  ) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
     final fakeNetworkMonitor = FakeNetworkMonitor();
@@ -54,10 +57,7 @@ MAPTILER_API_KEY=test_key
 
     // Build our app and trigger a frame.
     await tester.pumpWidget(
-      CCWMapApp(
-        mapViewModel: mapViewModel,
-        authViewModel: authViewModel,
-      ),
+      CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
     );
 
     // Wait for AuthGate to initialize
@@ -78,8 +78,9 @@ MAPTILER_API_KEY=test_key
     await testDatabase.close();
   });
 
-  testWidgets('App shows login screen when not authenticated',
-      (WidgetTester tester) async {
+  testWidgets('App shows login screen when not authenticated', (
+    WidgetTester tester,
+  ) async {
     // Create in-memory database for testing
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
     final fakeNetworkMonitor = FakeNetworkMonitor();
@@ -100,10 +101,7 @@ MAPTILER_API_KEY=test_key
 
     // Build our app and trigger a frame.
     await tester.pumpWidget(
-      CCWMapApp(
-        mapViewModel: mapViewModel,
-        authViewModel: authViewModel,
-      ),
+      CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
     );
 
     // Wait for AuthGate to initialize
@@ -117,7 +115,10 @@ MAPTILER_API_KEY=test_key
     expect(find.byType(TextFormField), findsNWidgets(2));
 
     // Verify that Create Account button is present
-    expect(find.widgetWithText(OutlinedButton, 'Create Account'), findsOneWidget);
+    expect(
+      find.widgetWithText(OutlinedButton, 'Create Account'),
+      findsOneWidget,
+    );
 
     // Verify that app logo/title is present
     expect(find.text('CCW Map'), findsOneWidget);

@@ -28,14 +28,8 @@ void main() {
     });
 
     test('fromColorCode throws on invalid code', () {
-      expect(
-        () => PinStatus.fromColorCode(3),
-        throwsA(isA<ArgumentError>()),
-      );
-      expect(
-        () => PinStatus.fromColorCode(-1),
-        throwsA(isA<ArgumentError>()),
-      );
+      expect(() => PinStatus.fromColorCode(3), throwsA(isA<ArgumentError>()));
+      expect(() => PinStatus.fromColorCode(-1), throwsA(isA<ArgumentError>()));
     });
   });
 }

@@ -42,7 +42,9 @@ class AuthViewModel extends ChangeNotifier {
       },
     );
 
-    debugPrint('AuthViewModel: Initialization complete. User: ${_currentUser?.email}');
+    debugPrint(
+      'AuthViewModel: Initialization complete. User: ${_currentUser?.email}',
+    );
     notifyListeners();
   }
 
@@ -76,7 +78,9 @@ class AuthViewModel extends ChangeNotifier {
     try {
       debugPrint('AuthViewModel: Signing up user: $email');
       await _repository.signUpWithEmail(email, password);
-      debugPrint('AuthViewModel: Sign up successful. Check email for confirmation.');
+      debugPrint(
+        'AuthViewModel: Sign up successful. Check email for confirmation.',
+      );
       // Note: User may need to confirm email before they can sign in
     } on supabase.AuthException catch (e) {
       debugPrint('AuthViewModel: Sign up failed: ${e.message}');
