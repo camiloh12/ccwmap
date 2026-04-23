@@ -10,8 +10,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Same scheme as release.yml: seconds since 2025-01-01 UTC. See comment
+  # there for rationale. This run's build number will always exceed any
+  # build number produced by the preceding release.yml run for the same
+  # tag, since production.yml fires after release.yml finishes.
+  compute-build-number:
+    name: Compute shared build number
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.calc.outputs.build }}
+    steps:
+      - id: calc
+        run: |
+          BUILD=$(( $(date -u +%s) - 1735689600 ))
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "Build number for this run: ${BUILD}"
+
   deploy-ios-appstore:
     name: iOS → App Store
+    needs: compute-build-number
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,10 +42,11 @@ jobs:
           supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
           maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
 
-      - name: Stamp version (semver from tag + run_number build)
+      - name: Stamp version (semver from tag + shared build number)
+        env:
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
         run: |
           SEMVER="${GITHUB_REF_NAME#v}"
-          BUILD=${{ github.run_number }}
           sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
           echo "Stamped: $(grep '^version:' pubspec.yaml)"
 
@@ -64,6 +82,7 @@ jobs:
 
   deploy-android-production:
     name: Android → Play Production
+    needs: compute-build-number
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -82,10 +101,11 @@ jobs:
           supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
           maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
 
-      - name: Stamp version (semver from tag + run_number build)
+      - name: Stamp version (semver from tag + shared build number)
+        env:
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
         run: |
           SEMVER="${GITHUB_REF_NAME#v}"
-          BUILD=${{ github.run_number }}
           sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
           echo "Stamped: $(grep '^version:' pubspec.yaml)"
 
@@ -127,7 +147,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub Release
-    needs: [deploy-ios-appstore, deploy-android-production]
+    needs: [compute-build-number, deploy-ios-appstore, deploy-android-production]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -145,7 +165,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
-          BUILD: ${{ github.run_number }}
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --draft=false

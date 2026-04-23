@@ -11,8 +11,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Build number scheme: seconds since 2025-01-01 UTC. Gives a value that
+  # (a) is always strictly increasing across release.yml and production.yml
+  # runs because production always fires after release, (b) is identical
+  # for the iOS and Android jobs in the same workflow run (both read this
+  # job's output), and (c) fits int32 for Play's versionCode ceiling
+  # (headroom until ~2093). github.run_number can't be used here because
+  # each workflow has its own counter — release and production would
+  # collide on first tag push.
+  compute-build-number:
+    name: Compute shared build number
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.calc.outputs.build }}
+    steps:
+      - id: calc
+        run: |
+          BUILD=$(( $(date -u +%s) - 1735689600 ))
+          echo "build=${BUILD}" >> "$GITHUB_OUTPUT"
+          echo "Build number for this run: ${BUILD}"
+
   deploy-ios-testflight:
     name: iOS → TestFlight
+    needs: compute-build-number
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,10 +47,11 @@ jobs:
           supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
           maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
 
-      - name: Stamp version (semver from pubspec + run_number build)
+      - name: Stamp version (semver from pubspec + shared build number)
+        env:
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
         run: |
           SEMVER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1 | tr -d ' ')
-          BUILD=${{ github.run_number }}
           sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
           echo "Stamped: $(grep '^version:' pubspec.yaml)"
 
@@ -58,6 +80,7 @@ jobs:
 
   deploy-android-internal:
     name: Android → Play Internal
+    needs: compute-build-number
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -76,10 +99,11 @@ jobs:
           supabase-anon-key: ${{ secrets.SUPABASE_ANON_KEY }}
           maptiler-api-key: ${{ secrets.MAPTILER_API_KEY }}
 
-      - name: Stamp version (semver from pubspec + run_number build)
+      - name: Stamp version (semver from pubspec + shared build number)
+        env:
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
         run: |
           SEMVER=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1 | tr -d ' ')
-          BUILD=${{ github.run_number }}
           sed -i.bak "s/^version:.*/version: ${SEMVER}+${BUILD}/" pubspec.yaml
           echo "Stamped: $(grep '^version:' pubspec.yaml)"
 
@@ -114,7 +138,7 @@ jobs:
 
   create-draft-release:
     name: Create/update draft GitHub Release
-    needs: [deploy-ios-testflight, deploy-android-internal]
+    needs: [compute-build-number, deploy-ios-testflight, deploy-android-internal]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -131,7 +155,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.ver.outputs.tag }}
-          BUILD: ${{ github.run_number }}
+          BUILD: ${{ needs.compute-build-number.outputs.build }}
           SHA: ${{ github.sha }}
         run: |
           BODY="Testing in TestFlight (build ${BUILD}) and Play Internal (build ${BUILD}). Tag this commit \`${TAG}\` after beta verification to promote to production."
