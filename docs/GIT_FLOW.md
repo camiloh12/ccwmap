@@ -201,5 +201,18 @@ Semantic versioning: `MAJOR.MINOR.PATCH`.
 - **PATCH**: bug fixes.
 
 Build number (the `+N` after the semver in `pubspec.yaml`) is overwritten
-by CI to `github.run_number`. Both stores require a strictly-increasing
-build number. Never manually reset it.
+at build time by CI — whatever you commit for `+N` is ignored. Both stores
+require strictly-increasing build numbers, so the scheme is:
+
+```
+build_number = seconds_since_2025_01_01_UTC
+```
+
+A `compute-build-number` job in each of `release.yml` and `production.yml`
+computes this value and passes it to all downstream jobs via job outputs,
+so iOS and Android in the same workflow run get the same build number. The
+seconds-since-epoch base ensures production.yml (which always fires after
+release.yml) produces a higher build number than the preceding release run
+for the same version — a plain `github.run_number` would not, because each
+workflow has its own counter. The value fits in int32 (Play's `versionCode`
+ceiling) with headroom until roughly 2093.
