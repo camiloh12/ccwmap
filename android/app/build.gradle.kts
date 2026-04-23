@@ -32,8 +32,12 @@ android {
         applicationId = "com.ccwmap.app"
         minSdk = flutter.minSdkVersion  // Minimum Android 5.0 (Lollipop)
         targetSdk = 35  // Required for 2026 Play Store compliance
-        versionCode = 4
-        versionName = "0.2.0"
+        // Read from pubspec.yaml via the Flutter Gradle plugin so CI's
+        // stamp step (sed on pubspec) actually takes effect. Previously
+        // hardcoded to 0.2.0 / 4, which caused Play Internal to display
+        // 0.2.0 regardless of what pubspec said.
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     signingConfigs {
