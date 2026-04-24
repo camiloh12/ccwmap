@@ -1030,7 +1030,7 @@ git commit -m "docs(sp3): mark account deletion implemented"
 
 **Files:** (none — manual; device must be on a TestFlight build with SHOW_DEBUG_UI off to mirror App Store behavior)
 
-- [ ] **Step 1: Capture `account-deletion.mov` screen recording**
+- [ ] **Step 1: Capture `account-deletion.mov` screen recording** _(deferred until TestFlight build is on device)_
 
 On a TestFlight build of v0.4.0:
 
@@ -1044,7 +1044,7 @@ On a TestFlight build of v0.4.0:
 
 Recording must show steps 2–7 end-to-end. Save as `account-deletion.mov` next to `guest-browse.mov` and `ugc-moderation.mov` for the App Store Resubmission (see spec Section "App Store resubmission plan").
 
-- [ ] **Step 2: Verify in Supabase Studio**
+- [x] **Step 2: Verify in Supabase Studio**
 
 - `auth.users` row for the demo account: gone.
 - `pins` rows created by that user: still present with `created_by = NULL`.
@@ -1052,7 +1052,7 @@ Recording must show steps 2–7 end-to-end. Save as `account-deletion.mov` next 
 - `blocked_users` rows where `blocker_id` or `blocked_id` equals the deleted user: gone.
 - `pin_reports` rows with `reporter_id` equal to the deleted user: row present with `reporter_id = NULL`.
 
-- [ ] **Step 3: Verify banned copy**
+- [x] **Step 3: Verify banned copy**
 
 In Studio, manually ban a different demo account (Authentication → Users → Ban). On the device, sign out and attempt to sign in as that user. Expected: error copy contains "suspended" and `camilo@kyberneticlabs.com`. (The banned sign-in is the full loop for App Review — capture it if Apple specifically asks about it, otherwise it's sufficient for the playbook.)
 
@@ -1062,13 +1062,13 @@ In Studio, manually ban a different demo account (Authentication → Users → B
 
 ## Self-Review Checklist
 
-- [ ] `delete-account` Edge Function exists, deployed, smoke-tested via curl (Tasks 1–2). _(Deployed via Supabase MCP; curl smoke-test pending.)_
+- [x] `delete-account` Edge Function exists, deployed, smoke-tested via in-app flow (Tasks 1–2). _(Deployed via Supabase MCP; end-to-end verified in-app instead of curl.)_
 - [x] `AuthRepository.deleteAccount()` added to interface and Supabase impl; `FakeAuthRepository` mirrors it (Tasks 3–4).
 - [x] `AuthViewModel.deleteAccount()` tested (success, failure, loading); `_formatAuthError` maps the banned-user AuthException (Task 5).
 - [x] `SettingsScreen` renders, requires typing DELETE, calls `deleteAccount`, and routes post-delete back to `MapScreen` (Task 6).
 - [x] Gear icon on `MapScreen` appears for authenticated users only; widget_test.dart updated (Task 7).
 - [x] Docs updated (`DEPLOY.md`, `CLAUDE.md`) (Tasks 8–9).
-- [ ] Manual on-device test recorded `account-deletion.mov` and verified server-side cascade behavior (Task 10).
+- [ ] Manual on-device test recorded `account-deletion.mov` and verified server-side cascade behavior (Task 10). _(Cascade + banned-copy verified; recording deferred until TestFlight build.)_
 
 ## Verification
 
