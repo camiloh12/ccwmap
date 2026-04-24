@@ -8,19 +8,16 @@ class SignInPromptSheet extends StatelessWidget {
   final String title;
   final String body;
 
-  const SignInPromptSheet({
-    super.key,
-    required this.title,
-    required this.body,
-  });
+  const SignInPromptSheet({super.key, required this.title, required this.body});
 
   void _openLogin(BuildContext context) {
     // Close the sheet, then push LoginScreen on the root navigator so the
     // returning user pops back to the map.
     Navigator.of(context).pop();
-    Navigator.of(context, rootNavigator: true).push(
-      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-    );
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
   }
 
   @override
@@ -34,9 +31,9 @@ class SignInPromptSheet extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(body, style: Theme.of(context).textTheme.bodyMedium),

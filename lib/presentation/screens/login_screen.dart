@@ -61,7 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
     // authenticated state. On failure, [authViewModel.error] is set and
     // the Consumer in build() surfaces it — we stay here so the user
     // can retry.
-    if (mounted && authViewModel.error == null && authViewModel.isAuthenticated) {
+    if (mounted &&
+        authViewModel.error == null &&
+        authViewModel.isAuthenticated) {
       Navigator.of(context).pop();
     }
   }

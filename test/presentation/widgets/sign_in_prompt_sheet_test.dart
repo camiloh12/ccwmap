@@ -57,10 +57,8 @@ void main() {
                 child: ElevatedButton(
                   onPressed: () => showModalBottomSheet<void>(
                     context: context,
-                    builder: (_) => const SignInPromptSheet(
-                      title: 't',
-                      body: 'b',
-                    ),
+                    builder: (_) =>
+                        const SignInPromptSheet(title: 't', body: 'b'),
                   ),
                   child: const Text('open'),
                 ),
@@ -87,10 +85,8 @@ void main() {
         final fakeAuthRepo = FakeAuthRepository();
         final authViewModel = AuthViewModel(fakeAuthRepo);
 
-        Widget buildSheet(BuildContext ctx) => const SignInPromptSheet(
-          title: 't',
-          body: 'b',
-        );
+        Widget buildSheet(BuildContext ctx) =>
+            const SignInPromptSheet(title: 't', body: 'b');
 
         await tester.pumpWidget(
           ChangeNotifierProvider<AuthViewModel>.value(
@@ -143,7 +139,10 @@ void main() {
 
         await tester.tap(find.widgetWithText(OutlinedButton, 'Create Account'));
         await tester.pumpAndSettle();
-        expect(pushedRoutes, countAfterSecondSheetOpen + 1); // second LoginScreen pushed
+        expect(
+          pushedRoutes,
+          countAfterSecondSheetOpen + 1,
+        ); // second LoginScreen pushed
 
         fakeAuthRepo.dispose();
       },

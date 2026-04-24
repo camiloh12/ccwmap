@@ -29,8 +29,9 @@ MAPTILER_API_KEY=test_key
     );
   });
 
-  testWidgets('App launches as guest: map visible and sign-in icon present',
-      (WidgetTester tester) async {
+  testWidgets('App launches as guest: map visible and sign-in icon present', (
+    WidgetTester tester,
+  ) async {
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
     final fakeNetworkMonitor = FakeNetworkMonitor();
 

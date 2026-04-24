@@ -32,8 +32,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('renders "Sign in to edit" and "Close", hides Save/Delete',
-        (tester) async {
+    testWidgets('renders "Sign in to edit" and "Close", hides Save/Delete', (
+      tester,
+    ) async {
       await pumpReadOnly(tester);
 
       expect(

@@ -306,13 +306,15 @@ class _PinDialogState extends State<PinDialog> {
     final isSelected = _selectedStatus == status;
 
     return InkWell(
-      onTap: widget.isReadOnly ? null : () => setState(() {
-        _selectedStatus = status;
-        // Clear restriction tag if switching away from NO_GUN
-        if (status != PinStatus.NO_GUN) {
-          _selectedRestrictionTag = null;
-        }
-      }),
+      onTap: widget.isReadOnly
+          ? null
+          : () => setState(() {
+              _selectedStatus = status;
+              // Clear restriction tag if switching away from NO_GUN
+              if (status != PinStatus.NO_GUN) {
+                _selectedRestrictionTag = null;
+              }
+            }),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         height: 56,

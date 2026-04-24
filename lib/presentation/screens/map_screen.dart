@@ -1111,8 +1111,7 @@ class _MapScreenState extends State<MapScreen> {
         onConfirm: (_) {
           // Unreachable in read-only mode; provided to satisfy required param.
         },
-        onCancel: () =>
-            Navigator.of(dialogContext, rootNavigator: true).pop(),
+        onCancel: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
         onSignInToEdit: () {
           Navigator.of(dialogContext, rootNavigator: true).pop();
           _promptSignIn(
@@ -1715,10 +1714,10 @@ class _MapScreenState extends State<MapScreen> {
                         onTap: isAuthed
                             ? _onExitTapped
                             : () => _promptSignIn(
-                                  title: 'Sign in',
-                                  body:
-                                      'Sign in to add pins and contribute to the community map.',
-                                ),
+                                title: 'Sign in',
+                                body:
+                                    'Sign in to add pins and contribute to the community map.',
+                              ),
                         borderRadius: BorderRadius.circular(8),
                         child: Tooltip(
                           message: isAuthed ? 'Sign out' : 'Sign in',
@@ -1728,8 +1727,9 @@ class _MapScreenState extends State<MapScreen> {
                               isAuthed ? Icons.exit_to_app : Icons.login,
                               color: Colors.black87,
                               size: 24,
-                              semanticLabel:
-                                  isAuthed ? 'Sign out button' : 'Sign in button',
+                              semanticLabel: isAuthed
+                                  ? 'Sign out button'
+                                  : 'Sign in button',
                             ),
                           ),
                         ),
