@@ -41,7 +41,7 @@ No schema migration. Verified 2026-04-24 in the design spec:
 - Create: `supabase/functions/delete-account/index.ts`
 - Create: `supabase/functions/delete-account/deno.json`
 
-- [ ] **Step 1: Scaffold the function**
+- [x] **Step 1: Scaffold the function**
 
 Create `supabase/functions/delete-account/deno.json`:
 
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
 });
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add supabase/functions/delete-account/
@@ -127,7 +127,9 @@ git commit -m "feat(sp3): delete-account Edge Function"
 
 **Files:** (none — live operation)
 
-- [ ] **Step 1: Deploy**
+**Deployed 2026-04-24 via Supabase MCP** (`mcp__supabase__deploy_edge_function`, version 1, `verify_jwt: true`, slug `delete-account`). The manual CLI form below is kept for reference / re-deploy via laptop.
+
+- [x] **Step 1: Deploy**
 
 Run:
 
@@ -137,7 +139,7 @@ supabase functions deploy delete-account
 
 Expected: success message + URL `https://<project-ref>.supabase.co/functions/v1/delete-account`.
 
-- [ ] **Step 2: Confirm env vars are set**
+- [x] **Step 2: Confirm env vars are set**
 
 The `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` env vars are injected automatically into Supabase Edge Functions and do not need to be set explicitly. No action required — proceed.
 
@@ -155,7 +157,7 @@ curl -X POST \
 
 Expected response: `{"ok": true, "user_id": "<uuid>"}`. Verify in Studio: the row is gone from `auth.users`; the user's pins persist in `pins` with `created_by = NULL`; `user_agreements` rows for the user are gone.
 
-- [ ] **Step 4: No commit** (live operation only).
+- [x] **Step 4: No commit** (live operation only).
 
 ---
 
@@ -165,7 +167,7 @@ Expected response: `{"ok": true, "user_id": "<uuid>"}`. Verify in Studio: the ro
 - Modify: `lib/domain/repositories/auth_repository.dart`
 - Modify: `test/fakes/fake_auth_repository.dart`
 
-- [ ] **Step 1: Extend the interface**
+- [x] **Step 1: Extend the interface**
 
 Edit `lib/domain/repositories/auth_repository.dart`. Append to the class:
 
@@ -181,7 +183,7 @@ Edit `lib/domain/repositories/auth_repository.dart`. Append to the class:
   Future<void> deleteAccount();
 ```
 
-- [ ] **Step 2: Extend the fake**
+- [x] **Step 2: Extend the fake**
 
 Edit `test/fakes/fake_auth_repository.dart`. Add:
 
@@ -201,14 +203,14 @@ Edit `test/fakes/fake_auth_repository.dart`. Add:
 
 Place these members just above the `/// Clean up resources` comment.
 
-- [ ] **Step 3: Run `flutter analyze`**
+- [x] **Step 3: Run `flutter analyze`**
 
 Expected: no errors. `SupabaseAuthRepository` will fail to compile because it hasn't implemented `deleteAccount` yet — that's the next task.
 
 Run: `flutter analyze`
 Expected: one analyzer error: `'SupabaseAuthRepository' is missing implementations for these members: AuthRepository.deleteAccount`. This is deliberate — Task 4 resolves it.
 
-- [ ] **Step 4: Commit (intermediate)**
+- [x] **Step 4: Commit (intermediate)**
 
 ```bash
 git add lib/domain/repositories/auth_repository.dart \
@@ -223,7 +225,7 @@ git commit -m "feat(sp3): deleteAccount() on AuthRepository interface + fake"
 **Files:**
 - Modify: `lib/data/repositories/supabase_auth_repository.dart`
 
-- [ ] **Step 1: Add constructor deps for cleanup**
+- [x] **Step 1: Add constructor deps for cleanup**
 
 The spec requires draining the local sync queue and clearing secure storage on successful delete. `SyncManager` and `FlutterSecureStorage` aren't currently on this class — inject them.
 
@@ -267,7 +269,7 @@ class SupabaseAuthRepository implements AuthRepository {
         _secureStorage = secureStorage ?? const FlutterSecureStorage();
 ```
 
-- [ ] **Step 2: Implement `deleteAccount`**
+- [x] **Step 2: Implement `deleteAccount`**
 
 Append to the class (before the closing brace):
 
@@ -309,7 +311,7 @@ Append to the class (before the closing brace):
   }
 ```
 
-- [ ] **Step 3: Thread `SyncManager` into `main.dart`**
+- [x] **Step 3: Thread `SyncManager` into `main.dart`**
 
 Edit `lib/main.dart`. Find:
 
@@ -324,7 +326,7 @@ Replace with:
       SupabaseAuthRepository(supabaseClient, syncManager: syncManager);
 ```
 
-- [ ] **Step 4: Run `flutter analyze` and the full test suite**
+- [x] **Step 4: Run `flutter analyze` and the full test suite**
 
 Run: `flutter analyze`
 Expected: no errors.
@@ -332,7 +334,7 @@ Expected: no errors.
 Run: `flutter test`
 Expected: all pass. `FakeAuthRepository` already implements `deleteAccount` (Task 3), so `test/widget_test.dart` and the SP-2 tests continue to work.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/data/repositories/supabase_auth_repository.dart lib/main.dart
@@ -347,7 +349,7 @@ git commit -m "feat(sp3): SupabaseAuthRepository.deleteAccount"
 - Modify: `lib/presentation/viewmodels/auth_viewmodel.dart`
 - Create: `test/presentation/viewmodels/auth_viewmodel_delete_test.dart`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `test/presentation/viewmodels/auth_viewmodel_delete_test.dart`:
 
@@ -424,12 +426,12 @@ class _BannedAuthRepo extends FakeAuthRepository {
 }
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `flutter test test/presentation/viewmodels/auth_viewmodel_delete_test.dart`
 Expected: FAIL — `deleteAccount` method missing; banned-error mapping not present.
 
-- [ ] **Step 3: Implement `deleteAccount` and extend `_formatAuthError`**
+- [x] **Step 3: Implement `deleteAccount` and extend `_formatAuthError`**
 
 Edit `lib/presentation/viewmodels/auth_viewmodel.dart`.
 
@@ -486,12 +488,12 @@ Replace with:
       return 'Invalid email or password. Please try again.';
 ```
 
-- [ ] **Step 4: Run the tests and verify they pass**
+- [x] **Step 4: Run the tests and verify they pass**
 
 Run: `flutter test test/presentation/viewmodels/auth_viewmodel_delete_test.dart`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/presentation/viewmodels/auth_viewmodel.dart \
@@ -507,7 +509,7 @@ git commit -m "feat(sp3): AuthViewModel.deleteAccount + banned-error mapping"
 - Create: `test/presentation/screens/settings_screen_test.dart`
 - Create: `lib/presentation/screens/settings_screen.dart`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Create `test/presentation/screens/settings_screen_test.dart`:
 
@@ -615,12 +617,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run the tests and confirm they fail**
+- [x] **Step 2: Run the tests and confirm they fail**
 
 Run: `flutter test test/presentation/screens/settings_screen_test.dart`
 Expected: FAIL — `SettingsScreen` undefined.
 
-- [ ] **Step 3: Implement `SettingsScreen`**
+- [x] **Step 3: Implement `SettingsScreen`**
 
 Create `lib/presentation/screens/settings_screen.dart`:
 
@@ -795,12 +797,12 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
 }
 ```
 
-- [ ] **Step 4: Run the tests and verify they pass**
+- [x] **Step 4: Run the tests and verify they pass**
 
 Run: `flutter test test/presentation/screens/settings_screen_test.dart`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/presentation/screens/settings_screen.dart \
@@ -815,7 +817,7 @@ git commit -m "feat(sp3): SettingsScreen with sign-out and delete flow"
 **Files:**
 - Modify: `lib/presentation/screens/map_screen.dart`
 
-- [ ] **Step 1: Import `SettingsScreen`**
+- [x] **Step 1: Import `SettingsScreen`**
 
 Edit `lib/presentation/screens/map_screen.dart`. Add:
 
@@ -823,7 +825,7 @@ Edit `lib/presentation/screens/map_screen.dart`. Add:
 import 'package:ccwmap/presentation/screens/settings_screen.dart';
 ```
 
-- [ ] **Step 2: Replace the single-icon Positioned block with a row of two icons (guest) or three (authenticated)**
+- [x] **Step 2: Replace the single-icon Positioned block with a row of two icons (guest) or three (authenticated)**
 
 Find the auth-aware top-right icon block added in SP-1 Task 4 (the `Positioned(... right: 16 ...) → Consumer<AuthViewModel>` block). Replace the whole `Positioned` with:
 
@@ -873,7 +875,7 @@ Find the auth-aware top-right icon block added in SP-1 Task 4 (the `Positioned(.
               ),
 ```
 
-- [ ] **Step 3: Add a small helper to keep the buttons consistent**
+- [x] **Step 3: Add a small helper to keep the buttons consistent**
 
 Add this method on `_MapScreenState` (place it alongside the other helpers, e.g. just above `_onExitTapped`):
 
@@ -907,7 +909,7 @@ Add this method on `_MapScreenState` (place it alongside the other helpers, e.g.
   }
 ```
 
-- [ ] **Step 4: Update `test/widget_test.dart` to reflect the new cluster**
+- [x] **Step 4: Update `test/widget_test.dart` to reflect the new cluster**
 
 Edit `test/widget_test.dart`. Update the authenticated-launch test. Find:
 
@@ -946,7 +948,7 @@ Replace with:
       expect(find.byIcon(Icons.settings), findsNothing);
 ```
 
-- [ ] **Step 5: Run analyze + full test suite**
+- [x] **Step 5: Run analyze + full test suite**
 
 Run: `flutter analyze`
 Expected: no errors.
@@ -954,7 +956,7 @@ Expected: no errors.
 Run: `flutter test`
 Expected: all pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/presentation/screens/map_screen.dart test/widget_test.dart
@@ -968,7 +970,7 @@ git commit -m "feat(sp3): add gear icon for Settings on MapScreen"
 **Files:**
 - Modify: `docs/DEPLOY.md`
 
-- [ ] **Step 1: Ensure delete-account is documented**
+- [x] **Step 1: Ensure delete-account is documented**
 
 SP-2 Task 22 already wrote `docs/DEPLOY.md` with a reference to `delete-account` in the "Deploy a function" section. Verify that line exists:
 
@@ -990,7 +992,7 @@ With:
 supabase functions deploy delete-account
 ```
 
-- [ ] **Step 2: Commit (only if the file changed)**
+- [x] **Step 2: Commit (only if the file changed)**
 
 ```bash
 git add docs/DEPLOY.md
@@ -1006,7 +1008,7 @@ Skip the commit if the comment wasn't present.
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Mark account deletion implemented**
+- [x] **Step 1: Mark account deletion implemented**
 
 In the "What's Implemented" block (updated in SP-2), append:
 
@@ -1015,7 +1017,7 @@ In the "What's Implemented" block (updated in SP-2), append:
 - ✅ Banned-user sign-in error surfaces suspension copy with appeals email
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add CLAUDE.md
@@ -1060,12 +1062,12 @@ In Studio, manually ban a different demo account (Authentication → Users → B
 
 ## Self-Review Checklist
 
-- [ ] `delete-account` Edge Function exists, deployed, smoke-tested via curl (Tasks 1–2).
-- [ ] `AuthRepository.deleteAccount()` added to interface and Supabase impl; `FakeAuthRepository` mirrors it (Tasks 3–4).
-- [ ] `AuthViewModel.deleteAccount()` tested (success, failure, loading); `_formatAuthError` maps the banned-user AuthException (Task 5).
-- [ ] `SettingsScreen` renders, requires typing DELETE, calls `deleteAccount`, and routes post-delete back to `MapScreen` (Task 6).
-- [ ] Gear icon on `MapScreen` appears for authenticated users only; widget_test.dart updated (Task 7).
-- [ ] Docs updated (`DEPLOY.md`, `CLAUDE.md`) (Tasks 8–9).
+- [ ] `delete-account` Edge Function exists, deployed, smoke-tested via curl (Tasks 1–2). _(Deployed via Supabase MCP; curl smoke-test pending.)_
+- [x] `AuthRepository.deleteAccount()` added to interface and Supabase impl; `FakeAuthRepository` mirrors it (Tasks 3–4).
+- [x] `AuthViewModel.deleteAccount()` tested (success, failure, loading); `_formatAuthError` maps the banned-user AuthException (Task 5).
+- [x] `SettingsScreen` renders, requires typing DELETE, calls `deleteAccount`, and routes post-delete back to `MapScreen` (Task 6).
+- [x] Gear icon on `MapScreen` appears for authenticated users only; widget_test.dart updated (Task 7).
+- [x] Docs updated (`DEPLOY.md`, `CLAUDE.md`) (Tasks 8–9).
 - [ ] Manual on-device test recorded `account-deletion.mov` and verified server-side cascade behavior (Task 10).
 
 ## Verification
