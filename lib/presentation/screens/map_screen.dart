@@ -11,10 +11,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:ccwmap/core/build_flags.dart';
 import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
+import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
+import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/report_pin_dialog.dart';
 import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
@@ -902,6 +905,21 @@ class _MapScreenState extends State<MapScreen> {
     // Set flag to prevent multiple dialogs
     _isDialogOpen = true;
 
+    // Resolve the creator id up front — needed for Report/Block visibility.
+    final auth = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUserId = auth.currentUser?.id;
+    String? pinCreatorId;
+    if (isEditMode && pinId != null) {
+      final existing = await _viewModel?.getPinById(pinId);
+      pinCreatorId = existing?.metadata.createdBy;
+    }
+    if (!mounted) return;
+    final canModerate = isEditMode &&
+        currentUserId != null &&
+        pinCreatorId != null &&
+        pinCreatorId != 'anonymous' &&
+        pinCreatorId != currentUserId;
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -912,6 +930,12 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: initialRestrictionTag,
         initialHasSecurityScreening: initialHasSecurityScreening,
         initialHasPostedSignage: initialHasPostedSignage,
+        onReport: canModerate && pinId != null
+            ? () => _handleReportPin(dialogContext, pinId)
+            : null,
+        onBlock: canModerate && pinCreatorId != null
+            ? () => _handleBlockUser(dialogContext, pinCreatorId!, pinId!)
+            : null,
         onConfirm: (result) async {
           debugPrint('Pin dialog confirmed:');
           debugPrint('  Status: ${result.status.displayName}');
@@ -1091,6 +1115,108 @@ class _MapScreenState extends State<MapScreen> {
     _isDialogOpen = false;
     _lastDialogCloseTime = DateTime.now();
     debugPrint('Dialog closed, cooldown period started');
+  }
+
+  Future<void> _handleReportPin(BuildContext dialogContext, String pinId) async {
+    final moderation = Provider.of<ModerationRepository>(context, listen: false);
+
+    final navigator = Navigator.of(dialogContext, rootNavigator: true);
+    // Close the PinDialog first so the report sub-dialog is the topmost modal.
+    navigator.pop();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => ReportPinDialog(
+        onSubmit: (reason, note) async {
+          try {
+            await moderation.submitPinReport(
+              pinId: pinId,
+              reason: reason,
+              note: note,
+            );
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Report submitted. Thanks for helping keep the map accurate.',
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Report failed: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleBlockUser(
+    BuildContext dialogContext,
+    String userId,
+    String pinId,
+  ) async {
+    final blocklist = Provider.of<BlocklistService>(context, listen: false);
+    final rootNavigator = Navigator.of(dialogContext, rootNavigator: true);
+
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this user?'),
+        content: const Text(
+          "You won't see any of their pins anymore.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text(
+              'Block',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    rootNavigator.pop();
+
+    try {
+      await blocklist.block(userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User blocked.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Block failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   /// Shows a read-only [PinDialog] for guests tapping an existing pin.
