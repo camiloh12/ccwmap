@@ -34,6 +34,8 @@ class PinDialog extends StatefulWidget {
 
   final bool isReadOnly;
   final VoidCallback? onSignInToEdit;
+  final VoidCallback? onReport;
+  final VoidCallback? onBlock;
 
   const PinDialog({
     super.key,
@@ -48,6 +50,8 @@ class PinDialog extends StatefulWidget {
     required this.onCancel,
     this.isReadOnly = false,
     this.onSignInToEdit,
+    this.onReport,
+    this.onBlock,
   }) : assert(
          !isReadOnly || onSignInToEdit != null,
          'onSignInToEdit is required when isReadOnly is true',
@@ -220,6 +224,27 @@ class _PinDialogState extends State<PinDialog> {
                 (value) => setState(() => _hasPostedSignage = value ?? false),
               ),
               const SizedBox(height: 24),
+
+              // Report / Block (edit mode + writable + callbacks provided).
+              // Filtered upstream in MapScreen so these are only wired for
+              // other users' pins (not own pins, not anonymous pins).
+              if (!widget.isReadOnly &&
+                  widget.isEditMode &&
+                  (widget.onReport != null || widget.onBlock != null)) ...[
+                if (widget.onReport != null)
+                  TextButton.icon(
+                    onPressed: widget.onReport,
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Text('Report pin'),
+                  ),
+                if (widget.onBlock != null)
+                  TextButton.icon(
+                    onPressed: widget.onBlock,
+                    icon: const Icon(Icons.block),
+                    label: const Text('Block creator of this pin'),
+                  ),
+                const SizedBox(height: 8),
+              ],
 
               // Delete Button (edit mode + writable only)
               if (!widget.isReadOnly &&
