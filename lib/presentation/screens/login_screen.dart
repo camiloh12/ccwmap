@@ -56,7 +56,14 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
-    // AuthGate will automatically navigate to MapScreen if successful
+    // LoginScreen is pushed on top of MapScreen from SignInPromptSheet.
+    // On success, pop back so the map becomes visible again in its now-
+    // authenticated state. On failure, [authViewModel.error] is set and
+    // the Consumer in build() surfaces it — we stay here so the user
+    // can retry.
+    if (mounted && authViewModel.error == null && authViewModel.isAuthenticated) {
+      Navigator.of(context).pop();
+    }
   }
 
   Future<void> _handleSignUp() async {

@@ -1423,7 +1423,8 @@ class _MapScreenState extends State<MapScreen> {
     if (shouldSignOut == true && mounted) {
       final authViewModel = context.read<AuthViewModel>();
       await authViewModel.signOut();
-      // AuthGate will automatically navigate to LoginScreen
+      // Map stays visible; MapScreen's top-right icon re-evaluates from
+      // AuthViewModel and flips back to the sign-in affordance.
     }
   }
 
