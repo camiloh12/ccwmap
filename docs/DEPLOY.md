@@ -11,10 +11,14 @@ Manual deploy process. Auto-deploy via GitHub Actions is a future enhancement.
 ## First-time setup (secrets)
 
 ```bash
-supabase secrets set RESEND_API_KEY=<api-key>
+supabase secrets set BREVO_API_KEY=<api-key>
 supabase secrets set MOD_FROM=moderation@kyberneticlabs.com
+supabase secrets set MOD_FROM_NAME="CCW Map Moderation"
 supabase secrets set MOD_TO=camilo@kyberneticlabs.com
 ```
+
+The sender address (`MOD_FROM`) must be on a domain verified in Brevo.
+`@kyberneticlabs.com` is already verified.
 
 ## Deploy a function
 

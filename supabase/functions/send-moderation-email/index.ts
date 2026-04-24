@@ -9,13 +9,14 @@
 //
 // The function formats a plain-text email with everything the moderator
 // needs to act (reporter/blocker id, pin id, coordinates, reason, note,
-// timestamp, a deep link into Supabase Studio) and ships it via Resend.
+// timestamp, a deep link into Supabase Studio) and ships it via Brevo.
 
 import "jsr:@std/dotenv/load";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
+const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const MOD_FROM = Deno.env.get("MOD_FROM") ?? "moderation@kyberneticlabs.com";
+const MOD_FROM_NAME = Deno.env.get("MOD_FROM_NAME") ?? "CCW Map Moderation";
 const MOD_TO = Deno.env.get("MOD_TO") ?? "camilo@kyberneticlabs.com";
 
 interface WebhookPayload {
@@ -32,22 +33,23 @@ function studioLink(table: string, rowId: string): string {
 }
 
 async function sendEmail(subject: string, body: string): Promise<void> {
-  const res = await fetch("https://api.resend.com/emails", {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "accept": "application/json",
+      "content-type": "application/json",
+      "api-key": BREVO_API_KEY,
     },
     body: JSON.stringify({
-      from: MOD_FROM,
-      to: [MOD_TO],
+      sender: { name: MOD_FROM_NAME, email: MOD_FROM },
+      to: [{ email: MOD_TO }],
       subject,
-      text: body,
+      textContent: body,
     }),
   });
   if (!res.ok) {
     const txt = await res.text();
-    throw new Error(`Resend error ${res.status}: ${txt}`);
+    throw new Error(`Brevo error ${res.status}: ${txt}`);
   }
 }
 
