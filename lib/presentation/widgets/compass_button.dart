@@ -58,6 +58,9 @@ class _CompassButtonState extends State<CompassButton> {
   @override
   Widget build(BuildContext context) {
     return FloatingActionButton(
+      // Stacked with another FAB on MapScreen; opt out of Hero to avoid
+      // "multiple heroes share the same tag" on route push/pop.
+      heroTag: null,
       onPressed: widget.onReset,
       backgroundColor: const Color(0xFFE8DEF8),
       elevation: 4,

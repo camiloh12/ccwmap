@@ -1744,6 +1744,10 @@ class _MapScreenState extends State<MapScreen> {
                 bottom: 96, // Moved up to avoid MapLibre's location button
                 right: 16,
                 child: FloatingActionButton(
+                  // Stacked with CompassButton (also a FAB); opt out of Hero
+                  // to avoid "multiple heroes share the same tag" on route
+                  // push/pop.
+                  heroTag: null,
                   onPressed: _onRecenterTapped,
                   backgroundColor: const Color(
                     0xFFE8DEF8,
