@@ -80,9 +80,10 @@ MAPTILER_API_KEY=test_key
     // Map title always renders (visible to everyone).
     expect(find.text('CCW Map'), findsOneWidget);
 
-    // Guest sees the sign-in icon, NOT the exit-to-app icon.
+    // Guest sees the sign-in icon only — no sign-out, no settings.
     expect(find.byIcon(Icons.login), findsOneWidget);
     expect(find.byIcon(Icons.exit_to_app), findsNothing);
+    expect(find.byIcon(Icons.settings), findsNothing);
 
     // Re-center FAB still present.
     expect(find.byIcon(Icons.my_location), findsOneWidget);
@@ -134,7 +135,9 @@ MAPTILER_API_KEY=test_key
 
       expect(find.text('CCW Map'), findsOneWidget);
 
-      // Authenticated user sees the exit (sign-out) icon, NOT sign-in.
+      // Authenticated user sees the settings gear and the exit (sign-out)
+      // icons; not the sign-in icon.
+      expect(find.byIcon(Icons.settings), findsOneWidget);
       expect(find.byIcon(Icons.exit_to_app), findsOneWidget);
       expect(find.byIcon(Icons.login), findsNothing);
 

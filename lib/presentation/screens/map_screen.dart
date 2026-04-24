@@ -21,6 +21,7 @@ import 'package:ccwmap/presentation/widgets/report_pin_dialog.dart';
 import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
+import 'package:ccwmap/presentation/screens/settings_screen.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
@@ -1602,6 +1603,34 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  Widget _buildTopBarButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(8),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Tooltip(
+          message: tooltip,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            child: Icon(
+              icon,
+              color: Colors.black87,
+              size: 24,
+              semanticLabel: tooltip,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _onExitTapped() async {
     debugPrint('Exit button tapped');
 
@@ -1823,44 +1852,46 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-              // Top-right icon: auth-aware.
-              // Guests see a sign-in icon that opens the prompt sheet.
-              // Authenticated users see the existing exit (sign-out) icon.
+              // Top-right icon cluster. Guests see only the sign-in icon.
+              // Authenticated users see a gear icon (Settings) to the left of
+              // the exit-door (sign-out) icon.
               Positioned(
                 top: MediaQuery.of(context).padding.top + 8,
                 right: 16,
                 child: Consumer<AuthViewModel>(
                   builder: (context, auth, _) {
                     final isAuthed = auth.isAuthenticated;
-                    return Material(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
-                      elevation: 2,
-                      child: InkWell(
-                        onTap: isAuthed
-                            ? _onExitTapped
-                            : () => _promptSignIn(
-                                title: 'Sign in',
-                                body:
-                                    'Sign in to add pins and contribute to the community map.',
-                              ),
-                        borderRadius: BorderRadius.circular(8),
-                        child: Tooltip(
-                          message: isAuthed ? 'Sign out' : 'Sign in',
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            child: Icon(
-                              isAuthed ? Icons.exit_to_app : Icons.login,
-                              color: Colors.black87,
-                              size: 24,
-                              semanticLabel: isAuthed
-                                  ? 'Sign out button'
-                                  : 'Sign in button',
-                            ),
+                    final buttons = <Widget>[];
+
+                    if (isAuthed) {
+                      buttons.add(_buildTopBarButton(
+                        icon: Icons.settings,
+                        tooltip: 'Settings',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const SettingsScreen(),
                           ),
                         ),
-                      ),
-                    );
+                      ));
+                      buttons.add(const SizedBox(width: 8));
+                      buttons.add(_buildTopBarButton(
+                        icon: Icons.exit_to_app,
+                        tooltip: 'Sign out',
+                        onTap: _onExitTapped,
+                      ));
+                    } else {
+                      buttons.add(_buildTopBarButton(
+                        icon: Icons.login,
+                        tooltip: 'Sign in',
+                        onTap: () => _promptSignIn(
+                          title: 'Sign in',
+                          body:
+                              'Sign in to add pins and contribute to the community map.',
+                        ),
+                      ));
+                    }
+
+                    return Row(mainAxisSize: MainAxisSize.min, children: buttons);
                   },
                 ),
               ),
