@@ -20,10 +20,8 @@ import 'fakes/fake_auth_repository.dart';
 import 'fakes/fake_network_monitor.dart';
 
 void main() {
-  // Initialize dotenv before running tests
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    // Load test environment variables or use empty config
     dotenv.loadFromString(
       envString: '''
 MAPTILER_API_KEY=test_key
@@ -31,14 +29,11 @@ MAPTILER_API_KEY=test_key
     );
   });
 
-  testWidgets('App launches and shows CCW Map title when authenticated', (
-    WidgetTester tester,
-  ) async {
-    // Create in-memory database for testing
+  testWidgets('App launches as guest: map visible and sign-in icon present',
+      (WidgetTester tester) async {
     final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
     final fakeNetworkMonitor = FakeNetworkMonitor();
 
-    // Create repositories
     final pinRepository = PinRepositoryImpl(
       testDatabase.pinDao,
       testDatabase.syncQueueDao,
@@ -46,86 +41,67 @@ MAPTILER_API_KEY=test_key
     );
     final authRepository = FakeAuthRepository();
 
-    // Create ViewModels
     final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
     final authViewModel = AuthViewModel(authRepository);
 
-    // Simulate authenticated user
-    authRepository.setCurrentUser(
-      User(id: 'test-user-id', email: 'test@example.com'),
-    );
+    // No setCurrentUser — user is unauthenticated.
 
-    // Build our app and trigger a frame.
     await tester.pumpWidget(
       CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
     );
-
-    // Wait for AuthGate to initialize
     await tester.pumpAndSettle();
 
-    // Verify that the CCW Map title is displayed (shows MapScreen)
+    // Map title always renders (visible to everyone).
     expect(find.text('CCW Map'), findsOneWidget);
 
-    // Verify that the exit/sign out icon is present
-    expect(find.byIcon(Icons.exit_to_app), findsOneWidget);
+    // Guest sees the sign-in icon, NOT the exit-to-app icon.
+    expect(find.byIcon(Icons.login), findsOneWidget);
+    expect(find.byIcon(Icons.exit_to_app), findsNothing);
 
-    // Verify that the re-center FAB is present
+    // Re-center FAB still present.
     expect(find.byIcon(Icons.my_location), findsOneWidget);
 
-    // Clean up
     authRepository.dispose();
     fakeNetworkMonitor.dispose();
     await testDatabase.close();
   });
 
-  testWidgets('App shows login screen when not authenticated', (
-    WidgetTester tester,
-  ) async {
-    // Create in-memory database for testing
-    final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
-    final fakeNetworkMonitor = FakeNetworkMonitor();
+  testWidgets(
+    'App launches authenticated: map visible and sign-out icon present',
+    (WidgetTester tester) async {
+      final testDatabase = AppDatabase.forTesting(NativeDatabase.memory());
+      final fakeNetworkMonitor = FakeNetworkMonitor();
 
-    // Create repositories
-    final pinRepository = PinRepositoryImpl(
-      testDatabase.pinDao,
-      testDatabase.syncQueueDao,
-      testDatabase.pinTombstoneDao,
-    );
-    final authRepository = FakeAuthRepository();
+      final pinRepository = PinRepositoryImpl(
+        testDatabase.pinDao,
+        testDatabase.syncQueueDao,
+        testDatabase.pinTombstoneDao,
+      );
+      final authRepository = FakeAuthRepository();
 
-    // Create ViewModels
-    final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
-    final authViewModel = AuthViewModel(authRepository);
+      final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
+      final authViewModel = AuthViewModel(authRepository);
 
-    // User is NOT authenticated (default state)
+      authRepository.setCurrentUser(
+        User(id: 'test-user-id', email: 'test@example.com'),
+      );
 
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(
-      CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
-    );
+      await tester.pumpWidget(
+        CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
+      );
+      await tester.pumpAndSettle();
 
-    // Wait for AuthGate to initialize
-    await tester.pumpAndSettle();
+      expect(find.text('CCW Map'), findsOneWidget);
 
-    // Verify that the Login screen is displayed
-    // Note: "Sign In" appears in both AppBar and button, so check for button specifically
-    expect(find.widgetWithText(ElevatedButton, 'Sign In'), findsOneWidget);
+      // Authenticated user sees the exit (sign-out) icon, NOT sign-in.
+      expect(find.byIcon(Icons.exit_to_app), findsOneWidget);
+      expect(find.byIcon(Icons.login), findsNothing);
 
-    // Verify that email and password fields are present
-    expect(find.byType(TextFormField), findsNWidgets(2));
+      expect(find.byIcon(Icons.my_location), findsOneWidget);
 
-    // Verify that Create Account button is present
-    expect(
-      find.widgetWithText(OutlinedButton, 'Create Account'),
-      findsOneWidget,
-    );
-
-    // Verify that app logo/title is present
-    expect(find.text('CCW Map'), findsOneWidget);
-
-    // Clean up
-    authRepository.dispose();
-    fakeNetworkMonitor.dispose();
-    await testDatabase.close();
-  });
+      authRepository.dispose();
+      fakeNetworkMonitor.dispose();
+      await testDatabase.close();
+    },
+  );
 }
