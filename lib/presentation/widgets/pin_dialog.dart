@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ccwmap/core/profanity_filter.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
 
@@ -80,15 +81,27 @@ class _PinDialogState extends State<PinDialog> {
   }
 
   bool get _isValid {
-    // Name must not be empty
-    if (_nameController.text.trim().isEmpty) {
-      return false;
-    }
-    // If NO_GUN status, must have a restriction tag
+    final trimmed = _nameController.text.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.length > 60) return false;
+    if (ProfanityFilter.contains(trimmed)) return false;
     if (_selectedStatus == PinStatus.NO_GUN) {
       return _selectedRestrictionTag != null;
     }
     return true;
+  }
+
+  /// Message shown below the text field when the current value is not
+  /// valid. Returns null when the value is valid (no message needed).
+  String? get _nameError {
+    final trimmed = _nameController.text.trim();
+    if (trimmed.length > 60) {
+      return 'Please keep names under 60 characters.';
+    }
+    if (trimmed.isNotEmpty && ProfanityFilter.contains(trimmed)) {
+      return 'Please choose a different name.';
+    }
+    return null;
   }
 
   void _handleConfirm() {
@@ -137,6 +150,7 @@ class _PinDialogState extends State<PinDialog> {
                 enabled: !widget.isReadOnly,
                 decoration: InputDecoration(
                   hintText: 'Enter a name for this location',
+                  errorText: _nameError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -146,7 +160,7 @@ class _PinDialogState extends State<PinDialog> {
                   ),
                 ),
                 style: const TextStyle(fontSize: 16),
-                maxLength: 100,
+                maxLength: 60,
                 onChanged: (_) => setState(() {}), // Update validation state
               ),
               const SizedBox(height: 16),
