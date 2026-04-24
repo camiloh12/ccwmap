@@ -71,6 +71,12 @@ dependencies:
   # HTTP client for API calls
   http: ^1.1.0
 
+  # EULA first-launch flag (device-local)
+  shared_preferences: ^2.2.0
+
+  # Open terms URL in external browser
+  url_launcher: ^6.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
