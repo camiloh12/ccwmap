@@ -56,16 +56,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
-    // LoginScreen is pushed on top of MapScreen from SignInPromptSheet.
-    // On success, pop back so the map becomes visible again in its now-
-    // authenticated state. On failure, [authViewModel.error] is set and
-    // the Consumer in build() surfaces it — we stay here so the user
-    // can retry.
-    if (mounted &&
-        authViewModel.error == null &&
-        authViewModel.isAuthenticated) {
-      Navigator.of(context).pop();
-    }
+    // Pop is handled reactively in build(): Supabase's onAuthStateChange
+    // stream delivers the new user on a later microtask, so the imperative
+    // isAuthenticated check right after `await signIn(...)` races and
+    // often misses on the first tap. The Consumer rebuild catches it.
   }
 
   Future<void> _handleSignUp() async {
@@ -94,6 +88,20 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Consumer<AuthViewModel>(
       builder: (context, authViewModel, child) {
+        // Auto-pop when auth flips to true. LoginScreen is always pushed on
+        // top of MapScreen (from SignInPromptSheet), so popping reveals the
+        // now-authenticated map. Using addPostFrameCallback keeps the pop
+        // out of the build phase; guards make it idempotent across rebuilds.
+        if (authViewModel.isAuthenticated &&
+            authViewModel.error == null &&
+            !authViewModel.isLoading) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+
         final isLoading = authViewModel.isLoading;
         final errorMessage = authViewModel.error;
 
