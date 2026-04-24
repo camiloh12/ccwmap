@@ -1,8 +1,24 @@
 [extend]
 useDefault = true
 
+# Allowlist 1: the SharedPreferences flag 'eula_acknowledged_v1' is a storage
+# key name, not a secret. It literally exists in lib/main.dart and is quoted
+# verbatim in planning/spec docs. Stopwords do a substring match against the
+# detected secret, which reliably covers every occurrence.
 [[allowlists]]
-description = "SharedPreferences flag key name 'eula_acknowledged_v1' — not a secret; it is a literal storage key used to mark that the user accepted the EULA."
-regexes = [
-  '''eula_acknowledged_v1''',
+description = "SharedPreferences flag key 'eula_acknowledged_v1' is not a secret"
+stopwords = [
+  "eula_acknowledged",
+]
+
+# Allowlist 2: internal planning/spec markdown under docs/superpowers/ contains
+# illustrative Dart code snippets that can trip entropy-based generic-secret
+# heuristics. These documents are not shipped and do not carry runtime secrets
+# (real credentials live only in .env which is gitignored). Scanning their
+# code blocks yields only false positives.
+[[allowlists]]
+description = "docs/superpowers/{plans,specs} contain planning snippets, not secrets"
+paths = [
+  '''docs/superpowers/plans/.*\.md''',
+  '''docs/superpowers/specs/.*\.md''',
 ]
