@@ -1631,35 +1631,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _onExitTapped() async {
-    debugPrint('Exit button tapped');
-
-    final shouldSignOut = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldSignOut == true && mounted) {
-      final authViewModel = context.read<AuthViewModel>();
-      await authViewModel.signOut();
-      // Map stays visible; MapScreen's top-right icon re-evaluates from
-      // AuthViewModel and flips back to the sign-in affordance.
-    }
-  }
-
   /// Show dialog when location permission is denied
   void _showPermissionDeniedDialog() {
     showDialog(
@@ -1852,19 +1823,15 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-              // Top-right icon cluster. Guests see only the sign-in icon.
-              // Authenticated users see a gear icon (Settings) to the left of
-              // the exit-door (sign-out) icon.
+              // Top-right icon. Guests see sign-in; authenticated users see
+              // a gear that opens SettingsScreen (Sign Out lives there).
               Positioned(
                 top: MediaQuery.of(context).padding.top + 8,
                 right: 16,
                 child: Consumer<AuthViewModel>(
                   builder: (context, auth, _) {
-                    final isAuthed = auth.isAuthenticated;
-                    final buttons = <Widget>[];
-
-                    if (isAuthed) {
-                      buttons.add(_buildTopBarButton(
+                    if (auth.isAuthenticated) {
+                      return _buildTopBarButton(
                         icon: Icons.settings,
                         tooltip: 'Settings',
                         onTap: () => Navigator.of(context).push(
@@ -1872,26 +1839,17 @@ class _MapScreenState extends State<MapScreen> {
                             builder: (_) => const SettingsScreen(),
                           ),
                         ),
-                      ));
-                      buttons.add(const SizedBox(width: 8));
-                      buttons.add(_buildTopBarButton(
-                        icon: Icons.exit_to_app,
-                        tooltip: 'Sign out',
-                        onTap: _onExitTapped,
-                      ));
-                    } else {
-                      buttons.add(_buildTopBarButton(
-                        icon: Icons.login,
-                        tooltip: 'Sign in',
-                        onTap: () => _promptSignIn(
-                          title: 'Sign in',
-                          body:
-                              'Sign in to add pins and contribute to the community map.',
-                        ),
-                      ));
+                      );
                     }
-
-                    return Row(mainAxisSize: MainAxisSize.min, children: buttons);
+                    return _buildTopBarButton(
+                      icon: Icons.login,
+                      tooltip: 'Sign in',
+                      onTap: () => _promptSignIn(
+                        title: 'Sign in',
+                        body:
+                            'Sign in to add pins and contribute to the community map.',
+                      ),
+                    );
                   },
                 ),
               ),

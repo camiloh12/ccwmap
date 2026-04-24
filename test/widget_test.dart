@@ -135,10 +135,10 @@ MAPTILER_API_KEY=test_key
 
       expect(find.text('CCW Map'), findsOneWidget);
 
-      // Authenticated user sees the settings gear and the exit (sign-out)
-      // icons; not the sign-in icon.
+      // Authenticated user sees the settings gear only; no sign-in or
+      // sign-out icons on the map (Sign Out lives on SettingsScreen).
       expect(find.byIcon(Icons.settings), findsOneWidget);
-      expect(find.byIcon(Icons.exit_to_app), findsOneWidget);
+      expect(find.byIcon(Icons.exit_to_app), findsNothing);
       expect(find.byIcon(Icons.login), findsNothing);
 
       expect(find.byIcon(Icons.my_location), findsOneWidget);
