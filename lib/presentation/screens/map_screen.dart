@@ -15,6 +15,7 @@ import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
 import 'package:ccwmap/domain/models/pin.dart';
@@ -191,6 +192,9 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // Capture auth state before any awaits to satisfy use_build_context_synchronously.
+    final auth = Provider.of<AuthViewModel>(context, listen: false);
+
     // Find the pin by ID. On web, maplibre-gl-js doesn't always surface the
     // GeoJSON feature id to onFeatureTapped (without an explicit promoteId),
     // so fall back to nearest-pin-by-pixel-distance if the id lookup misses.
@@ -237,6 +241,12 @@ class _MapScreenState extends State<MapScreen> {
     _setDebugDetection(
       'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}',
     );
+
+    if (!auth.isAuthenticated) {
+      _showReadOnlyPinDialog(pin);
+      return;
+    }
+
     _showPinDialog(
       isEditMode: true,
       poiName: pin.name,
@@ -631,8 +641,17 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
 
-        // Show create dialog with POI name
+        // Show create dialog with POI name (or prompt guests to sign in)
         if (mounted) {
+          final auth = Provider.of<AuthViewModel>(context, listen: false);
+          if (!auth.isAuthenticated) {
+            _promptSignIn(
+              title: 'Sign in to add pins',
+              body:
+                  'Create an account or sign in to contribute to the community map.',
+            );
+            return;
+          }
           _showPinDialog(
             isEditMode: false,
             poiName: poiName,
@@ -706,6 +725,12 @@ class _MapScreenState extends State<MapScreen> {
 
           debugPrint('Opening edit dialog for pin: $pinName (ID: $pinId)');
 
+          final auth = Provider.of<AuthViewModel>(context, listen: false);
+          if (!auth.isAuthenticated) {
+            // Re-fetch the Pin so we show read-only with full data.
+            _showReadOnlyPinDialog(clickedPin);
+            return;
+          }
           _showPinDialog(
             isEditMode: true,
             poiName: pinName,
@@ -774,6 +799,15 @@ class _MapScreenState extends State<MapScreen> {
       // User explicitly wants to create a custom pin (not using POI)
       if (mounted) {
         debugPrint('Opening create dialog for long-press with empty name');
+        final auth = Provider.of<AuthViewModel>(context, listen: false);
+        if (!auth.isAuthenticated) {
+          _promptSignIn(
+            title: 'Sign in to add pins',
+            body:
+                'Create an account or sign in to contribute to the community map.',
+          );
+          return;
+        }
         _showPinDialog(
           isEditMode: false,
           poiName: '', // Empty name - user will enter their own
@@ -1057,6 +1091,40 @@ class _MapScreenState extends State<MapScreen> {
     _isDialogOpen = false;
     _lastDialogCloseTime = DateTime.now();
     debugPrint('Dialog closed, cooldown period started');
+  }
+
+  /// Shows a read-only [PinDialog] for guests tapping an existing pin.
+  /// Tapping "Sign in to edit" closes the dialog and opens the prompt sheet.
+  Future<void> _showReadOnlyPinDialog(Pin pin) async {
+    _isDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PinDialog(
+        isEditMode: true,
+        isReadOnly: true,
+        poiName: pin.name,
+        initialStatus: pin.status,
+        initialRestrictionTag: pin.restrictionTag,
+        initialHasSecurityScreening: pin.hasSecurityScreening,
+        initialHasPostedSignage: pin.hasPostedSignage,
+        onConfirm: (_) {
+          // Unreachable in read-only mode; provided to satisfy required param.
+        },
+        onCancel: () =>
+            Navigator.of(dialogContext, rootNavigator: true).pop(),
+        onSignInToEdit: () {
+          Navigator.of(dialogContext, rootNavigator: true).pop();
+          _promptSignIn(
+            title: 'Sign in to edit',
+            body:
+                'Create an account or sign in to contribute to the community map.',
+          );
+        },
+      ),
+    );
+    _isDialogOpen = false;
+    _lastDialogCloseTime = DateTime.now();
   }
 
   /// Detect POI at or near click point
@@ -1399,6 +1467,17 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  /// Shows the sign-in bottom sheet. Called from guest taps that would
+  /// otherwise start a create/edit flow.
+  void _promptSignIn({required String title, required String body}) {
+    if (_isDialogOpen) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SignInPromptSheet(title: title, body: body),
+    );
+  }
+
   Future<void> _onExitTapped() async {
     debugPrint('Exit button tapped');
 
@@ -1620,30 +1699,44 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-              // Exit/sign out icon (top-right)
+              // Top-right icon: auth-aware.
+              // Guests see a sign-in icon that opens the prompt sheet.
+              // Authenticated users see the existing exit (sign-out) icon.
               Positioned(
                 top: MediaQuery.of(context).padding.top + 8,
                 right: 16,
-                child: Material(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  elevation: 2,
-                  child: InkWell(
-                    onTap: _onExitTapped,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Tooltip(
-                      message: 'Sign out',
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: const Icon(
-                          Icons.exit_to_app,
-                          color: Colors.black87,
-                          size: 24,
-                          semanticLabel: 'Sign out button',
+                child: Consumer<AuthViewModel>(
+                  builder: (context, auth, _) {
+                    final isAuthed = auth.isAuthenticated;
+                    return Material(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(8),
+                      elevation: 2,
+                      child: InkWell(
+                        onTap: isAuthed
+                            ? _onExitTapped
+                            : () => _promptSignIn(
+                                  title: 'Sign in',
+                                  body:
+                                      'Sign in to add pins and contribute to the community map.',
+                                ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Tooltip(
+                          message: isAuthed ? 'Sign out' : 'Sign in',
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            child: Icon(
+                              isAuthed ? Icons.exit_to_app : Icons.login,
+                              color: Colors.black87,
+                              size: 24,
+                              semanticLabel:
+                                  isAuthed ? 'Sign out button' : 'Sign in button',
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
 
