@@ -24,7 +24,7 @@ The sender address (`MOD_FROM`) must be on a domain verified in Brevo.
 
 ```bash
 supabase functions deploy send-moderation-email
-supabase functions deploy delete-account     # once SP-3 lands
+supabase functions deploy delete-account
 ```
 
 Confirm deployment in Studio → Edge Functions. The invocation URL is
