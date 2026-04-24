@@ -23,4 +23,14 @@ abstract class AuthRepository {
   /// Handles deep link callback from OAuth/email confirmation
   /// Extracts tokens from URI and establishes session
   Future<void> handleDeepLink(Uri uri);
+
+  /// Permanently deletes the currently-authenticated user's account.
+  ///
+  /// Calls the `delete-account` Supabase Edge Function, which verifies
+  /// the caller's JWT and invokes `auth.admin.deleteUser` for that user.
+  /// On success, local secure storage is cleared and the user is signed
+  /// out.
+  ///
+  /// Throws on network error or if the server rejects the deletion.
+  Future<void> deleteAccount();
 }
