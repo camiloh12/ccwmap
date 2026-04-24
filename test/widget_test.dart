@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:drift/native.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ccwmap/main.dart';
 import 'package:ccwmap/data/database/database.dart';
@@ -30,6 +31,12 @@ void main() {
 MAPTILER_API_KEY=test_key
 ''',
     );
+  });
+
+  setUp(() {
+    // Mark EULA as already acknowledged so the passive modal doesn't
+    // appear mid-test.
+    SharedPreferences.setMockInitialValues({'eula_acknowledged_v1': true});
   });
 
   testWidgets('App launches as guest: map visible and sign-in icon present', (
