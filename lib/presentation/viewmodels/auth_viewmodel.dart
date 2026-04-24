@@ -135,6 +135,31 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Permanently deletes the current user's account. Safe to await — on
+  /// success, auth state change listeners will fire with null and the
+  /// app returns to guest state; on failure, [error] is populated and
+  /// the method returns normally (does not rethrow).
+  Future<void> deleteAccount() async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      debugPrint('AuthViewModel: Deleting account');
+      await _repository.deleteAccount();
+      debugPrint('AuthViewModel: Account deletion successful');
+    } on supabase.AuthException catch (e) {
+      debugPrint('AuthViewModel: Delete failed: ${e.message}');
+      _error = _formatAuthError(e);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('AuthViewModel: Delete error: $e');
+      _error = 'Account deletion failed. Please try again.';
+      notifyListeners();
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   /// Clears the current error message
   void clearError() {
     _clearError();
@@ -161,6 +186,10 @@ class AuthViewModel extends ChangeNotifier {
   String _formatAuthError(supabase.AuthException e) {
     final message = e.message.toLowerCase();
 
+    if (message.contains('banned') || message.contains('suspended')) {
+      return 'This account has been suspended for violating the community '
+          'guidelines. For appeals, email camilo@kyberneticlabs.com.';
+    }
     if (message.contains('invalid login credentials')) {
       return 'Invalid email or password. Please try again.';
     } else if (message.contains('user already registered')) {

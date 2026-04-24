@@ -2,19 +2,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:app_links/app_links.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
-import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
+import 'package:ccwmap/data/repositories/supabase_agreements_repository.dart';
+import 'package:ccwmap/data/repositories/supabase_moderation_repository.dart';
+import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
 import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/domain/models/user.dart';
+import 'package:ccwmap/domain/repositories/agreements_repository.dart';
+import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ccwmap/presentation/widgets/eula_modal.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Global database instance
 late final AppDatabase database;
@@ -50,6 +58,9 @@ Future<void> main() async {
   // Create data sources
   final supabaseClient = Supabase.instance.client;
   final remoteDataSource = SupabaseRemoteDataSource(supabaseClient);
+  final moderationRepository = SupabaseModerationRepository(remoteDataSource);
+  final agreementsRepository = SupabaseAgreementsRepository(remoteDataSource);
+  final blocklistService = BlocklistService(moderationRepository);
 
   // Create sync manager
   final syncManager = SyncManager(
@@ -67,23 +78,44 @@ Future<void> main() async {
     database.pinTombstoneDao,
     syncManager: syncManager,
   );
-  final authRepository = SupabaseAuthRepository(supabaseClient);
+  final authRepository = SupabaseAuthRepository(
+    supabaseClient,
+    syncManager: syncManager,
+  );
 
   // Create ViewModels
-  final mapViewModel = MapViewModel(pinRepository, networkMonitor);
+  final mapViewModel = MapViewModel(
+    pinRepository,
+    networkMonitor,
+    blocklistService,
+  );
   final authViewModel = AuthViewModel(authRepository);
 
-  runApp(CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel));
+  runApp(
+    CCWMapApp(
+      mapViewModel: mapViewModel,
+      authViewModel: authViewModel,
+      blocklistService: blocklistService,
+      agreementsRepository: agreementsRepository,
+      moderationRepository: moderationRepository,
+    ),
+  );
 }
 
 class CCWMapApp extends StatelessWidget {
   final MapViewModel mapViewModel;
   final AuthViewModel authViewModel;
+  final BlocklistService blocklistService;
+  final AgreementsRepository agreementsRepository;
+  final ModerationRepository moderationRepository;
 
   const CCWMapApp({
     super.key,
     required this.mapViewModel,
     required this.authViewModel,
+    required this.blocklistService,
+    required this.agreementsRepository,
+    required this.moderationRepository,
   });
 
   @override
@@ -92,6 +124,9 @@ class CCWMapApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: mapViewModel),
         ChangeNotifierProvider.value(value: authViewModel),
+        ChangeNotifierProvider.value(value: blocklistService),
+        Provider<AgreementsRepository>.value(value: agreementsRepository),
+        Provider<ModerationRepository>.value(value: moderationRepository),
       ],
       child: MaterialApp(
         title: 'CCW Map',
@@ -104,61 +139,152 @@ class CCWMapApp extends StatelessWidget {
           ),
           appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         ),
-        home: const AuthGate(),
+        home: const _AppRoot(),
       ),
     );
   }
 }
 
-/// Gate that shows LoginScreen or MapScreen based on authentication state
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+/// Root widget. Owns auth-state initialization and deep-link listening but
+/// does NOT gate routing on auth — the map is visible to everyone. Auth-
+/// sensitive affordances (create/edit/delete pins, sign out) are decided
+/// inside [MapScreen] by reading [AuthViewModel] directly.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AppRootState extends State<_AppRoot> {
+  static const _eulaFlagKey = 'eula_acknowledged_v1';
+
   StreamSubscription<Uri>? _deepLinkSubscription;
+  bool _passiveEulaShown = false;
+  bool _retroactiveEulaChecked = false;
+  User? _lastAuthUser;
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize AuthViewModel after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authViewModel = context.read<AuthViewModel>();
-      authViewModel.initialize();
-      _initializeDeepLinkListener(authViewModel);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final auth = context.read<AuthViewModel>();
+      auth.initialize();
+      _initializeDeepLinkListener(auth);
+      await _maybeShowPassiveEula();
     });
   }
 
   Future<void> _initializeDeepLinkListener(AuthViewModel authViewModel) async {
     final appLinks = AppLinks();
 
-    // Handle initial deep link (cold start - app was closed)
     try {
       final initialLink = await appLinks.getInitialLink();
       if (initialLink != null) {
-        debugPrint('AuthGate: Processing initial deep link: $initialLink');
+        debugPrint('_AppRoot: Processing initial deep link: $initialLink');
         await authViewModel.handleDeepLink(initialLink);
       }
     } catch (e) {
-      debugPrint('AuthGate: Failed to process initial deep link: $e');
+      debugPrint('_AppRoot: Failed to process initial deep link: $e');
       authViewModel.setError('Failed to process authentication link.');
     }
 
-    // Listen to runtime deep links (app is already open)
     _deepLinkSubscription = appLinks.uriLinkStream.listen(
       (Uri uri) {
-        debugPrint('AuthGate: Processing runtime deep link: $uri');
+        debugPrint('_AppRoot: Processing runtime deep link: $uri');
         authViewModel.handleDeepLink(uri);
       },
       onError: (err) {
-        debugPrint('AuthGate: Deep link stream error: $err');
+        debugPrint('_AppRoot: Deep link stream error: $err');
         authViewModel.setError('Failed to process authentication link.');
       },
     );
+  }
+
+  Future<void> _maybeShowPassiveEula() async {
+    if (_passiveEulaShown) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_eulaFlagKey) == true) {
+      _passiveEulaShown = true;
+      return;
+    }
+    _passiveEulaShown = true;
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => EulaModal(
+        mode: EulaModalMode.passiveFirstLaunch,
+        onAccept: () async {
+          await prefs.setBool(_eulaFlagKey, true);
+          if (ctx.mounted) Navigator.of(ctx).pop();
+        },
+        onReadTerms: _openTermsUrl,
+      ),
+    );
+  }
+
+  Future<void> _maybeShowRetroactiveEula(User user) async {
+    if (_retroactiveEulaChecked) return;
+    _retroactiveEulaChecked = true;
+
+    final agreements = context.read<AgreementsRepository>();
+    final blocklist = context.read<BlocklistService>();
+    final auth = context.read<AuthViewModel>();
+
+    // Refresh blocklist now that a user is signed in.
+    try {
+      await blocklist.refresh();
+    } catch (_) {
+      /* non-fatal */
+    }
+
+    bool accepted;
+    try {
+      accepted = await agreements.hasAcceptedAgreement(
+        userId: user.id,
+        version: AgreementsRepository.currentAgreementVersion,
+      );
+    } catch (_) {
+      return; // don't block on transient errors
+    }
+    if (accepted) return;
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: EulaModal(
+          mode: EulaModalMode.retroactiveBlocking,
+          onAccept: () async {
+            try {
+              await agreements.recordAgreementAcceptance(
+                userId: user.id,
+                version: AgreementsRepository.currentAgreementVersion,
+              );
+            } catch (_) {
+              /* non-fatal */
+            }
+            if (ctx.mounted) Navigator.of(ctx).pop();
+          },
+          onReadTerms: _openTermsUrl,
+          onSignOut: () async {
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            await auth.signOut();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTermsUrl() async {
+    final uri = Uri.parse('https://camiloh12.github.io/ccwmap/terms');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -169,22 +295,24 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthViewModel>(
-      builder: (context, authViewModel, child) {
-        // Show loading while initializing
-        if (authViewModel.currentUser == null && authViewModel.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        // Show MapScreen if authenticated, LoginScreen otherwise
-        if (authViewModel.isAuthenticated) {
-          return const MapScreen();
-        } else {
-          return const LoginScreen();
-        }
-      },
-    );
+    // Trigger the retroactive check when an authenticated user becomes
+    // available (post-initialize or post-signin). Firing here instead of
+    // in initState lets us observe the auth-state change cleanly.
+    final auth = context.watch<AuthViewModel>();
+    final current = auth.currentUser;
+    if (current != null && current != _lastAuthUser) {
+      _lastAuthUser = current;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _retroactiveEulaChecked = false; // re-check on each new sign-in
+        _maybeShowRetroactiveEula(current);
+      });
+    }
+    if (current == null && _lastAuthUser != null) {
+      // User signed out — clear cached blocklist and reset retroactive flag.
+      context.read<BlocklistService>().clear();
+      _lastAuthUser = null;
+      _retroactiveEulaChecked = false;
+    }
+    return const MapScreen();
   }
 }

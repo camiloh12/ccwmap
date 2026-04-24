@@ -11,12 +11,17 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:ccwmap/core/build_flags.dart';
 import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
+import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
+import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/report_pin_dialog.dart';
+import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
+import 'package:ccwmap/presentation/screens/settings_screen.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
@@ -191,6 +196,9 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
+    // Capture auth state before any awaits to satisfy use_build_context_synchronously.
+    final auth = Provider.of<AuthViewModel>(context, listen: false);
+
     // Find the pin by ID. On web, maplibre-gl-js doesn't always surface the
     // GeoJSON feature id to onFeatureTapped (without an explicit promoteId),
     // so fall back to nearest-pin-by-pixel-distance if the id lookup misses.
@@ -237,6 +245,12 @@ class _MapScreenState extends State<MapScreen> {
     _setDebugDetection(
       'feature-tap: ${pin.name}${pixelDist != null ? " (${pixelDist.toStringAsFixed(0)}px)" : ""}',
     );
+
+    if (!auth.isAuthenticated) {
+      _showReadOnlyPinDialog(pin);
+      return;
+    }
+
     _showPinDialog(
       isEditMode: true,
       poiName: pin.name,
@@ -631,8 +645,17 @@ class _MapScreenState extends State<MapScreen> {
           return;
         }
 
-        // Show create dialog with POI name
+        // Show create dialog with POI name (or prompt guests to sign in)
         if (mounted) {
+          final auth = Provider.of<AuthViewModel>(context, listen: false);
+          if (!auth.isAuthenticated) {
+            _promptSignIn(
+              title: 'Sign in to add pins',
+              body:
+                  'Create an account or sign in to contribute to the community map.',
+            );
+            return;
+          }
           _showPinDialog(
             isEditMode: false,
             poiName: poiName,
@@ -706,6 +729,12 @@ class _MapScreenState extends State<MapScreen> {
 
           debugPrint('Opening edit dialog for pin: $pinName (ID: $pinId)');
 
+          final auth = Provider.of<AuthViewModel>(context, listen: false);
+          if (!auth.isAuthenticated) {
+            // Pass the already-fetched pin straight to the read-only dialog.
+            _showReadOnlyPinDialog(clickedPin);
+            return;
+          }
           _showPinDialog(
             isEditMode: true,
             poiName: pinName,
@@ -774,6 +803,15 @@ class _MapScreenState extends State<MapScreen> {
       // User explicitly wants to create a custom pin (not using POI)
       if (mounted) {
         debugPrint('Opening create dialog for long-press with empty name');
+        final auth = Provider.of<AuthViewModel>(context, listen: false);
+        if (!auth.isAuthenticated) {
+          _promptSignIn(
+            title: 'Sign in to add pins',
+            body:
+                'Create an account or sign in to contribute to the community map.',
+          );
+          return;
+        }
         _showPinDialog(
           isEditMode: false,
           poiName: '', // Empty name - user will enter their own
@@ -868,6 +906,22 @@ class _MapScreenState extends State<MapScreen> {
     // Set flag to prevent multiple dialogs
     _isDialogOpen = true;
 
+    // Resolve the creator id up front — needed for Report/Block visibility.
+    final auth = Provider.of<AuthViewModel>(context, listen: false);
+    final currentUserId = auth.currentUser?.id;
+    String? pinCreatorId;
+    if (isEditMode && pinId != null) {
+      final existing = await _viewModel?.getPinById(pinId);
+      pinCreatorId = existing?.metadata.createdBy;
+    }
+    if (!mounted) return;
+    final canModerate =
+        isEditMode &&
+        currentUserId != null &&
+        pinCreatorId != null &&
+        pinCreatorId != 'anonymous' &&
+        pinCreatorId != currentUserId;
+
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -878,6 +932,12 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: initialRestrictionTag,
         initialHasSecurityScreening: initialHasSecurityScreening,
         initialHasPostedSignage: initialHasPostedSignage,
+        onReport: canModerate && pinId != null
+            ? () => _handleReportPin(dialogContext, pinId)
+            : null,
+        onBlock: canModerate && pinCreatorId != null
+            ? () => _handleBlockUser(dialogContext, pinCreatorId!, pinId!)
+            : null,
         onConfirm: (result) async {
           debugPrint('Pin dialog confirmed:');
           debugPrint('  Status: ${result.status.displayName}');
@@ -1057,6 +1117,142 @@ class _MapScreenState extends State<MapScreen> {
     _isDialogOpen = false;
     _lastDialogCloseTime = DateTime.now();
     debugPrint('Dialog closed, cooldown period started');
+  }
+
+  Future<void> _handleReportPin(
+    BuildContext dialogContext,
+    String pinId,
+  ) async {
+    final moderation = Provider.of<ModerationRepository>(
+      context,
+      listen: false,
+    );
+
+    final navigator = Navigator.of(dialogContext, rootNavigator: true);
+    // Close the PinDialog first so the report sub-dialog is the topmost modal.
+    navigator.pop();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => ReportPinDialog(
+        onSubmit: (reason, note) async {
+          try {
+            await moderation.submitPinReport(
+              pinId: pinId,
+              reason: reason,
+              note: note,
+            );
+            if (ctx.mounted) Navigator.of(ctx).pop();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Report submitted. Thanks for helping keep the map accurate.',
+                  ),
+                  backgroundColor: Colors.green,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Report failed: $e'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _handleBlockUser(
+    BuildContext dialogContext,
+    String userId,
+    String pinId,
+  ) async {
+    final blocklist = Provider.of<BlocklistService>(context, listen: false);
+    final rootNavigator = Navigator.of(dialogContext, rootNavigator: true);
+
+    final confirmed = await showDialog<bool>(
+      context: dialogContext,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block this user?'),
+        content: const Text("You won't see any of their pins anymore."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Block', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    rootNavigator.pop();
+
+    try {
+      await blocklist.block(userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('User blocked.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Block failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Shows a read-only [PinDialog] for guests tapping an existing pin.
+  /// Tapping "Sign in to edit" closes the dialog and opens the prompt sheet.
+  Future<void> _showReadOnlyPinDialog(Pin pin) async {
+    _isDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PinDialog(
+        isEditMode: true,
+        isReadOnly: true,
+        poiName: pin.name,
+        initialStatus: pin.status,
+        initialRestrictionTag: pin.restrictionTag,
+        initialHasSecurityScreening: pin.hasSecurityScreening,
+        initialHasPostedSignage: pin.hasPostedSignage,
+        onConfirm: (_) {
+          // Unreachable in read-only mode; provided to satisfy required param.
+        },
+        onCancel: () => Navigator.of(dialogContext, rootNavigator: true).pop(),
+        onSignInToEdit: () {
+          Navigator.of(dialogContext, rootNavigator: true).pop();
+          _promptSignIn(
+            title: 'Sign in to edit',
+            body:
+                'Create an account or sign in to contribute to the community map.',
+          );
+        },
+      ),
+    );
+    _isDialogOpen = false;
+    _lastDialogCloseTime = DateTime.now();
   }
 
   /// Detect POI at or near click point
@@ -1399,32 +1595,42 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Future<void> _onExitTapped() async {
-    debugPrint('Exit button tapped');
-
-    final shouldSignOut = await showDialog<bool>(
+  /// Shows the sign-in bottom sheet. Called from guest taps that would
+  /// otherwise start a create/edit flow.
+  void _promptSignIn({required String title, required String body}) {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+      isScrollControlled: true,
+      builder: (_) => SignInPromptSheet(title: title, body: body),
+    );
+  }
+
+  Widget _buildTopBarButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.9),
+      borderRadius: BorderRadius.circular(8),
+      elevation: 2,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Tooltip(
+          message: tooltip,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            child: Icon(
+              icon,
+              color: Colors.black87,
+              size: 24,
+              semanticLabel: tooltip,
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign Out'),
-          ),
-        ],
+        ),
       ),
     );
-
-    if (shouldSignOut == true && mounted) {
-      final authViewModel = context.read<AuthViewModel>();
-      await authViewModel.signOut();
-      // AuthGate will automatically navigate to LoginScreen
-    }
   }
 
   /// Show dialog when location permission is denied
@@ -1619,30 +1825,34 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ),
 
-              // Exit/sign out icon (top-right)
+              // Top-right icon. Guests see sign-in; authenticated users see
+              // a gear that opens SettingsScreen (Sign Out lives there).
               Positioned(
                 top: MediaQuery.of(context).padding.top + 8,
                 right: 16,
-                child: Material(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  elevation: 2,
-                  child: InkWell(
-                    onTap: _onExitTapped,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Tooltip(
-                      message: 'Sign out',
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        child: const Icon(
-                          Icons.exit_to_app,
-                          color: Colors.black87,
-                          size: 24,
-                          semanticLabel: 'Sign out button',
+                child: Consumer<AuthViewModel>(
+                  builder: (context, auth, _) {
+                    if (auth.isAuthenticated) {
+                      return _buildTopBarButton(
+                        icon: Icons.settings,
+                        tooltip: 'Settings',
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const SettingsScreen(),
+                          ),
                         ),
+                      );
+                    }
+                    return _buildTopBarButton(
+                      icon: Icons.login,
+                      tooltip: 'Sign in',
+                      onTap: () => _promptSignIn(
+                        title: 'Sign in',
+                        body:
+                            'Sign in to add pins and contribute to the community map.',
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
 
@@ -1651,6 +1861,10 @@ class _MapScreenState extends State<MapScreen> {
                 bottom: 96, // Moved up to avoid MapLibre's location button
                 right: 16,
                 child: FloatingActionButton(
+                  // Stacked with CompassButton (also a FAB); opt out of Hero
+                  // to avoid "multiple heroes share the same tag" on route
+                  // push/pop.
+                  heroTag: null,
                   onPressed: _onRecenterTapped,
                   backgroundColor: const Color(
                     0xFFE8DEF8,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '../../data/services/blocklist_service.dart';
 import '../../data/services/network_monitor.dart';
 import '../../domain/models/pin.dart';
 import '../../domain/repositories/pin_repository.dart';
@@ -10,9 +11,11 @@ import '../../domain/validators/location_validator.dart';
 class MapViewModel extends ChangeNotifier {
   final PinRepository _repository;
   final NetworkMonitor _networkMonitor;
+  final BlocklistService _blocklist;
   StreamSubscription<List<Pin>>? _pinsSubscription;
   StreamSubscription<bool>? _networkSubscription;
 
+  List<Pin> _pinsAll = [];
   List<Pin> _pins = [];
   bool _isLoading = false;
   String? _error;
@@ -20,7 +23,11 @@ class MapViewModel extends ChangeNotifier {
   DateTime? _lastSyncTime;
   bool _wasOffline = false;
 
-  MapViewModel(this._repository, this._networkMonitor);
+  MapViewModel(this._repository, this._networkMonitor, this._blocklist) {
+    // Re-apply the filter whenever the blocklist changes so the map
+    // updates immediately when the user blocks/unblocks someone.
+    _blocklist.addListener(_applyBlocklistFilter);
+  }
 
   // Getters
   List<Pin> get pins => _pins;
@@ -37,8 +44,8 @@ class MapViewModel extends ChangeNotifier {
       // Start watching pins
       _pinsSubscription = _repository.watchPins().listen(
         (pins) {
-          _pins = pins;
-          notifyListeners();
+          _pinsAll = pins;
+          _applyBlocklistFilter();
         },
         onError: (error) {
           _setError(error.toString());
@@ -176,8 +183,16 @@ class MapViewModel extends ChangeNotifier {
     }
   }
 
+  void _applyBlocklistFilter() {
+    _pins = _pinsAll
+        .where((p) => !_blocklist.isBlocked(p.metadata.createdBy))
+        .toList(growable: false);
+    notifyListeners();
+  }
+
   @override
   void dispose() {
+    _blocklist.removeListener(_applyBlocklistFilter);
     _pinsSubscription?.cancel();
     _networkSubscription?.cancel();
     super.dispose();

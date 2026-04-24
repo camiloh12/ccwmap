@@ -70,6 +70,15 @@ jobs:
       - name: Build IPA (SHOW_DEBUG_UI=true for beta)
         run: flutter build ipa --release --dart-define=SHOW_DEBUG_UI=true --export-options-plist=ios/ExportOptions.plist
 
+      - name: Read release notes (en-US) for TestFlight
+        id: notes
+        run: |
+          {
+            echo 'content<<NOTES_EOF'
+            cat release_notes/whatsnew-en-US
+            echo NOTES_EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v3
         with:
@@ -77,6 +86,7 @@ jobs:
           issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          release-notes: ${{ steps.notes.outputs.content }}
 
   deploy-android-internal:
     name: Android → Play Internal
@@ -135,6 +145,7 @@ jobs:
           releaseFiles: build/app/outputs/bundle/release/app-release.aab
           track: internal
           status: completed
+          whatsNewDirectory: release_notes
 
   create-draft-release:
     name: Create/update draft GitHub Release

@@ -96,7 +96,7 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 **Target Platforms:** Android and iOS (production), Web (development/testing)
 **Backend:** Supabase (PostgreSQL + Auth + Realtime)
 
-### What's Implemented (Iterations 1-7)
+### What's Implemented (Iterations 1-7 + v0.4.0 SP-1, SP-2, SP-3)
 - ✅ Clean Architecture setup (Domain, Data, Presentation layers)
 - ✅ Local SQLite database with Drift ORM (native) + in-memory (web)
 - ✅ MapLibre integration with circle-based pin markers
@@ -107,7 +107,13 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ US boundary validation
 - ✅ Pin dialogs with color-coded status and restriction tags
 - ✅ Web pin click detection (dual-detection system)
-- ✅ 109/109 tests passing (100% success rate)
+- ✅ Anonymous map access — map visible to guests; auth required only for create/edit/delete
+- ✅ EULA acceptance (first-launch passive + signup checkbox + retroactive blocking)
+- ✅ User report + block flows with server-side tables and moderation-email webhook
+- ✅ Pin name constraints (60-char cap + minimal profanity filter)
+- ✅ Account deletion (Settings → Delete Account → type-DELETE confirmation → delete-account Edge Function)
+- ✅ Banned-user sign-in error surfaces suspension copy with appeals email
+- ✅ Tests passing (run `flutter test` for current tally)
 
 ## Architecture
 
@@ -180,6 +186,18 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 - Additional: `location` column (PostGIS GEOGRAPHY for spatial queries)
 - RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy)
 - Automatic `last_modified` trigger on updates
+- Additional tables for SP-2 (v0.4.0):
+  - `user_agreements` — versioned EULA acceptance
+  - `pin_reports` — user-filed reports on pins (service-role read only)
+  - `blocked_users` — per-user blocklist (blocker_id, blocked_id)
+  - `pins.name` has a `CHECK (char_length(name) <= 60)` constraint
+
+### Edge Functions (Supabase)
+
+- `send-moderation-email` — webhook target fired on `INSERT` into
+  `pin_reports` or `blocked_users`. Sends the moderator a formatted
+  plaintext email via Resend. See `docs/MODERATION.md` and
+  `docs/DEPLOY.md`.
 
 ## Authentication
 

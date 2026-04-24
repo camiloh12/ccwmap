@@ -51,6 +51,18 @@ class FakeAuthRepository implements AuthRepository {
     setCurrentUser(user);
   }
 
+  bool deleteShouldThrow = false;
+  int deleteCallCount = 0;
+
+  @override
+  Future<void> deleteAccount() async {
+    deleteCallCount++;
+    if (deleteShouldThrow) {
+      throw Exception('simulated delete failure');
+    }
+    setCurrentUser(null);
+  }
+
   /// Clean up resources
   void dispose() {
     _authStateController.close();

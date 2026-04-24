@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:ccwmap/domain/repositories/agreements_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 /// Login screen for user authentication
@@ -16,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
+  bool _eulaChecked = false;
 
   @override
   void dispose() {
@@ -56,13 +59,18 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
-    // AuthGate will automatically navigate to MapScreen if successful
+    // Pop is handled reactively in build(): Supabase's onAuthStateChange
+    // stream delivers the new user on a later microtask, so the imperative
+    // isAuthenticated check right after `await signIn(...)` races and
+    // often misses on the first tap. The Consumer rebuild catches it.
   }
 
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_eulaChecked) return;
 
     final authViewModel = context.read<AuthViewModel>();
+    final agreements = context.read<AgreementsRepository>();
     authViewModel.clearError();
 
     await authViewModel.signUp(
@@ -70,8 +78,25 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordController.text,
     );
 
-    // Show success message if signup succeeded
-    if (mounted && authViewModel.error == null) {
+    if (!mounted) return;
+
+    if (authViewModel.error == null) {
+      // Record acceptance before email confirmation completes. The row is
+      // keyed by user id so the new user — once confirmed and signed in —
+      // will not be re-prompted by the retroactive modal.
+      final user = authViewModel.currentUser;
+      if (user != null) {
+        try {
+          await agreements.recordAgreementAcceptance(
+            userId: user.id,
+            version: AgreementsRepository.currentAgreementVersion,
+          );
+        } catch (_) {
+          // Non-fatal: retroactive modal will catch the unrecorded user.
+        }
+      }
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Account created! Check your email to confirm.'),
@@ -81,10 +106,31 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _openTermsUrl() async {
+    final uri = Uri.parse('https://camiloh12.github.io/ccwmap/terms');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthViewModel>(
       builder: (context, authViewModel, child) {
+        // Auto-pop when auth flips to true. LoginScreen is always pushed on
+        // top of MapScreen (from SignInPromptSheet), so popping reveals the
+        // now-authenticated map. Using addPostFrameCallback keeps the pop
+        // out of the build phase; guards make it idempotent across rebuilds.
+        if (authViewModel.isAuthenticated &&
+            authViewModel.error == null &&
+            !authViewModel.isLoading) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          });
+        }
+
         final isLoading = authViewModel.isLoading;
         final errorMessage = authViewModel.error;
 
@@ -163,7 +209,47 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // EULA acceptance (required for signup). Disabled while
+                      // loading so users cannot re-check mid-request.
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Checkbox(
+                            value: _eulaChecked,
+                            onChanged: isLoading
+                                ? null
+                                : (v) =>
+                                      setState(() => _eulaChecked = v ?? false),
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Wrap(
+                                children: [
+                                  const Text(
+                                    'I agree to the Terms of Use and Community '
+                                    'Guidelines and understand that objectionable '
+                                    'content and abusive behavior are not '
+                                    'tolerated. ',
+                                  ),
+                                  TextButton(
+                                    onPressed: isLoading ? null : _openTermsUrl,
+                                    style: TextButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text('Read terms'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
                       // Error message
                       if (errorMessage != null) ...[
@@ -208,9 +294,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Sign Up button
+                      // Sign Up button (disabled until EULA checked)
                       OutlinedButton(
-                        onPressed: isLoading ? null : _handleSignUp,
+                        onPressed: (isLoading || !_eulaChecked)
+                            ? null
+                            : _handleSignUp,
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                         ),

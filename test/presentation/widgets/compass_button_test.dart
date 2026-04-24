@@ -103,5 +103,29 @@ void main() {
         closeTo(math.sin(expectedAngle), 1e-9),
       );
     });
+
+    testWidgets('FAB has null heroTag to avoid duplicate-Hero assertions', (
+      tester,
+    ) async {
+      // CompassButton is stacked with another FAB on MapScreen. Two FABs with
+      // the default heroTag in the same route throw "multiple heroes share the
+      // same tag" on every route push/pop (modal sheets, dialogs, etc.).
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CompassButton(
+              listenable: null,
+              bearingGetter: null,
+              onReset: () {},
+            ),
+          ),
+        ),
+      );
+
+      final fab = tester.widget<FloatingActionButton>(
+        find.byType(FloatingActionButton),
+      );
+      expect(fab.heroTag, isNull);
+    });
   });
 }

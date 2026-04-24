@@ -1,0 +1,10 @@
+# Per-finding ignore list for gitleaks.
+#
+# Each line is a fingerprint in the format:
+#   <commit-sha>:<file-path>:<rule-id>:<line-number>
+#
+# Ignored: SharedPreferences flag key 'eula_acknowledged_v1' appears verbatim
+# inside a Dart code snippet embedded in an internal planning markdown doc.
+# It is a storage key name, not a secret. The literal also exists in
+# lib/main.dart where the default generic-api-key allowlist suppresses it.
+96efd86c34c74a4139e5845eb1bd01ed4cc52cc6:docs/superpowers/plans/2026-04-24-sp2-ugc-precautions.md:generic-api-key:1709

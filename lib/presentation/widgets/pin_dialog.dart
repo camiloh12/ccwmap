@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ccwmap/core/profanity_filter.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
 
@@ -31,6 +32,11 @@ class PinDialog extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback onCancel;
 
+  final bool isReadOnly;
+  final VoidCallback? onSignInToEdit;
+  final VoidCallback? onReport;
+  final VoidCallback? onBlock;
+
   const PinDialog({
     super.key,
     required this.isEditMode,
@@ -42,7 +48,14 @@ class PinDialog extends StatefulWidget {
     required this.onConfirm,
     this.onDelete,
     required this.onCancel,
-  });
+    this.isReadOnly = false,
+    this.onSignInToEdit,
+    this.onReport,
+    this.onBlock,
+  }) : assert(
+         !isReadOnly || onSignInToEdit != null,
+         'onSignInToEdit is required when isReadOnly is true',
+       );
 
   @override
   State<PinDialog> createState() => _PinDialogState();
@@ -72,15 +85,27 @@ class _PinDialogState extends State<PinDialog> {
   }
 
   bool get _isValid {
-    // Name must not be empty
-    if (_nameController.text.trim().isEmpty) {
-      return false;
-    }
-    // If NO_GUN status, must have a restriction tag
+    final trimmed = _nameController.text.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed.length > 60) return false;
+    if (ProfanityFilter.contains(trimmed)) return false;
     if (_selectedStatus == PinStatus.NO_GUN) {
       return _selectedRestrictionTag != null;
     }
     return true;
+  }
+
+  /// Message shown below the text field when the current value is not
+  /// valid. Returns null when the value is valid (no message needed).
+  String? get _nameError {
+    final trimmed = _nameController.text.trim();
+    if (trimmed.length > 60) {
+      return 'Please keep names under 60 characters.';
+    }
+    if (trimmed.isNotEmpty && ProfanityFilter.contains(trimmed)) {
+      return 'Please choose a different name.';
+    }
+    return null;
   }
 
   void _handleConfirm() {
@@ -126,8 +151,10 @@ class _PinDialogState extends State<PinDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _nameController,
+                enabled: !widget.isReadOnly,
                 decoration: InputDecoration(
                   hintText: 'Enter a name for this location',
+                  errorText: _nameError,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -137,7 +164,7 @@ class _PinDialogState extends State<PinDialog> {
                   ),
                 ),
                 style: const TextStyle(fontSize: 16),
-                maxLength: 100,
+                maxLength: 60,
                 onChanged: (_) => setState(() {}), // Update validation state
               ),
               const SizedBox(height: 16),
@@ -198,8 +225,31 @@ class _PinDialogState extends State<PinDialog> {
               ),
               const SizedBox(height: 24),
 
-              // Delete Button (edit mode only)
-              if (widget.isEditMode && widget.onDelete != null) ...[
+              // Report / Block (edit mode + writable + callbacks provided).
+              // Filtered upstream in MapScreen so these are only wired for
+              // other users' pins (not own pins, not anonymous pins).
+              if (!widget.isReadOnly &&
+                  widget.isEditMode &&
+                  (widget.onReport != null || widget.onBlock != null)) ...[
+                if (widget.onReport != null)
+                  TextButton.icon(
+                    onPressed: widget.onReport,
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Text('Report pin'),
+                  ),
+                if (widget.onBlock != null)
+                  TextButton.icon(
+                    onPressed: widget.onBlock,
+                    icon: const Icon(Icons.block),
+                    label: const Text('Block creator of this pin'),
+                  ),
+                const SizedBox(height: 8),
+              ],
+
+              // Delete Button (edit mode + writable only)
+              if (!widget.isReadOnly &&
+                  widget.isEditMode &&
+                  widget.onDelete != null) ...[
                 OutlinedButton.icon(
                   onPressed: widget.onDelete,
                   style: OutlinedButton.styleFrom(
@@ -219,39 +269,71 @@ class _PinDialogState extends State<PinDialog> {
               ],
 
               // Action Buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: widget.onCancel,
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(color: Colors.grey[700]),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _isValid ? _handleConfirm : null,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 14,
+              if (widget.isReadOnly)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton(
+                      onPressed: widget.onSignInToEdit,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        backgroundColor: const Color(0xFF6200EE),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      backgroundColor: const Color(0xFF6200EE),
-                    ),
-                    child: Text(
-                      widget.isEditMode ? 'Save' : 'Create',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                      child: const Text(
+                        'Sign in to edit',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: widget.onCancel,
+                      child: Text(
+                        'Close',
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: widget.onCancel,
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _isValid ? _handleConfirm : null,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 14,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        backgroundColor: const Color(0xFF6200EE),
+                      ),
+                      child: Text(
+                        widget.isEditMode ? 'Save' : 'Create',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -263,13 +345,15 @@ class _PinDialogState extends State<PinDialog> {
     final isSelected = _selectedStatus == status;
 
     return InkWell(
-      onTap: () => setState(() {
-        _selectedStatus = status;
-        // Clear restriction tag if switching away from NO_GUN
-        if (status != PinStatus.NO_GUN) {
-          _selectedRestrictionTag = null;
-        }
-      }),
+      onTap: widget.isReadOnly
+          ? null
+          : () => setState(() {
+              _selectedStatus = status;
+              // Clear restriction tag if switching away from NO_GUN
+              if (status != PinStatus.NO_GUN) {
+                _selectedRestrictionTag = null;
+              }
+            }),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         height: 56,
@@ -324,7 +408,9 @@ class _PinDialogState extends State<PinDialog> {
               ),
             );
           }).toList(),
-          onChanged: (value) => setState(() => _selectedRestrictionTag = value),
+          onChanged: widget.isReadOnly
+              ? null
+              : (value) => setState(() => _selectedRestrictionTag = value),
         ),
       ),
     );
@@ -336,7 +422,7 @@ class _PinDialogState extends State<PinDialog> {
     ValueChanged<bool?> onChanged,
   ) {
     return InkWell(
-      onTap: () => onChanged(!value),
+      onTap: widget.isReadOnly ? null : () => onChanged(!value),
       child: Row(
         children: [
           SizedBox(
@@ -344,7 +430,7 @@ class _PinDialogState extends State<PinDialog> {
             height: 24,
             child: Checkbox(
               value: value,
-              onChanged: onChanged,
+              onChanged: widget.isReadOnly ? null : onChanged,
               activeColor: const Color(0xFF6200EE),
             ),
           ),
