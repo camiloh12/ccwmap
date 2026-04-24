@@ -113,4 +113,101 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
       rethrow;
     }
   }
+
+  // --- SP-2: Agreements ---
+
+  /// Returns true if [userId] has a row in user_agreements for [version].
+  Future<bool> hasAcceptedAgreement({
+    required String userId,
+    required int version,
+  }) async {
+    final row = await _supabase
+        .from('user_agreements')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('agreement_version', version)
+        .maybeSingle();
+    return row != null;
+  }
+
+  /// Records acceptance of [version] for [userId]. Relies on the
+  /// UNIQUE (user_id, agreement_version) constraint to make repeated
+  /// calls idempotent — a duplicate insert raises a unique-violation
+  /// which we swallow.
+  Future<void> recordAgreementAcceptance({
+    required String userId,
+    required int version,
+  }) async {
+    try {
+      await _supabase.from('user_agreements').insert({
+        'user_id': userId,
+        'agreement_version': version,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return; // unique_violation = already accepted
+      rethrow;
+    }
+  }
+
+  // --- SP-2: Moderation ---
+
+  /// Returns the set of user IDs the current user has blocked.
+  Future<Set<String>> fetchBlocklist() async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) return const <String>{};
+    final rows = await _supabase
+        .from('blocked_users')
+        .select('blocked_id')
+        .eq('blocker_id', uid);
+    return (rows as List)
+        .map<String>((r) => (r as Map<String, dynamic>)['blocked_id'] as String)
+        .toSet();
+  }
+
+  /// Inserts a block row. Idempotent — a duplicate insert (already blocked)
+  /// raises unique-violation which we swallow.
+  Future<void> blockUser(String blockedUserId) async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('blockUser requires authentication');
+    }
+    try {
+      await _supabase.from('blocked_users').insert({
+        'blocker_id': uid,
+        'blocked_id': blockedUserId,
+      });
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return;
+      rethrow;
+    }
+  }
+
+  /// Removes a block. Idempotent — deleting a non-existent row is a no-op.
+  Future<void> unblockUser(String blockedUserId) async {
+    final uid = _supabase.auth.currentUser?.id;
+    if (uid == null) {
+      throw StateError('unblockUser requires authentication');
+    }
+    await _supabase
+        .from('blocked_users')
+        .delete()
+        .eq('blocker_id', uid)
+        .eq('blocked_id', blockedUserId);
+  }
+
+  /// Files a report. [note] is trimmed; empty notes become null.
+  Future<void> submitPinReport({
+    required String pinId,
+    required String reason,
+    String? note,
+  }) async {
+    final uid = _supabase.auth.currentUser?.id;
+    final n = (note == null || note.trim().isEmpty) ? null : note.trim();
+    await _supabase.from('pin_reports').insert({
+      'pin_id': pinId,
+      'reporter_id': uid,
+      'reason': reason,
+      'note': n,
+    });
+  }
 }
