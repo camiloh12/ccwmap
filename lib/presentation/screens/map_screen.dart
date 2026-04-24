@@ -727,7 +727,7 @@ class _MapScreenState extends State<MapScreen> {
 
           final auth = Provider.of<AuthViewModel>(context, listen: false);
           if (!auth.isAuthenticated) {
-            // Re-fetch the Pin so we show read-only with full data.
+            // Pass the already-fetched pin straight to the read-only dialog.
             _showReadOnlyPinDialog(clickedPin);
             return;
           }
@@ -1470,7 +1470,6 @@ class _MapScreenState extends State<MapScreen> {
   /// Shows the sign-in bottom sheet. Called from guest taps that would
   /// otherwise start a create/edit flow.
   void _promptSignIn({required String title, required String body}) {
-    if (_isDialogOpen) return;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
