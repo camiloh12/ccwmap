@@ -78,7 +78,8 @@ Future<void> main() async {
     database.pinTombstoneDao,
     syncManager: syncManager,
   );
-  final authRepository = SupabaseAuthRepository(supabaseClient);
+  final authRepository =
+      SupabaseAuthRepository(supabaseClient, syncManager: syncManager);
 
   // Create ViewModels
   final mapViewModel = MapViewModel(pinRepository, networkMonitor, blocklistService);
