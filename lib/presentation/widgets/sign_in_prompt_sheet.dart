@@ -4,31 +4,20 @@ import 'package:ccwmap/presentation/screens/login_screen.dart';
 /// A bottom-sheet prompt shown to guests when they attempt an action that
 /// requires an account. Offers Sign In / Create Account (both route to the
 /// same [LoginScreen], which exposes both affordances) and Cancel.
-///
-/// [onSignIn] is an optional override for the navigation action. When null
-/// (the default), both Sign In and Create Account push [LoginScreen] on the
-/// root navigator. Supply a callback in tests or call sites that want to
-/// intercept the navigation.
 class SignInPromptSheet extends StatelessWidget {
   final String title;
   final String body;
-  final VoidCallback? onSignIn;
 
   const SignInPromptSheet({
     super.key,
     required this.title,
     required this.body,
-    this.onSignIn,
   });
 
   void _openLogin(BuildContext context) {
     // Close the sheet, then push LoginScreen on the root navigator so the
     // returning user pops back to the map.
     Navigator.of(context).pop();
-    if (onSignIn != null) {
-      onSignIn!();
-      return;
-    }
     Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
     );
@@ -38,17 +27,19 @@ class SignInPromptSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+        padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
               title,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 12),
-            Text(body, style: const TextStyle(fontSize: 15)),
+            Text(body, style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => _openLogin(context),

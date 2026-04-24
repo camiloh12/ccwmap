@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
+import '../../fakes/fake_auth_repository.dart';
 
 void main() {
   group('SignInPromptSheet', () {
@@ -77,49 +80,74 @@ void main() {
       expect(find.byType(SignInPromptSheet), findsNothing);
     });
 
-    testWidgets('Sign In and Create Account both push a new route',
-        (tester) async {
-      int pushedRoutes = 0;
-      // [onSignIn] intercepts the navigation action so the test does not need
-      // a full AuthViewModel provider tree. It captures the navigator context
-      // before the sheet is dismissed and pushes a named route to increment
-      // the observer count.
-      final navKey = GlobalKey<NavigatorState>();
+    testWidgets(
+      'tapping Sign In pushes a new route; tapping Create Account pushes another',
+      (tester) async {
+        int pushedRoutes = 0;
+        final fakeAuthRepo = FakeAuthRepository();
+        final authViewModel = AuthViewModel(fakeAuthRepo);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          navigatorKey: navKey,
-          onGenerateRoute: (_) => MaterialPageRoute<void>(
-            builder: (ctx) => Scaffold(
-              body: Center(
-                child: ElevatedButton(
-                  onPressed: () => showModalBottomSheet<void>(
-                    context: ctx,
-                    builder: (_) => SignInPromptSheet(
-                      title: 't',
-                      body: 'b',
-                      onSignIn: () => navKey.currentState!.pushNamed('/login'),
+        Widget buildSheet(BuildContext ctx) => const SignInPromptSheet(
+          title: 't',
+          body: 'b',
+        );
+
+        await tester.pumpWidget(
+          ChangeNotifierProvider<AuthViewModel>.value(
+            value: authViewModel,
+            child: MaterialApp(
+              navigatorObservers: [
+                _CountingObserver(onPush: () => pushedRoutes++),
+              ],
+              home: Builder(
+                builder: (context) => Scaffold(
+                  body: Center(
+                    child: ElevatedButton(
+                      onPressed: () => showModalBottomSheet<void>(
+                        context: context,
+                        builder: buildSheet,
+                      ),
+                      child: const Text('open'),
                     ),
                   ),
-                  child: const Text('open'),
                 ),
               ),
             ),
           ),
-          navigatorObservers: [
-            _CountingObserver(onPush: () => pushedRoutes++),
-          ],
-        ),
-      );
+        );
 
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
+        // After pumpWidget the home route has been pushed once.
+        // Tap 'open' — the modal sheet is pushed (pushedRoutes increments).
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In'));
-      await tester.pumpAndSettle();
-      // Pushed the LoginScreen route.
-      expect(pushedRoutes, greaterThanOrEqualTo(2)); // initial + push
-    });
+        // Capture count after sheet is showing (home + sheet = 2 so far).
+        final countAfterSheetOpen = pushedRoutes;
+
+        // Tap Sign In — sheet pops (no push), LoginScreen is pushed.
+        await tester.tap(find.widgetWithText(ElevatedButton, 'Sign In'));
+        await tester.pumpAndSettle();
+        expect(pushedRoutes, countAfterSheetOpen + 1); // LoginScreen pushed
+
+        // Go back to the home screen so we can re-open the sheet.
+        final NavigatorState nav = tester.state(find.byType(Navigator).first);
+        nav.pop();
+        await tester.pumpAndSettle();
+
+        // Re-open the sheet and tap Create Account.
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        // Sheet is open again — capture count (includes sheet push).
+        final countAfterSecondSheetOpen = pushedRoutes;
+
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Create Account'));
+        await tester.pumpAndSettle();
+        expect(pushedRoutes, countAfterSecondSheetOpen + 1); // second LoginScreen pushed
+
+        fakeAuthRepo.dispose();
+      },
+    );
   });
 }
 
