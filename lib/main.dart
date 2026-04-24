@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
-import 'package:ccwmap/presentation/screens/login_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
@@ -104,28 +103,29 @@ class CCWMapApp extends StatelessWidget {
           ),
           appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         ),
-        home: const AuthGate(),
+        home: const _AppRoot(),
       ),
     );
   }
 }
 
-/// Gate that shows LoginScreen or MapScreen based on authentication state
-class AuthGate extends StatefulWidget {
-  const AuthGate({super.key});
+/// Root widget. Owns auth-state initialization and deep-link listening but
+/// does NOT gate routing on auth — the map is visible to everyone. Auth-
+/// sensitive affordances (create/edit/delete pins, sign out) are decided
+/// inside [MapScreen] by reading [AuthViewModel] directly.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AppRootState extends State<_AppRoot> {
   StreamSubscription<Uri>? _deepLinkSubscription;
 
   @override
   void initState() {
     super.initState();
-
-    // Initialize AuthViewModel after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authViewModel = context.read<AuthViewModel>();
       authViewModel.initialize();
@@ -136,26 +136,24 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _initializeDeepLinkListener(AuthViewModel authViewModel) async {
     final appLinks = AppLinks();
 
-    // Handle initial deep link (cold start - app was closed)
     try {
       final initialLink = await appLinks.getInitialLink();
       if (initialLink != null) {
-        debugPrint('AuthGate: Processing initial deep link: $initialLink');
+        debugPrint('_AppRoot: Processing initial deep link: $initialLink');
         await authViewModel.handleDeepLink(initialLink);
       }
     } catch (e) {
-      debugPrint('AuthGate: Failed to process initial deep link: $e');
+      debugPrint('_AppRoot: Failed to process initial deep link: $e');
       authViewModel.setError('Failed to process authentication link.');
     }
 
-    // Listen to runtime deep links (app is already open)
     _deepLinkSubscription = appLinks.uriLinkStream.listen(
       (Uri uri) {
-        debugPrint('AuthGate: Processing runtime deep link: $uri');
+        debugPrint('_AppRoot: Processing runtime deep link: $uri');
         authViewModel.handleDeepLink(uri);
       },
       onError: (err) {
-        debugPrint('AuthGate: Deep link stream error: $err');
+        debugPrint('_AppRoot: Deep link stream error: $err');
         authViewModel.setError('Failed to process authentication link.');
       },
     );
@@ -168,23 +166,5 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthViewModel>(
-      builder: (context, authViewModel, child) {
-        // Show loading while initializing
-        if (authViewModel.currentUser == null && authViewModel.isLoading) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        // Show MapScreen if authenticated, LoginScreen otherwise
-        if (authViewModel.isAuthenticated) {
-          return const MapScreen();
-        } else {
-          return const LoginScreen();
-        }
-      },
-    );
-  }
+  Widget build(BuildContext context) => const MapScreen();
 }
