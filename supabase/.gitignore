@@ -1,0 +1,4 @@
+.env
+.env.local
+functions/*/.env
+functions/*/.env.local
