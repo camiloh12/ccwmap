@@ -96,7 +96,7 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 **Target Platforms:** Android and iOS (production), Web (development/testing)
 **Backend:** Supabase (PostgreSQL + Auth + Realtime)
 
-### What's Implemented (Iterations 1-7)
+### What's Implemented (Iterations 1-7 + v0.4.0 SP-1)
 - ✅ Clean Architecture setup (Domain, Data, Presentation layers)
 - ✅ Local SQLite database with Drift ORM (native) + in-memory (web)
 - ✅ MapLibre integration with circle-based pin markers
@@ -107,7 +107,8 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ US boundary validation
 - ✅ Pin dialogs with color-coded status and restriction tags
 - ✅ Web pin click detection (dual-detection system)
-- ✅ 109/109 tests passing (100% success rate)
+- ✅ Anonymous map access — map visible to guests; auth required only for create/edit/delete
+- ✅ Tests passing (count updated after SP-1 changes; run `flutter test` for current tally)
 
 ## Architecture
 
