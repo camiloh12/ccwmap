@@ -13,10 +13,13 @@ import 'package:drift/native.dart';
 import 'package:ccwmap/main.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
+import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/user.dart';
+import 'fakes/fake_agreements_repository.dart';
 import 'fakes/fake_auth_repository.dart';
+import 'fakes/fake_moderation_repository.dart';
 import 'fakes/fake_network_monitor.dart';
 
 void main() {
@@ -42,13 +45,28 @@ MAPTILER_API_KEY=test_key
     );
     final authRepository = FakeAuthRepository();
 
-    final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
+    final moderationRepo = FakeModerationRepository();
+    final agreementsRepo = FakeAgreementsRepository()
+      ..willReportAccepted = true;
+    final blocklist = BlocklistService(moderationRepo);
+
+    final mapViewModel = MapViewModel(
+      pinRepository,
+      fakeNetworkMonitor,
+      blocklist,
+    );
     final authViewModel = AuthViewModel(authRepository);
 
     // No setCurrentUser — user is unauthenticated.
 
     await tester.pumpWidget(
-      CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
+      CCWMapApp(
+        mapViewModel: mapViewModel,
+        authViewModel: authViewModel,
+        blocklistService: blocklist,
+        agreementsRepository: agreementsRepo,
+        moderationRepository: moderationRepo,
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -80,7 +98,16 @@ MAPTILER_API_KEY=test_key
       );
       final authRepository = FakeAuthRepository();
 
-      final mapViewModel = MapViewModel(pinRepository, fakeNetworkMonitor);
+      final moderationRepo = FakeModerationRepository();
+      final agreementsRepo = FakeAgreementsRepository()
+        ..willReportAccepted = true;
+      final blocklist = BlocklistService(moderationRepo);
+
+      final mapViewModel = MapViewModel(
+        pinRepository,
+        fakeNetworkMonitor,
+        blocklist,
+      );
       final authViewModel = AuthViewModel(authRepository);
 
       authRepository.setCurrentUser(
@@ -88,7 +115,13 @@ MAPTILER_API_KEY=test_key
       );
 
       await tester.pumpWidget(
-        CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel),
+        CCWMapApp(
+          mapViewModel: mapViewModel,
+          authViewModel: authViewModel,
+          blocklistService: blocklist,
+          agreementsRepository: agreementsRepo,
+          moderationRepository: moderationRepo,
+        ),
       );
       await tester.pumpAndSettle();
 

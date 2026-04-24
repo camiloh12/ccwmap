@@ -9,9 +9,14 @@ import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/repositories/supabase_auth_repository.dart';
+import 'package:ccwmap/data/repositories/supabase_agreements_repository.dart';
+import 'package:ccwmap/data/repositories/supabase_moderation_repository.dart';
+import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
 import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/domain/repositories/agreements_repository.dart';
+import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
@@ -49,6 +54,9 @@ Future<void> main() async {
   // Create data sources
   final supabaseClient = Supabase.instance.client;
   final remoteDataSource = SupabaseRemoteDataSource(supabaseClient);
+  final moderationRepository = SupabaseModerationRepository(remoteDataSource);
+  final agreementsRepository = SupabaseAgreementsRepository(remoteDataSource);
+  final blocklistService = BlocklistService(moderationRepository);
 
   // Create sync manager
   final syncManager = SyncManager(
@@ -69,20 +77,32 @@ Future<void> main() async {
   final authRepository = SupabaseAuthRepository(supabaseClient);
 
   // Create ViewModels
-  final mapViewModel = MapViewModel(pinRepository, networkMonitor);
+  final mapViewModel = MapViewModel(pinRepository, networkMonitor, blocklistService);
   final authViewModel = AuthViewModel(authRepository);
 
-  runApp(CCWMapApp(mapViewModel: mapViewModel, authViewModel: authViewModel));
+  runApp(CCWMapApp(
+    mapViewModel: mapViewModel,
+    authViewModel: authViewModel,
+    blocklistService: blocklistService,
+    agreementsRepository: agreementsRepository,
+    moderationRepository: moderationRepository,
+  ));
 }
 
 class CCWMapApp extends StatelessWidget {
   final MapViewModel mapViewModel;
   final AuthViewModel authViewModel;
+  final BlocklistService blocklistService;
+  final AgreementsRepository agreementsRepository;
+  final ModerationRepository moderationRepository;
 
   const CCWMapApp({
     super.key,
     required this.mapViewModel,
     required this.authViewModel,
+    required this.blocklistService,
+    required this.agreementsRepository,
+    required this.moderationRepository,
   });
 
   @override
@@ -91,6 +111,9 @@ class CCWMapApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider.value(value: mapViewModel),
         ChangeNotifierProvider.value(value: authViewModel),
+        ChangeNotifierProvider.value(value: blocklistService),
+        Provider<AgreementsRepository>.value(value: agreementsRepository),
+        Provider<ModerationRepository>.value(value: moderationRepository),
       ],
       child: MaterialApp(
         title: 'CCW Map',
