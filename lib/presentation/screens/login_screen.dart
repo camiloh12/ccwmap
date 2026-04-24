@@ -220,7 +220,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             value: _eulaChecked,
                             onChanged: isLoading
                                 ? null
-                                : (v) => setState(() => _eulaChecked = v ?? false),
+                                : (v) =>
+                                      setState(() => _eulaChecked = v ?? false),
                           ),
                           Expanded(
                             child: Padding(
@@ -234,9 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     'tolerated. ',
                                   ),
                                   TextButton(
-                                    onPressed: isLoading
-                                        ? null
-                                        : _openTermsUrl,
+                                    onPressed: isLoading ? null : _openTermsUrl,
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       tapTargetSize:

@@ -56,10 +56,7 @@ class SettingsScreen extends StatelessWidget {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(auth.error!),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(auth.error!), backgroundColor: Colors.red),
       );
     }
   }
@@ -91,7 +88,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               OutlinedButton(
-                onPressed: auth.isLoading ? null : () => _handleSignOut(context),
+                onPressed: auth.isLoading
+                    ? null
+                    : () => _handleSignOut(context),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),

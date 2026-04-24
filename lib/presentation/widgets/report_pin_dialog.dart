@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 
-typedef ReportSubmitCallback = Future<void> Function(
-  ReportReason reason,
-  String? note,
-);
+typedef ReportSubmitCallback =
+    Future<void> Function(ReportReason reason, String? note);
 
 /// Reason picker + optional free-text note for reporting a pin.
 /// Returns via [onSubmit]. The caller is responsible for popping the

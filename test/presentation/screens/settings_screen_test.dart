@@ -28,9 +28,13 @@ void main() {
       return (vm, fake);
     }
 
-    testWidgets('renders signed-in email, Sign Out, Delete Account',
-        (tester) async {
-      await pump(tester, user: User(id: 'u', email: 'u@example.com'));
+    testWidgets('renders signed-in email, Sign Out, Delete Account', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        user: User(id: 'u', email: 'u@example.com'),
+      );
 
       expect(find.text('u@example.com'), findsOneWidget);
       expect(find.widgetWithText(OutlinedButton, 'Sign Out'), findsOneWidget);
@@ -40,9 +44,13 @@ void main() {
       );
     });
 
-    testWidgets('Delete button disabled in second dialog until DELETE typed',
-        (tester) async {
-      await pump(tester, user: User(id: 'u', email: 'u@example.com'));
+    testWidgets('Delete button disabled in second dialog until DELETE typed', (
+      tester,
+    ) async {
+      await pump(
+        tester,
+        user: User(id: 'u', email: 'u@example.com'),
+      );
 
       await tester.tap(find.widgetWithText(ElevatedButton, 'Delete Account'));
       await tester.pumpAndSettle();
@@ -64,27 +72,26 @@ void main() {
       expect(btn.onPressed, isNotNull);
     });
 
-    testWidgets(
-      'typing DELETE and tapping Delete calls deleteAccount',
-      (tester) async {
-        final (_, fake) = await pump(
-          tester,
-          user: User(id: 'u', email: 'u@example.com'),
-        );
+    testWidgets('typing DELETE and tapping Delete calls deleteAccount', (
+      tester,
+    ) async {
+      final (_, fake) = await pump(
+        tester,
+        user: User(id: 'u', email: 'u@example.com'),
+      );
 
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Delete Account'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Continue'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Delete Account'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Continue'));
+      await tester.pumpAndSettle();
 
-        await tester.enterText(find.byType(TextField), 'DELETE');
-        await tester.pumpAndSettle();
-        await tester.tap(find.widgetWithText(ElevatedButton, 'Delete'));
-        await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'DELETE');
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Delete'));
+      await tester.pumpAndSettle();
 
-        expect(fake.deleteCallCount, 1);
-      },
-    );
+      expect(fake.deleteCallCount, 1);
+    });
 
     testWidgets('Sign Out calls signOut on the repository', (tester) async {
       final (_, fake) = await pump(

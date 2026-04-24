@@ -24,9 +24,9 @@ class EulaModal extends StatelessWidget {
     required this.onReadTerms,
     this.onSignOut,
   }) : assert(
-          mode != EulaModalMode.retroactiveBlocking || onSignOut != null,
-          'onSignOut is required for retroactiveBlocking mode',
-        );
+         mode != EulaModalMode.retroactiveBlocking || onSignOut != null,
+         'onSignOut is required for retroactiveBlocking mode',
+       );
 
   @override
   Widget build(BuildContext context) {
@@ -47,19 +47,10 @@ class EulaModal extends StatelessWidget {
           child: const Text('Read full terms'),
         ),
         if (isRetroactive) ...[
-          OutlinedButton(
-            onPressed: onSignOut,
-            child: const Text('Sign Out'),
-          ),
-          ElevatedButton(
-            onPressed: onAccept,
-            child: const Text('I Agree'),
-          ),
+          OutlinedButton(onPressed: onSignOut, child: const Text('Sign Out')),
+          ElevatedButton(onPressed: onAccept, child: const Text('I Agree')),
         ] else
-          ElevatedButton(
-            onPressed: onAccept,
-            child: const Text('Got it'),
-          ),
+          ElevatedButton(onPressed: onAccept, child: const Text('Got it')),
       ],
     );
   }

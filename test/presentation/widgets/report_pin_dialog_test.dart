@@ -8,9 +8,7 @@ void main() {
     testWidgets('lists four reason radios and Submit/Cancel', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: ReportPinDialog(onSubmit: (_, __) async {}),
-          ),
+          home: Scaffold(body: ReportPinDialog(onSubmit: (_, __) async {})),
         ),
       );
 
@@ -22,13 +20,12 @@ void main() {
       expect(find.widgetWithText(TextButton, 'Cancel'), findsOneWidget);
     });
 
-    testWidgets('Submit is disabled until a reason is selected',
-        (tester) async {
+    testWidgets('Submit is disabled until a reason is selected', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: ReportPinDialog(onSubmit: (_, __) async {}),
-          ),
+          home: Scaffold(body: ReportPinDialog(onSubmit: (_, __) async {})),
         ),
       );
       final button = tester.widget<ElevatedButton>(
@@ -44,8 +41,9 @@ void main() {
       expect(button2.onPressed, isNotNull);
     });
 
-    testWidgets('Submit invokes callback with selected reason and note',
-        (tester) async {
+    testWidgets('Submit invokes callback with selected reason and note', (
+      tester,
+    ) async {
       ReportReason? captured;
       String? capturedNote;
 

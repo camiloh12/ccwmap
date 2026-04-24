@@ -15,8 +15,8 @@ class SupabaseAuthRepository implements AuthRepository {
     this._supabase, {
     SyncManager? syncManager,
     FlutterSecureStorage? secureStorage,
-  })  : _syncManager = syncManager,
-        _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  }) : _syncManager = syncManager,
+       _secureStorage = secureStorage ?? const FlutterSecureStorage();
 
   /// Maps Supabase User to domain User model
   domain.User? _mapUser(supabase.User? supabaseUser) {

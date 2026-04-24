@@ -9,9 +9,26 @@ class ProfanityFilter {
   // Non-exhaustive by design. Additions should be obvious slurs /
   // profanities that no legitimate place-name would contain.
   static const List<String> _deny = [
-    'fuck', 'shit', 'bitch', 'asshole', 'bastard', 'cunt', 'dick',
-    'faggot', 'nigger', 'nigga', 'retard', 'retarded', 'slut', 'whore',
-    'chink', 'gook', 'kike', 'spic', 'tranny', 'wetback',
+    'fuck',
+    'shit',
+    'bitch',
+    'asshole',
+    'bastard',
+    'cunt',
+    'dick',
+    'faggot',
+    'nigger',
+    'nigga',
+    'retard',
+    'retarded',
+    'slut',
+    'whore',
+    'chink',
+    'gook',
+    'kike',
+    'spic',
+    'tranny',
+    'wetback',
   ];
 
   /// Returns true if [input] contains any deny-listed substring

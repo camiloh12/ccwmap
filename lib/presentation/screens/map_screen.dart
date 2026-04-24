@@ -915,7 +915,8 @@ class _MapScreenState extends State<MapScreen> {
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
-    final canModerate = isEditMode &&
+    final canModerate =
+        isEditMode &&
         currentUserId != null &&
         pinCreatorId != null &&
         pinCreatorId != 'anonymous' &&
@@ -1118,8 +1119,14 @@ class _MapScreenState extends State<MapScreen> {
     debugPrint('Dialog closed, cooldown period started');
   }
 
-  Future<void> _handleReportPin(BuildContext dialogContext, String pinId) async {
-    final moderation = Provider.of<ModerationRepository>(context, listen: false);
+  Future<void> _handleReportPin(
+    BuildContext dialogContext,
+    String pinId,
+  ) async {
+    final moderation = Provider.of<ModerationRepository>(
+      context,
+      listen: false,
+    );
 
     final navigator = Navigator.of(dialogContext, rootNavigator: true);
     // Close the PinDialog first so the report sub-dialog is the topmost modal.
@@ -1174,9 +1181,7 @@ class _MapScreenState extends State<MapScreen> {
       context: dialogContext,
       builder: (ctx) => AlertDialog(
         title: const Text('Block this user?'),
-        content: const Text(
-          "You won't see any of their pins anymore.",
-        ),
+        content: const Text("You won't see any of their pins anymore."),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -1185,10 +1190,7 @@ class _MapScreenState extends State<MapScreen> {
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              'Block',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Block', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

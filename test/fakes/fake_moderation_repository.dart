@@ -14,7 +14,8 @@ class FakeModerationRepository implements ModerationRepository {
   }
 
   @override
-  Future<Set<String>> fetchBlocklist() async => Set<String>.from(remoteBlocklist);
+  Future<Set<String>> fetchBlocklist() async =>
+      Set<String>.from(remoteBlocklist);
 
   @override
   Future<void> blockUser(String userId) async {

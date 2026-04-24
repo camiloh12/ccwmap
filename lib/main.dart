@@ -78,20 +78,28 @@ Future<void> main() async {
     database.pinTombstoneDao,
     syncManager: syncManager,
   );
-  final authRepository =
-      SupabaseAuthRepository(supabaseClient, syncManager: syncManager);
+  final authRepository = SupabaseAuthRepository(
+    supabaseClient,
+    syncManager: syncManager,
+  );
 
   // Create ViewModels
-  final mapViewModel = MapViewModel(pinRepository, networkMonitor, blocklistService);
+  final mapViewModel = MapViewModel(
+    pinRepository,
+    networkMonitor,
+    blocklistService,
+  );
   final authViewModel = AuthViewModel(authRepository);
 
-  runApp(CCWMapApp(
-    mapViewModel: mapViewModel,
-    authViewModel: authViewModel,
-    blocklistService: blocklistService,
-    agreementsRepository: agreementsRepository,
-    moderationRepository: moderationRepository,
-  ));
+  runApp(
+    CCWMapApp(
+      mapViewModel: mapViewModel,
+      authViewModel: authViewModel,
+      blocklistService: blocklistService,
+      agreementsRepository: agreementsRepository,
+      moderationRepository: moderationRepository,
+    ),
+  );
 }
 
 class CCWMapApp extends StatelessWidget {
@@ -228,7 +236,9 @@ class _AppRootState extends State<_AppRoot> {
     // Refresh blocklist now that a user is signed in.
     try {
       await blocklist.refresh();
-    } catch (_) {/* non-fatal */}
+    } catch (_) {
+      /* non-fatal */
+    }
 
     bool accepted;
     try {
@@ -255,7 +265,9 @@ class _AppRootState extends State<_AppRoot> {
                 userId: user.id,
                 version: AgreementsRepository.currentAgreementVersion,
               );
-            } catch (_) {/* non-fatal */}
+            } catch (_) {
+              /* non-fatal */
+            }
             if (ctx.mounted) Navigator.of(ctx).pop();
           },
           onReadTerms: _openTermsUrl,
