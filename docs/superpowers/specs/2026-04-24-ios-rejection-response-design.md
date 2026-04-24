@@ -241,20 +241,9 @@ Operational playbook:
 
 User can permanently delete their account from inside the app. Their pins persist with `created_by = NULL`.
 
-### Schema migration (008)
+### Schema migration
 
-```sql
-ALTER TABLE pins ALTER COLUMN created_by DROP NOT NULL;
-ALTER TABLE pins DROP CONSTRAINT pins_created_by_fkey;
-ALTER TABLE pins ADD CONSTRAINT pins_created_by_fkey
-  FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL;
-```
-
-**Caveat to resolve during implementation:** CLAUDE.md's BUG-002 notes mention "pre-auth pins stored as `'anonymous'`." That suggests the current `pins.created_by` column on Supabase may be TEXT, not a UUID FK. Before writing migration 008, pull the current Supabase schema and confirm column type + FK state. If stored as TEXT, migration 008 additionally:
-
-1. Sets `'anonymous'` rows to `NULL`.
-2. Alters column type to UUID.
-3. Adds the FK with `ON DELETE SET NULL`.
+None required. Verified via Supabase MCP on 2026-04-24: `public.pins.created_by` is already `uuid`, nullable, with FK `pins_created_by_fkey` → `auth.users(id)` `ON DELETE SET NULL`. Row distribution at check time: 73 UUID-valued rows, 37 NULL, no `'anonymous'` literals (the column is UUID — couldn't hold the string). The CLAUDE.md BUG-002 reference to `'anonymous'` reflects a past client-side convention that was already normalized to NULL in the DB. SP-3 relies on the existing FK cascade and needs no DDL.
 
 ### `delete-account` Edge Function
 
@@ -301,7 +290,6 @@ Updated in `AuthViewModel._formatAuthError`: when Supabase returns a "banned" au
 
 ### Files touched (SP-3)
 
-- `supabase/migrations/008_created_by_set_null.sql` — new.
 - `supabase/functions/delete-account/index.ts` — new.
 - `lib/domain/repositories/auth_repository.dart` — add `deleteAccount()`.
 - `lib/data/repositories/supabase_auth_repository.dart` — implement.
@@ -327,9 +315,8 @@ Migrations introduced by this work (new `supabase/migrations/` directory):
 - **005** — `pin_reports` table.
 - **006** — `blocked_users` table.
 - **007** — `pins.name` length CHECK constraint.
-- **008** — `pins.created_by` → nullable + `ON DELETE SET NULL` FK (possibly plus UUID type change per caveat).
 
-Backfilling the current schema as migrations 001–003 is nice-to-have but out of scope for this work.
+SP-3's `ON DELETE SET NULL` cascade on `pins.created_by` is already present in the live schema (verified 2026-04-24 via Supabase MCP); no migration 008 needed. Backfilling the current schema as migrations 001–003 is nice-to-have but out of scope for this work.
 
 ## Edge Functions
 
@@ -441,7 +428,6 @@ Deliberately not in v0.4.0:
 
 ## Open items to resolve during implementation
 
-- Verify current Supabase schema for `pins.created_by` (UUID FK vs TEXT). Adjusts migration 008.
 - Draft ToU text for the GitHub Pages `/terms` page. Keep short and clear; link to `camilo@kyberneticlabs.com` for questions.
 - Decide Resend From-address: sandbox default vs custom `moderation@kyberneticlabs.com` (requires DNS setup). Can start with sandbox and migrate later.
 - Confirm `auth.users.banned_until = 'infinity'` is the correct Supabase idiom (vs. a far-future timestamp). Practical check before the ban runbook is published.
