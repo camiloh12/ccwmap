@@ -66,5 +66,12 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Required by url_launcher on Android 11+ (package visibility): without this,
+             PackageManager.resolveActivity() returns null for https URLs and
+             canLaunchUrl() returns false, so the "Read full terms" link silently no-ops. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
     </queries>
 </manifest>
