@@ -83,18 +83,18 @@
 <body>
     <h1>Account & Data Deletion</h1>
 
-    <p>This page explains how to request deletion of your CCW Map account and associated data.</p>
+    <p>This page explains how to delete your CCW Map account and associated data. You can do it yourself from inside the app, or request deletion by email as a fallback.</p>
 
     <hr>
 
     <div class="danger">
         <h3>⚠️ Important Notice</h3>
         <p><strong>Account deletion is permanent and irreversible.</strong></p>
-        <p>Once your account is deleted, you will NOT be able to:</p>
+        <p>Once your account is deleted:</p>
         <ul>
-            <li>Recover your email address or password</li>
-            <li>Access pins you created</li>
-            <li>Restore your account</li>
+            <li>You cannot recover your email address or password.</li>
+            <li>You cannot restore the account.</li>
+            <li>You will be signed out of all devices immediately.</li>
         </ul>
     </div>
 
@@ -102,7 +102,7 @@
 
     <h2>What Gets Deleted</h2>
 
-    <p>When you request account deletion, the following data will be permanently removed:</p>
+    <p>When your account is deleted, the following personal data is permanently removed from our servers:</p>
 
     <h3>1. Account Information</h3>
     <ul>
@@ -112,70 +112,78 @@
         <li>Session tokens</li>
     </ul>
 
-    <h3>2. User Content</h3>
+    <h3>2. Personal Records Tied to Your Account</h3>
     <ul>
-        <li>All pins you created (including coordinates, status, and metadata)</li>
-        <li>Pin modification history</li>
-        <li>Sync queue entries</li>
+        <li>Your Terms of Use acceptance record</li>
+        <li>Your blocklist (users you blocked, and other users' blocks targeting you)</li>
     </ul>
 
     <hr>
 
     <h2>What May Be Retained</h2>
 
-    <p>Some data may be retained for legal, security, or operational reasons:</p>
+    <p>Some data may be retained for legal, security, or operational reasons, or because it is community data that outlives any single account:</p>
 
     <ul>
-        <li><strong>Anonymous usage statistics</strong>: Aggregated, non-identifiable analytics data</li>
-        <li><strong>Legal compliance</strong>: Records required by law (fraud prevention, abuse reports)</li>
-        <li><strong>Backup archives</strong>: May take up to 90 days to fully purge from backup systems</li>
+        <li><strong>Pins you created</strong>: The pins stay on the map as community content, but the <em>creator link</em> is severed — the pin is no longer tied to your account. Any signed-in user can subsequently edit or remove these pins through normal crowd-sourced moderation. If you want specific pins gone, remove them <strong>before</strong> deleting your account.</li>
+        <li><strong>Reports you filed on other users' pins</strong>: The report is preserved for moderation continuity but the reporter link is cleared.</li>
+        <li><strong>Anonymous usage statistics</strong>: Aggregated, non-identifiable analytics data.</li>
+        <li><strong>Legal compliance</strong>: Records required by law (fraud prevention, abuse investigations).</li>
+        <li><strong>Backup archives</strong>: May take up to 90 days to fully purge from backup systems.</li>
     </ul>
 
     <hr>
 
-    <h2>How to Request Deletion</h2>
+    <h2>How to Delete Your Data</h2>
 
     <div class="info">
-        <h3>Option 1: Delete Individual Pins (Recommended)</h3>
+        <h3>Option 1: Delete Individual Pins</h3>
         <p>If you only want to remove specific pins:</p>
         <ol>
             <li>Open the CCW Map app</li>
-            <li>Tap on the pin you want to delete</li>
-            <li>Select "Delete Pin" in the pin dialog</li>
+            <li>Tap the pin you want to remove</li>
+            <li>Select <strong>Delete Pin</strong> in the pin dialog</li>
         </ol>
-        <p><strong>Note:</strong> This does NOT delete your account, only the selected pin.</p>
+        <p><strong>Note:</strong> This does NOT delete your account, only the selected pin. Pin deletions are crowd-sourced — any signed-in user can remove a pin.</p>
     </div>
 
-    <h3>Option 2: Delete Entire Account</h3>
-    <p>To permanently delete your account and all associated data:</p>
+    <h3>Option 2: Delete Your Account (In-App, Recommended)</h3>
+    <p>You can delete your entire account directly from the app:</p>
 
     <ol>
-        <li>Send an email to <a href="mailto:camilo@kyberneticlabs.com">camilo@kyberneticlabs.com</a></li>
-        <li>Use the subject line: <strong>"CCW Map Account Deletion Request"</strong></li>
-        <li>Include the following information:
-            <ul>
-                <li>The email address associated with your CCW Map account</li>
-                <li>Confirmation that you want to permanently delete your account</li>
-            </ul>
-        </li>
+        <li>Open the CCW Map app and make sure you are signed in.</li>
+        <li>Tap the <strong>gear icon</strong> (top-right of the map) to open <strong>Settings</strong>.</li>
+        <li>Tap <strong>Delete Account</strong>.</li>
+        <li>A confirmation dialog will ask you to type <strong>DELETE</strong> (all caps) to proceed — this protects against accidental taps.</li>
+        <li>Tap <strong>Delete</strong>. Your account is removed immediately, you are signed out of all devices, and you are returned to the map as a guest.</li>
+    </ol>
+
+    <p>No email, ticket, or waiting period required. Deletion is instant and irreversible.</p>
+
+    <h3>Option 3: Email Fallback</h3>
+    <p>If you cannot access the app — for example, because you no longer have the installed device or you have forgotten your password and cannot reset it — you can request deletion by email:</p>
+
+    <ol>
+        <li>Email <a href="mailto:camilo@kyberneticlabs.com">camilo@kyberneticlabs.com</a> from the address associated with your CCW Map account.</li>
+        <li>Use the subject line: <strong>"CCW Map Account Deletion Request"</strong>.</li>
+        <li>Include confirmation that you want to permanently delete your account.</li>
     </ol>
 
     <div class="contact-box">
-        <p><strong>Email for Deletion Requests:</strong></p>
+        <p><strong>Email for fallback deletion requests:</strong></p>
         <a href="mailto:camilo@kyberneticlabs.com">camilo@kyberneticlabs.com</a>
     </div>
 
     <hr>
 
-    <h2>Verification Process</h2>
+    <h2>Verification</h2>
 
-    <p>To protect your account security, we will verify your identity:</p>
+    <p>Your identity is verified automatically depending on the path:</p>
 
-    <ol>
-        <li><strong>Email Verification</strong>: You must send the deletion request from the email address associated with your account</li>
-        <li><strong>Confirmation</strong>: We may ask you to confirm your request via a follow-up email</li>
-        <li><strong>Processing Time</strong>: Your data will be deleted within <strong>30 days</strong> of receiving your verified request</li>
-    </ol>
+    <ul>
+        <li><strong>In-app deletion (Option 2):</strong> Your active signed-in session is the proof of identity. The app calls a server-side function that deletes the account associated with your session; no email round-trip is required.</li>
+        <li><strong>Email fallback (Option 3):</strong> The request must come from the email address on the account. We may ask you to confirm via a follow-up email. Processed within <strong>30 days</strong> of receiving your verified request.</li>
+    </ul>
 
     <hr>
 
@@ -184,10 +192,10 @@
     <div class="warning">
         <p>Once your account is deleted:</p>
         <ul>
-            <li>You will be logged out of all devices</li>
-            <li>You cannot sign in with the same email address for 30 days</li>
-            <li>Pins you created will be removed from the map</li>
-            <li>You will receive a confirmation email once deletion is complete</li>
+            <li>You are signed out of all devices.</li>
+            <li>Your authentication record and associated personal data (see "What Gets Deleted" above) are removed from our servers.</li>
+            <li>The pins you created stay on the map (they are community data and are no longer tied to a user identity), but any signed-in user can edit or remove them at any time via crowd-sourced moderation. If you want specific pins gone, remove them <strong>before</strong> deleting your account (Option 1).</li>
+            <li>The email address is released and may be used to sign up for a new account.</li>
         </ul>
     </div>
 
@@ -229,7 +237,7 @@
     <hr>
 
     <p style="text-align: center; color: #666; margin-top: 40px;">
-        <strong>Last Updated:</strong> February 1, 2026
+        <strong>Last Updated:</strong> April 24, 2026
     </p>
 </body>
 </html>
