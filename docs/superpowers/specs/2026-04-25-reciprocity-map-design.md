@@ -20,7 +20,7 @@ The data acquisition cost — not the engineering — is the hard part. The desi
 | 1 | Data scope for v1 | Structured: status + `resident_only` (bool), `min_age` (int?), `must_inform` (bool), `notes` (String?), `source_url`, `last_verified_at`. **Not** location-restriction rules, magazine caps, or open-carry interactions (deferred). |
 | 2 | Entry point | Bottom navigation. `_AppRoot` becomes a `Scaffold` with `IndexedStack` of two screens: "Pins" (existing `MapScreen`) and "Reciprocity" (new). |
 | 3 | Auth & home-state persistence | Guest-accessible, no auth required. Home state stored in `SharedPreferences` only. |
-| 4 | Data acquisition | Separate `ccwmap-reciprocity-pipeline` repo. Weekly GitHub Action fetches AG pages, runs Gemini 2.5 Flash extractor, validates against JSON schema, diffs vs. prior snapshot, opens GitHub issue on changes for human review. |
+| 4 | Data acquisition | Separate `ccwmap-reciprocity-pipeline` repo. Weekly GitHub Action fetches AG pages, runs **Gemini 3 Flash** extractor (constrained JSON via `response_schema`), validates output against JSON schema, diffs vs. prior snapshot, opens GitHub issue on changes for human review. **Anthropic Haiku 4.5** (via tool-use for constrained output) is the API fallback when Gemini is rate-limited or unavailable. |
 | 5 | Delivery & staleness UX | Bundled `assets/reciprocity.json` baseline + Supabase Storage override. App loads cache → bundled fallback → opportunistic remote upgrade. Persistent freshness banner; per-cell `last_verified_at`; banner turns yellow at >30 days. One-time dismissible disclaimer modal mirroring the existing EULA pattern. |
 
 ## Architecture
@@ -34,7 +34,7 @@ Two physically separate repos with one runtime data hop:
 │  GitHub Action (weekly cron)            │        │  Flutter app               │
 │   1. fetch 50 AG URLs                   │        │   ┌────────────────────┐   │
 │   2. text-extract + sha256              │        │   │ Bottom nav         │   │
-│   3. Gemini 2.5 Flash → JSON schema     │        │   │   • Pins (existing)│   │
+│   3. Gemini 3 Flash → JSON schema       │        │   │   • Pins (existing)│   │
 │   4. JSON-Schema validate               │        │   │   • Reciprocity    │   │
 │   5. diff vs prev snapshot              │        │   └────────────────────┘   │
 │   6. on diff → open GitHub issue        │        │                            │
@@ -100,7 +100,7 @@ The retroactive-EULA and deep-link logic in `_AppRoot` remains unchanged; both f
 ### Pipeline-side (`ccwmap-reciprocity-pipeline`, new repo)
 
 - `sources.yaml` — list of 50 entries: `{ state: "WA", url: "https://www.atg.wa.gov/concealed-pistol-license-reciprocity" }`. Hand-curated. Each AG page typically describes both directions ("states we honor" and "states that honor us"); the LLM prompt extracts whatever directional data is present.
-- `extract.py` — fetches a URL, runs trafilatura for text extraction, sends to Gemini 2.5 Flash with a fixed system prompt + JSON schema, parses & validates response.
+- `extract.py` — fetches a URL, runs trafilatura for text extraction, sends to **Gemini 3 Flash** with a fixed system prompt + `response_schema` (constrained JSON output), parses & validates response. Falls back to **Anthropic Haiku 4.5** via tool-use (also constrained) on Gemini rate-limit / 5xx.
 - `pipeline.py` — orchestrator: iterate `sources.yaml`, call `extract.py`, write per-state JSON to `data/states/<XX>.json`, compute global `data/reciprocity.json`, sha256 each page text into `data/hashes.json`.
 - `diff.py` — compare new JSON to last snapshot in git history; if changed, build a markdown report.
 - `.github/workflows/weekly-extract.yml` — Mon 06:00 UTC cron: run pipeline, if diff exists open issue with report, else exit clean. Manual `workflow_dispatch` trigger also available.
@@ -121,7 +121,7 @@ Mon 06:00 UTC, GitHub Actions
   │    sha256(text) → compare to data/hashes.json
   │    if hash unchanged → skip LLM call (cost saver)
   │    if hash changed (or first run):
-  │        call Gemini 2.5 Flash with prompts/extract.md + text
+  │        call Gemini 3 Flash (response_schema) with prompts/extract.md + text
   │        validate response against schemas/reciprocity.schema.json
   │        on validation fail → retry once → still fail → flag state in report
   │        on success → write data/states/<XX>.json
