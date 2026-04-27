@@ -27,7 +27,7 @@ class GeocodingResult {
 /// Thin HTTP client for MapTiler's reverse geocoding endpoint.
 ///
 /// Used as an iOS fallback when `queryRenderedFeatures` fails to return
-/// base map POI labels. See docs/ios-poi-tap-fix-plan.md.
+/// base map POI labels. See docs/superpowers/plans/2026-04-12-ios-poi-tap-fix.md.
 class MaptilerGeocodingClient {
   static const String _baseUrl = 'https://api.maptiler.com/geocoding';
   static const Duration _timeout = Duration(seconds: 5);

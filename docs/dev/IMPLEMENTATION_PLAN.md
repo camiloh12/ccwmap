@@ -477,7 +477,7 @@ This implementation plan provides a detailed, iterative roadmap for building the
 - `test/data/mappers/pin_mapper_test.dart` (NEW)
 - `test/data/database/database_test.dart` (NEW)
 - `test/widget_test.dart` (fixed)
-- `TESTING_GUIDELINES.md`
+- `docs/dev/TESTING_GUIDELINES.md`
 
 ### Test Results
 ✅ **All 51 tests passing**

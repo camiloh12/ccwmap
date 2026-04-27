@@ -54,7 +54,7 @@ _No open bugs._
        ON pins FOR DELETE
        USING (auth.role() = 'authenticated');
      ```
-     Spec updated in `FUNCTIONAL_SPEC.md` (sections 3, Data Model, and Row Level Security).
+     Spec updated in `docs/dev/FUNCTIONAL_SPEC.md` (sections 3, Data Model, and Row Level Security).
   2. **`SupabaseRemoteDataSource.deletePin`** performs a follow-up `select('id').eq('id', pinId).maybeSingle()` and throws if the row survived the delete. Belt-and-suspenders: surfaces any unexpected server rejection (network glitch, future policy changes, race where another client recreated the row) as a real error through `SyncManager`'s normal retry path.
   3. **`PinTombstones` table** (`lib/data/database/database.dart`, schema v2; DAO in `lib/data/database/pin_tombstone_dao.dart`) is kept as defense-in-depth. `SyncManager._downloadRemoteChanges` consults it alongside current queue DELETEs and just-processed IDs. With the new RLS policy, tombstones are no longer load-bearing for the primary bug, but they make offline-delete-then-sync bulletproof against mid-cycle failures.
 - **Tests:** `test/data/database/database_test.dart` adds four tests for `PinTombstoneDao` (insert/retrieve, idempotent insert, isTombstoned, remove).
@@ -86,7 +86,7 @@ _No open bugs._
   - `.github/workflows/production.yml` — fires on push of `v*.*.*` tag. **Omits** the flag entirely. Debug UI is tree-shaken out of every public-store build by construction.
   - `.github/workflows/weekly-scans.yml` — scheduled OSV dep scan + CodeQL Kotlin. Flag not applicable.
 
-- **Production guarantee:** The only trigger for a public-store build is a `v*.*.*` tag push, which can only run `production.yml`, which does not pass `SHOW_DEBUG_UI`. There is no path from developer action to a public build that carries the debug UI. See `docs/GIT_FLOW.md` for the full release playbook.
+- **Production guarantee:** The only trigger for a public-store build is a `v*.*.*` tag push, which can only run `production.yml`, which does not pass `SHOW_DEBUG_UI`. There is no path from developer action to a public build that carries the debug UI. See `docs/dev/GIT_FLOW.md` for the full release playbook.
 
 ## Project Overview
 
@@ -196,8 +196,8 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 
 - `send-moderation-email` — webhook target fired on `INSERT` into
   `pin_reports` or `blocked_users`. Sends the moderator a formatted
-  plaintext email via Resend. See `docs/MODERATION.md` and
-  `docs/DEPLOY.md`.
+  plaintext email via Resend. See `docs/dev/MODERATION.md` and
+  `docs/dev/DEPLOY.md`.
 
 ## Authentication
 
