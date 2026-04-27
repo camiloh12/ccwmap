@@ -18,7 +18,7 @@ A collaborative mobile application for mapping and sharing information about con
 - 74/74 tests passing (100%)
 - Ready for Iteration 8: Overpass API Integration
 
-See `IMPLEMENTATION_PLAN.md` for detailed development roadmap.
+See `docs/dev/IMPLEMENTATION_PLAN.md` for detailed development roadmap.
 
 ## Prerequisites
 
@@ -127,7 +127,7 @@ lib/
 
 ## Known Issues
 
-- **Web Pin Detection**: Requires dual-detection system (see `BUILD_STATUS.md` section 2)
+- **Web Pin Detection**: Requires dual-detection system (see `CLAUDE.md` BUG-004)
 - **Windows Build**: Requires Visual Studio 2019+ with Desktop development workload
 - **Linter Warnings**: 13 style warnings for enum naming (intentional for database consistency)
 
@@ -146,5 +146,4 @@ This project is licensed under the MIT License.
 ## Links
 
 - **Documentation**: See `CLAUDE.md` for development guidelines
-- **Implementation Plan**: See `IMPLEMENTATION_PLAN.md` for roadmap
-- **Build Status**: See `BUILD_STATUS.md` for current build health
+- **Implementation Plan**: See `docs/dev/IMPLEMENTATION_PLAN.md` for roadmap

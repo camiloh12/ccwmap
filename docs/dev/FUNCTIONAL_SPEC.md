@@ -989,7 +989,7 @@ Stream<String> startRealtimeSubscription() {
 
 ## UI/UX Specifications
 
-**Reference Screenshots**: See `screenshot-1.png`, `screenshot-2.png`, `screenshot-3.png`, and `screenshot-4.png` for current app design.
+**Reference Screenshots**: See `store-assets/screenshot-1.png`, `store-assets/screenshot-2.png`, `store-assets/screenshot-3.png`, and `store-assets/screenshot-4.png` for current app design.
 
 ### Screens
 
@@ -1039,7 +1039,7 @@ Stream<String> startRealtimeSubscription() {
 
 #### 2. MapScreen
 
-**Reference**: `screenshot-1.png`
+**Reference**: `store-assets/screenshot-1.png`
 
 **Layout**:
 - Full-screen map (no traditional AppBar)
@@ -1087,7 +1087,7 @@ Stream<String> startRealtimeSubscription() {
 
 #### 3. PinDialog (Modal)
 
-**Reference**: `screenshot-2.png` (Create), `screenshot-3.png` (Edit - basic), `screenshot-4.png` (Edit - with restrictions)
+**Reference**: `store-assets/screenshot-2.png` (Create), `store-assets/screenshot-3.png` (Edit - basic), `store-assets/screenshot-4.png` (Edit - with restrictions)
 
 **Visual Design**:
 - Rounded corners bottom sheet / centered modal dialog
@@ -1095,7 +1095,7 @@ Stream<String> startRealtimeSubscription() {
 - Appears over dimmed map background
 - Padding around all content
 
-**Layout - Creating Mode** (`screenshot-2.png`):
+**Layout - Creating Mode** (`store-assets/screenshot-2.png`):
 - **Title**: "Create Pin" (large, bold, black text)
 - **POI Name**: Display name in purple/indigo color (e.g., "Kohl's")
 - **Status Label**: "Select carry zone status:" (gray text)
@@ -1115,7 +1115,7 @@ Stream<String> startRealtimeSubscription() {
   - "Cancel" button: Text-only, gray/purple text
   - "Create" button: Filled purple/indigo button with white text
 
-**Layout - Editing Mode (Basic)** (`screenshot-3.png`):
+**Layout - Editing Mode (Basic)** (`store-assets/screenshot-3.png`):
 - Same as Create mode but:
   - **Title**: "Edit Pin"
   - **POI Name**: "Publix" (in purple)
@@ -1127,7 +1127,7 @@ Stream<String> startRealtimeSubscription() {
     - "Cancel" (text-only)
     - "Save" (filled purple button)
 
-**Layout - Editing Mode (No Guns Selected)** (`screenshot-4.png`):
+**Layout - Editing Mode (No Guns Selected)** (`store-assets/screenshot-4.png`):
 - Same as Edit mode plus:
   - **POI Name**: "Tampa General Hospital" (purple)
   - **No Guns Option**: Selected with red border
@@ -2103,9 +2103,9 @@ This plan follows an iterative approach, prioritizing early visual feedback with
 
 10. **Build PinDialog widget**
     - Create reusable PinDialog component
-    - Implement Create mode UI (screenshot-2.png reference)
-    - Implement Edit mode UI (screenshot-3.png reference)
-    - Implement restriction dropdown and optional details (screenshot-4.png)
+    - Implement Create mode UI (store-assets/screenshot-2.png reference)
+    - Implement Edit mode UI (store-assets/screenshot-3.png reference)
+    - Implement restriction dropdown and optional details (store-assets/screenshot-4.png)
     - Style all components to match design (status buttons, dropdown, checkboxes)
     - Add validation (require restriction tag when "No Guns" selected)
     - Wire up state management within dialog
