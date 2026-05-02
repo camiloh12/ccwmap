@@ -22,7 +22,7 @@ import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/eula_modal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:ccwmap/presentation/utils/terms_url.dart';
 
 // Global database instance
 late final AppDatabase database;
@@ -220,7 +220,7 @@ class _AppRootState extends State<_AppRoot> {
           await prefs.setBool(_eulaFlagKey, true);
           if (ctx.mounted) Navigator.of(ctx).pop();
         },
-        onReadTerms: _openTermsUrl,
+        onReadTerms: openTermsUrl,
       ),
     );
   }
@@ -270,7 +270,7 @@ class _AppRootState extends State<_AppRoot> {
             }
             if (ctx.mounted) Navigator.of(ctx).pop();
           },
-          onReadTerms: _openTermsUrl,
+          onReadTerms: openTermsUrl,
           onSignOut: () async {
             if (ctx.mounted) Navigator.of(ctx).pop();
             await auth.signOut();
@@ -278,13 +278,6 @@ class _AppRootState extends State<_AppRoot> {
         ),
       ),
     );
-  }
-
-  Future<void> _openTermsUrl() async {
-    final uri = Uri.parse('https://camiloh12.github.io/ccwmap/terms');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override

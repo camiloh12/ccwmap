@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:ccwmap/domain/repositories/agreements_repository.dart';
+import 'package:ccwmap/presentation/utils/terms_url.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 /// Login screen for user authentication
@@ -103,13 +103,6 @@ class _LoginScreenState extends State<LoginScreen> {
           backgroundColor: Colors.green,
         ),
       );
-    }
-  }
-
-  Future<void> _openTermsUrl() async {
-    final uri = Uri.parse('https://camiloh12.github.io/ccwmap/terms');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -235,7 +228,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     'tolerated. ',
                                   ),
                                   TextButton(
-                                    onPressed: isLoading ? null : _openTermsUrl,
+                                    onPressed: isLoading ? null : openTermsUrl,
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       tapTargetSize:
