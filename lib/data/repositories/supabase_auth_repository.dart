@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/domain/models/user.dart' as domain;
 import 'package:ccwmap/domain/repositories/auth_repository.dart';
@@ -10,13 +12,24 @@ class SupabaseAuthRepository implements AuthRepository {
   final supabase.SupabaseClient _supabase;
   final SyncManager? _syncManager;
   final FlutterSecureStorage _secureStorage;
+  final StreamController<void> _passwordRecoveryController =
+      StreamController<void>.broadcast();
 
   SupabaseAuthRepository(
     this._supabase, {
     SyncManager? syncManager,
     FlutterSecureStorage? secureStorage,
-  }) : _syncManager = syncManager,
-       _secureStorage = secureStorage ?? const FlutterSecureStorage();
+  })  : _syncManager = syncManager,
+        _secureStorage = secureStorage ?? const FlutterSecureStorage() {
+    // Surface password-recovery events from the underlying Supabase auth
+    // stream as a separate stream consumers can listen to. This is the
+    // signal that distinguishes a recovery callback from a normal sign-in.
+    _supabase.auth.onAuthStateChange.listen((state) {
+      if (state.event == supabase.AuthChangeEvent.passwordRecovery) {
+        _passwordRecoveryController.add(null);
+      }
+    });
+  }
 
   /// Maps Supabase User to domain User model
   domain.User? _mapUser(supabase.User? supabaseUser) {
@@ -110,6 +123,36 @@ class SupabaseAuthRepository implements AuthRepository {
       throw supabase.AuthException('Deep link handling failed: $e');
     }
   }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'https://camiloh12.github.io/ccwmap/auth/callback',
+      );
+    } on supabase.AuthException {
+      rethrow;
+    } catch (e) {
+      throw supabase.AuthException('Send reset email failed: $e');
+    }
+  }
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(
+        supabase.UserAttributes(password: newPassword),
+      );
+    } on supabase.AuthException {
+      rethrow;
+    } catch (e) {
+      throw supabase.AuthException('Update password failed: $e');
+    }
+  }
+
+  @override
+  Stream<void> passwordRecoveryEvents() => _passwordRecoveryController.stream;
 
   @override
   Future<void> deleteAccount() async {
