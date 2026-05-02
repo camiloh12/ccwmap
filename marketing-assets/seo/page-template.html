@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- TODO: Replace title with EXACT-MATCH target query -->
+    <title>{{EXACT_QUERY}} — CCW Map</title>
+    <meta name="description" content="{{160-char meta description that includes the query and a benefit}}">
+
+    <!-- TODO: Update canonical URL -->
+    <link rel="canonical" href="https://camiloh12.github.io/ccwmap/{{slug}}/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="{{EXACT_QUERY}}">
+    <meta property="og:description" content="{{meta description}}">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://camiloh12.github.io/ccwmap/{{slug}}/">
+
+    <!-- FAQPage structured data — TODO: fill questions/answers below -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "{{Question 1}}",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "{{Answer 1 — plain text, no HTML}}"
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "{{Question 2}}",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "{{Answer 2}}"
+          }
+        }
+      ]
+    }
+    </script>
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.65;
+            color: #1a1a1a;
+            background: #fafafa;
+        }
+        .container { max-width: 720px; margin: 0 auto; padding: 40px 20px 60px; }
+
+        nav { font-size: 0.9rem; color: #666; margin-bottom: 24px; }
+        nav a { color: #1a3a52; text-decoration: none; }
+        nav a:hover { text-decoration: underline; }
+
+        h1 { font-size: 2rem; margin-bottom: 16px; line-height: 1.2; }
+        .last-verified { font-size: 0.85rem; color: #888; margin-bottom: 24px; }
+
+        .disclaimer {
+            background: #fff8e1;
+            border-left: 4px solid #f0b400;
+            padding: 14px 18px;
+            margin-bottom: 28px;
+            font-size: 0.95rem;
+        }
+        .disclaimer strong { color: #8a6d00; }
+
+        h2 { font-size: 1.4rem; margin: 36px 0 14px; color: #1a3a52; }
+        h3 { font-size: 1.1rem; margin: 24px 0 10px; }
+        p, ul, ol { margin-bottom: 14px; }
+        ul, ol { padding-left: 24px; }
+        li { margin-bottom: 6px; }
+
+        a { color: #1a3a52; }
+
+        .citation {
+            font-size: 0.85rem;
+            color: #555;
+            background: #f0f4f7;
+            padding: 12px 14px;
+            border-radius: 6px;
+            margin: 12px 0;
+        }
+
+        .cta {
+            background: #1a3a52;
+            color: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            margin: 36px 0;
+        }
+        .cta h3 { color: #fff; margin-top: 0; }
+        .cta a {
+            display: inline-block;
+            background: #fff;
+            color: #1a3a52;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 8px 6px 0;
+        }
+
+        .related {
+            border-top: 1px solid #e0e0e0;
+            margin-top: 40px;
+            padding-top: 20px;
+        }
+        .related h3 { font-size: 1rem; }
+        .related ul { list-style: none; padding: 0; }
+        .related li { margin-bottom: 6px; }
+
+        footer {
+            margin-top: 60px;
+            padding: 24px 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #888;
+            font-size: 0.85rem;
+        }
+        footer a { color: #555; margin: 0 8px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <nav>
+        <a href="/ccwmap/">CCW Map</a> &rsaquo;
+        <a href="/ccwmap/{{parent-slug}}/">{{Parent topic, e.g., "Texas"}}</a> &rsaquo;
+        <span>{{Current page short title}}</span>
+    </nav>
+
+    <h1>{{EXACT_QUERY — should match the page title and target keyword}}</h1>
+    <div class="last-verified">Last verified: {{YYYY-MM-DD}}</div>
+
+    <div class="disclaimer">
+        <strong>Not legal advice.</strong> This page summarizes publicly available statutes and is provided for informational purposes only. Laws change; always confirm posted signage on site and consult a licensed attorney for legal advice specific to your situation.
+    </div>
+
+    <!-- TODO: 1-paragraph direct answer to the query, 2-3 sentences, FRONT-LOADED with the keyword -->
+    <p>{{1-paragraph direct answer. Front-load the exact-match keyword in the first sentence. Be specific. Cite the statute by section number where possible.}}</p>
+
+    <h2>The short answer</h2>
+    <ul>
+        <li>{{Bullet point 1 — the most useful single fact}}</li>
+        <li>{{Bullet point 2}}</li>
+        <li>{{Bullet point 3}}</li>
+    </ul>
+
+    <h2>The detail</h2>
+    <p>{{Paragraph that expands on the short answer. Cite primary sources — link to the actual state code or federal statute, not to a blog summarizing them.}}</p>
+
+    <div class="citation">
+        <strong>Statute:</strong> {{Citation, e.g., "Tex. Penal Code § 30.06"}} —
+        <a href="{{official statute URL}}" target="_blank" rel="noopener">read the law</a>
+    </div>
+
+    <h3>{{Sub-heading: a specific scenario or edge case}}</h3>
+    <p>{{Specifics. Avoid vague language. Permit holders Google for specifics.}}</p>
+
+    <h3>{{Another sub-heading}}</h3>
+    <p>{{Specifics.}}</p>
+
+    <h2>Frequently asked questions</h2>
+
+    <!-- These should match the FAQPage JSON-LD above exactly -->
+    <h3>{{Question 1 — phrased as a real query}}</h3>
+    <p>{{Direct answer. 2-4 sentences max.}}</p>
+
+    <h3>{{Question 2}}</h3>
+    <p>{{Answer.}}</p>
+
+    <h3>{{Question 3}}</h3>
+    <p>{{Answer.}}</p>
+
+    <div class="cta">
+        <h3>See real-time community-marked zones</h3>
+        <p>CCW Map shows {{relevant zone type, e.g., "30.06-posted businesses across Texas"}}, updated by permit holders. Free, no ads, works offline.</p>
+        <a href="https://play.google.com/store/apps/details?id=com.ccwmap.app&amp;utm_source=seo&amp;utm_medium=organic&amp;utm_campaign={{slug}}">Get on Google Play</a>
+        <a href="https://apps.apple.com/us/app/ccw-map/id6761668100?utm_source=seo&amp;utm_medium=organic&amp;utm_campaign={{slug}}">Download on the App Store</a>
+    </div>
+
+    <div class="related">
+        <h3>Related</h3>
+        <ul>
+            <li><a href="/ccwmap/{{related-slug-1}}/">{{Related page title 1}}</a></li>
+            <li><a href="/ccwmap/{{related-slug-2}}/">{{Related page title 2}}</a></li>
+        </ul>
+    </div>
+
+    <footer>
+        <a href="/ccwmap/">Home</a>
+        <a href="/ccwmap/terms/">Terms</a>
+        <a href="/ccwmap/privacy-policy.html">Privacy</a>
+        <a href="mailto:camilo@kyberneticlabs.com">Contact</a>
+    </footer>
+
+</div>
+
+</body>
+</html>

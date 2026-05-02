@@ -3,63 +3,314 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CCW Map</title>
+    <title>CCW Map — Free crowd-sourced gun-free-zone map</title>
+    <meta name="description" content="Free, ad-free, crowd-sourced map of where you can and can't legally carry. Works offline. No tracking. Built by a CCW permit holder.">
+
+    <!-- Auth callback redirect: must run before any UI renders -->
+    <script>
+        (function() {
+            var urlParams = new URLSearchParams(window.location.search);
+            var hash = window.location.hash;
+            if (urlParams.has('token_hash') || hash.includes('access_token')) {
+                window.location.replace('/ccwmap/auth/callback' + window.location.search + window.location.hash);
+            }
+        })();
+    </script>
+
+    <meta property="og:title" content="CCW Map — Free crowd-sourced gun-free-zone map">
+    <meta property="og:description" content="Free, ad-free, crowd-sourced map of where you can and can't legally carry. Works offline. No tracking.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://camiloh12.github.io/ccwmap/">
+    <meta name="twitter:card" content="summary_large_image">
+
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            max-width: 800px;
+            line-height: 1.6;
+            color: #1a1a1a;
+            background: #fafafa;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+
+        /* Hero */
+        .hero {
+            background: linear-gradient(135deg, #1a3a52 0%, #2d5a7b 100%);
+            color: #fff;
+            padding: 80px 20px 60px;
+            text-align: center;
+        }
+        .hero h1 { font-size: 2.5rem; margin-bottom: 16px; line-height: 1.2; }
+        .hero .pitch { font-size: 1.2rem; max-width: 640px; margin: 0 auto 32px; opacity: 0.95; }
+        .hero .anti-features {
+            display: inline-flex;
+            flex-wrap: wrap;
+            gap: 8px 16px;
+            justify-content: center;
+            margin-bottom: 36px;
+            font-size: 0.95rem;
+            opacity: 0.9;
+        }
+        .hero .anti-features span::before { content: "✓ "; color: #5fd49e; font-weight: bold; }
+        .store-badges { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+        .store-badge {
+            display: inline-block;
+            padding: 14px 28px;
+            background: #fff;
+            color: #1a3a52;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .store-badge:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .store-badge .small { display: block; font-size: 0.75rem; opacity: 0.7; font-weight: 400; }
+
+        /* Sections */
+        section { padding: 64px 20px; }
+        section h2 { font-size: 1.8rem; margin-bottom: 32px; text-align: center; }
+
+        /* Demo placeholder */
+        .demo {
+            background: #fff;
+            border: 2px dashed #ccc;
+            padding: 80px 20px;
+            text-align: center;
+            border-radius: 12px;
+            color: #666;
+            font-style: italic;
             margin: 0 auto;
+            max-width: 720px;
+        }
+
+        /* How it works */
+        .how-it-works {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+        }
+        .step {
+            background: #fff;
+            padding: 28px;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+        }
+        .step .num {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+            background: #1a3a52;
+            color: #fff;
+            border-radius: 50%;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .step h3 { font-size: 1.15rem; margin-bottom: 8px; }
+        .step p { color: #555; font-size: 0.95rem; }
+
+        /* Screenshots */
+        .screenshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+        .shot { margin: 0; text-align: center; }
+        .shot img {
+            width: 100%;
+            height: auto;
+            border-radius: 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+            background: #fff;
+            display: block;
+        }
+        .shot figcaption {
+            margin-top: 12px;
+            font-size: 0.92rem;
+            color: #555;
+            font-weight: 500;
+        }
+
+        /* FAQ */
+        .faq { max-width: 720px; margin: 0 auto; }
+        .faq details {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            padding: 16px 20px;
+        }
+        .faq summary {
+            font-weight: 600;
+            cursor: pointer;
+            list-style: none;
+            position: relative;
+            padding-right: 24px;
+        }
+        .faq summary::after {
+            content: "+";
+            position: absolute;
+            right: 0;
+            top: 0;
+            font-size: 1.4rem;
+            line-height: 1;
+        }
+        .faq details[open] summary::after { content: "−"; }
+        .faq p { margin-top: 12px; color: #444; }
+
+        /* Footer */
+        footer {
+            background: #1a1a1a;
+            color: #aaa;
             padding: 40px 20px;
             text-align: center;
-            line-height: 1.6;
+            font-size: 0.9rem;
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-        p {
-            color: #666;
-            margin-bottom: 30px;
-        }
-        .links {
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        a {
-            color: #667eea;
-            text-decoration: none;
-            padding: 10px 20px;
-            border: 2px solid #667eea;
-            border-radius: 6px;
-            transition: all 0.3s;
-        }
-        a:hover {
-            background: #667eea;
-            color: white;
+        footer a { color: #fff; text-decoration: none; margin: 0 12px; }
+        footer a:hover { text-decoration: underline; }
+        footer .copy { margin-top: 20px; opacity: 0.6; font-size: 0.85rem; }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 1.8rem; }
+            .hero .pitch { font-size: 1.05rem; }
+            section { padding: 48px 20px; }
+            section h2 { font-size: 1.4rem; }
         }
     </style>
 </head>
 <body>
-    <h1>CCW Map</h1>
-    <p>Collaborative mapping of concealed carry zones</p>
 
-    <div class="links">
-        <a href="terms/">Terms of Use</a>
-        <a href="privacy-policy.html">Privacy Policy</a>
-        <a href="data-deletion.html">Data Deletion</a>
-    </div>
+    <header class="hero">
+        <div class="container">
+            <h1>Know where you can carry.</h1>
+            <p class="pitch">Free, crowd-sourced map of gun-free zones across the United States. Built by a CCW permit holder, for permit holders.</p>
+            <div class="anti-features">
+                <span>No ads</span>
+                <span>No tracking</span>
+                <span>Works offline</span>
+                <span>No account to view</span>
+            </div>
+            <div class="store-badges">
+                <a class="store-badge" href="https://play.google.com/store/apps/details?id=com.ccwmap.app&amp;utm_source=landing" data-store="play">
+                    Get on Google Play
+                    <span class="small">Android</span>
+                </a>
+                <a class="store-badge" href="https://apps.apple.com/us/app/ccw-map/id6761668100?utm_source=landing" data-store="ios">
+                    Download on the App Store
+                    <span class="small">iPhone</span>
+                </a>
+            </div>
+        </div>
+    </header>
 
-    <script>
-        // Check if this is an auth callback (has token_hash or access_token)
-        const urlParams = new URLSearchParams(window.location.search);
-        const hash = window.location.hash;
+    <section>
+        <div class="container">
+            <h2>See it in action</h2>
+            <div class="demo">
+                <strong>[ Demo GIF placeholder ]</strong><br>
+                Replace with a 15-second screen capture showing: open app → tap POI → cycle status → save.
+            </div>
+        </div>
+    </section>
 
-        if (urlParams.has('token_hash') || hash.includes('access_token')) {
-            // Redirect to auth callback page
-            window.location.href = '/ccwmap/auth/callback' + window.location.search + window.location.hash;
-        }
-    </script>
+    <section style="background: #fff;">
+        <div class="container">
+            <h2>How it works</h2>
+            <div class="how-it-works">
+                <div class="step">
+                    <span class="num">1</span>
+                    <h3>Browse the map</h3>
+                    <p>Open the app — no account needed. Pins are color-coded green / yellow / red by carry status.</p>
+                </div>
+                <div class="step">
+                    <span class="num">2</span>
+                    <h3>Tap a pin to see why</h3>
+                    <p>Each pin shows the restriction tag (federal property, school, posted business, etc.) and whether signage is posted.</p>
+                </div>
+                <div class="step">
+                    <span class="num">3</span>
+                    <h3>Mark a zone</h3>
+                    <p>Sign in to add or correct a pin. Any authenticated permit holder can update any pin — crowd-sourced moderation keeps the data fresh.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <div class="container">
+            <h2>What you'll see</h2>
+            <div class="screenshots">
+                <figure class="shot">
+                    <img src="screenshots/screenshot-1.png" alt="Map view showing CCW-friendly and restricted zones across Tampa, FL with green and red pins." loading="lazy">
+                    <figcaption>Browse the crowd-sourced map</figcaption>
+                </figure>
+                <figure class="shot">
+                    <img src="screenshots/screenshot-2.png" alt="Edit Pin dialog showing red No Guns status with restriction reason and security details." loading="lazy">
+                    <figcaption>Tap a pin. Know why.</figcaption>
+                </figure>
+                <figure class="shot">
+                    <img src="screenshots/screenshot-4.png" alt="Create Pin dialog with carry zone status options: Allowed, Uncertain, No Guns." loading="lazy">
+                    <figcaption>Mark a zone in 3 taps</figcaption>
+                </figure>
+                <figure class="shot">
+                    <img src="screenshots/screenshot-3.png" alt="Edit Pin dialog showing green Allowed status for a Publix grocery store." loading="lazy">
+                    <figcaption>Color-coded carry status</figcaption>
+                </figure>
+            </div>
+        </div>
+    </section>
+
+    <section style="background: #fff;">
+        <div class="container">
+            <h2>FAQ</h2>
+            <div class="faq">
+                <details>
+                    <summary>Is this really free? What's the catch?</summary>
+                    <p>Free today, with no ads, no premium tier, and no tracking SDKs. The app is built and maintained by one CCW permit holder who needed it himself. There are no current plans to monetize. If hosting ever outgrows what one developer can absorb, the first options I'd explore are donations, a 2A-aligned grant, or a non-essential paid feature. Selling user data is not on the table, and any change will be announced openly.</p>
+                </details>
+                <details>
+                    <summary>What data do you collect?</summary>
+                    <p>None beyond what the app needs to function. No analytics SDKs. No ad pixels. No third-party trackers. Your location is used to center the map — it's not stored or transmitted. If you sign in to add pins, your email is stored for authentication only.</p>
+                </details>
+                <details>
+                    <summary>How do I know the pins are accurate?</summary>
+                    <p>Pins are crowd-sourced by permit holders. Each carries a last-modified timestamp, and any authenticated user can correct a wrong pin. The map is a starting point, not legal advice — always confirm posted signage on site.</p>
+                </details>
+                <details>
+                    <summary>Do I need an account?</summary>
+                    <p>No, not to view the map. An email/password account is only required to add or edit pins, so we can revoke abuse.</p>
+                </details>
+                <details>
+                    <summary>Which states are covered?</summary>
+                    <p>All 50 states. Restriction tags handle federal facilities (18 USC 930), GFSZA school zones, Texas 30.06/30.07/51%, California PC 626.9 + SB 2 sensitive places, New York post-Bruen CCIA, Illinois 430 ILCS 66/65, Florida 790.06(12) under HB 543, plus airport secure areas, K-12 schools, and state/local government property.</p>
+                </details>
+                <details>
+                    <summary>Is this affiliated with the NRA / USCCA / GOA / a political party?</summary>
+                    <p>No affiliation with any government agency, gun-rights organization, or political party. CCW Map is an independent project.</p>
+                </details>
+                <details>
+                    <summary>How can I report a problem pin?</summary>
+                    <p>Tap the pin in the app, then choose Report. Reports are reviewed and acted on within a few days. You can also block a user whose pins you consistently disagree with.</p>
+                </details>
+                <details>
+                    <summary>Can I delete my account?</summary>
+                    <p>Yes. Settings → Delete Account → type-DELETE confirmation. All your account data is removed.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <a href="terms/">Terms of Use</a>
+            <a href="privacy-policy.html">Privacy Policy</a>
+            <a href="data-deletion.html">Data Deletion</a>
+            <a href="mailto:camilo@kyberneticlabs.com">Contact</a>
+            <div class="copy">© CCW Map · Built by a CCW permit holder</div>
+        </div>
+    </footer>
+
 </body>
 </html>
