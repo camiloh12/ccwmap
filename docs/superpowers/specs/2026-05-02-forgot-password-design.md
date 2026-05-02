@@ -1,4 +1,4 @@
-# Forgot Password — Design Spec
+# Forgot Password + Auth-Screen Redesign — Design Spec
 
 **Date:** 2026-05-02
 **Branch:** `feature/forgot-login`
@@ -6,7 +6,10 @@
 
 ## Goal
 
-Allow a signed-out user who has forgotten their password to recover access through a self-service email-based reset flow. The user enters their email, receives a reset link, taps it on their phone, sets a new password in the app, and lands back in the app signed in with the new password.
+Two related changes shipped together:
+
+1. **Forgot password.** Allow a signed-out user who has forgotten their password to recover access through a self-service email-based reset flow. The user enters their email, receives a reset link, taps it on their phone, sets a new password in the app, and lands back in the app signed in with the new password.
+2. **Split the combined login/signup screen.** The current `LoginScreen` hosts both flows in one form with two buttons and an EULA checkbox that only matters for signup, which is confusing. Split into a sign-in-only `LoginScreen` and a new `SignUpScreen`, and add a confirm-password field to signup so it matches the new reset-password screen.
 
 ## Non-goals
 
@@ -14,22 +17,38 @@ Allow a signed-out user who has forgotten their password to recover access throu
 - SMS / phone-based recovery.
 - Recovery questions, hardware keys, or any non-email factor.
 - Re-prompting users for a new password on subsequent app launches if they closed the app mid-recovery.
+- Reworking the EULA modal flow, the passive first-launch acceptance, or the retroactive-blocking modal — only the inline checkbox on the auth form moves.
+- Visual redesign / theming of the auth screens beyond the structural split.
 
 ## User flow
 
 ```
-LoginScreen
-  └─ taps "Forgot password?"  ──►  ForgotPasswordScreen
-                                     │  enters email, taps "Send reset link"
-                                     │  ──► supabase.auth.resetPasswordForEmail(...)
-                                     ▼
-                                   Success state ("If an account exists for X,
-                                   we sent a reset link. Check inbox / spam.")
-                                     │  taps "Back to sign in"
-                                     ▼
-                                   LoginScreen
+SignInPromptSheet ──push──► LoginScreen
+                              │   email + password + "Sign In"
+                              │
+                              ├─ "Forgot password?" ──push──► ForgotPasswordScreen
+                              │                                 │  enters email, taps
+                              │                                 │  "Send reset link"
+                              │                                 │  ──► resetPasswordForEmail(...)
+                              │                                 ▼
+                              │                               Success state ("If an account
+                              │                               exists for X, we sent a reset
+                              │                               link. Check inbox / spam.")
+                              │                                 │  taps "Back to sign in"
+                              │                                 ▼
+                              │                               (pop) → LoginScreen
+                              │
+                              └─ "Sign up" ────────push──► SignUpScreen
+                                                              │  email + password + confirm
+                                                              │  + EULA checkbox + "Create
+                                                              │  Account"
+                                                              │  ──► signUpWithEmail(...)
+                                                              │  → snackbar "Check email"
+                                                              ▼
+                                                            (auto-pop on auth-state change)
+                                                            → LoginScreen → MapScreen
 
-  ── separately: user opens email on phone, taps link ──►
+  ── separately: user opens email on phone, taps reset link ──►
      web: GitHub Pages page (recovery copy) ──redirect──►
      deep link: com.ccwmap.app://auth/callback?token_hash=...&type=recovery
        │
@@ -50,19 +69,22 @@ LoginScreen
 
 - `lib/presentation/screens/forgot_password_screen.dart` — email entry + success state
 - `lib/presentation/screens/reset_password_screen.dart` — new password + confirm
+- `lib/presentation/screens/sign_up_screen.dart` — signup-only (split out of LoginScreen)
 - `test/presentation/screens/forgot_password_screen_test.dart`
 - `test/presentation/screens/reset_password_screen_test.dart`
-- `test/presentation/viewmodels/auth_viewmodel_test.dart` — extend if exists, else create
+- `test/presentation/screens/sign_up_screen_test.dart`
+- `test/presentation/viewmodels/auth_viewmodel_password_reset_test.dart` — sits alongside the existing per-feature `auth_viewmodel_delete_test.dart`
 
 ### Modified files
 
 - `lib/domain/repositories/auth_repository.dart` — add `sendPasswordResetEmail`, `updatePassword`, `passwordRecoveryEvents`
 - `lib/data/repositories/supabase_auth_repository.dart` — implement the three methods; subscribe to underlying Supabase auth stream and surface `AuthChangeEvent.passwordRecovery`
 - `lib/presentation/viewmodels/auth_viewmodel.dart` — add `sendPasswordReset`, `updatePassword`, `isInPasswordRecovery`, `clearRecoveryState`; extend `_formatAuthError` for new error cases; subscribe to repository's recovery stream
-- `lib/presentation/screens/login_screen.dart` — add "Forgot password?" link below the password field, right-aligned, above the EULA checkbox
+- `lib/presentation/screens/login_screen.dart` — strip out signup logic, EULA checkbox, and the "Create Account" button; relax password validator (no min-length on sign-in); add "Forgot password?" link below the password field; add "Don't have an account? Sign up" footer link that pushes `SignUpScreen`
 - `lib/main.dart` — `_AppRoot` watches `auth.isInPasswordRecovery` and pushes `ResetPasswordScreen` (modal route, back-button blocked via `PopScope`); also surfaces `auth.error` as a `SnackBar` for the recovery-link-expiry path
 - `test/fakes/fake_auth_repository.dart` — implement new interface methods + recovery stream controller + `sendShouldThrow` / `updateShouldThrow` toggles
 - `docs/auth/callback/index.html` — branch on `?type` so recovery flows render "Reset Your Password" copy instead of "Email Confirmed!"
+- `test/presentation/screens/login_screen_test.dart` — update to assert the screen no longer shows EULA / signup affordances and to cover the new "Forgot password?" / "Sign up" footer links
 
 ### Repository interface additions (`AuthRepository`)
 
@@ -123,6 +145,66 @@ The new wiring is:
 
 `resetPasswordForEmail` uses redirect URL `https://camiloh12.github.io/ccwmap/auth/callback` — the URL already configured in Supabase Auth → Redirect URLs for signup confirmations. No new URL to register.
 
+## Auth-screen redesign (login / signup split)
+
+### Why split
+
+The current `LoginScreen` hosts both flows in one form with two action buttons ("Sign In" and "Create Account") and an EULA checkbox that only matters for one of them. Symptoms:
+- The EULA checkbox is rendered for sign-in users who have already accepted (unnecessary noise) and gates the wrong button only conditionally.
+- The shared password validator enforces a 6-char minimum on sign-in, which would falsely reject legacy accounts whose passwords don't meet current rules.
+- "Two primary buttons on one form" is the classic flow-confusion anti-pattern.
+
+We split into two dedicated screens, mirroring the dedicated-screen approach we already chose for `ForgotPasswordScreen` and `ResetPasswordScreen`.
+
+### Navigation
+
+```
+SignInPromptSheet ──push──► LoginScreen
+                              ├─ "Forgot password?" ──push──► ForgotPasswordScreen
+                              └─ "Sign up" ──push──► SignUpScreen
+                                                      └─ "Already have an account? Sign in" ── pop ──► back
+```
+
+`SignUpScreen` is reachable only by pushing on top of `LoginScreen`. After a successful signup the auto-pop-on-auth-state-change pattern unwinds both screens back to `MapScreen` cleanly. The same auto-pop runs on `LoginScreen` after a successful sign-in.
+
+### `LoginScreen` (sign-in only) — what stays / what changes
+
+Stays:
+- App icon, title ("CCW Map"), subtitle
+- Email field + email-format validator
+- Password field with show/hide eye toggle
+- Auto-pop on `isAuthenticated` flip (existing pattern)
+- Error banner (red-bordered container)
+
+Changes:
+- **Password validator**: drop the 6-char minimum — sign-in accepts whatever the user types and lets the server reject it. Keeps legacy accounts working and avoids client-side rejection of correct-but-old passwords.
+- **Add** "Forgot password?" `TextButton`, right-aligned in an `Align` widget directly below the password field. Disabled while `isLoading`. Pushes `ForgotPasswordScreen`.
+- **Remove** the EULA checkbox row and `_eulaChecked` state.
+- **Remove** the "Create Account" `OutlinedButton` and `_handleSignUp` logic.
+- **Add** footer row at the bottom: a `TextButton` reading "Don't have an account? Sign up" that pushes `SignUpScreen`. Disabled while `isLoading`.
+
+### `SignUpScreen` (new) — composition
+
+- AppBar with back button, title "Create Account"
+- App icon + small tagline (matches LoginScreen visual rhythm)
+- Email field + email-format validator (same regex as LoginScreen)
+- Password field with show/hide eye toggle, validator: ≥6 chars
+- **Confirm-password field** with show/hide eye toggle, validator: must equal the password field's current value (compared via the password `TextEditingController` reference — same pattern as `ResetPasswordScreen`)
+- EULA checkbox row identical to today's wording, with the same `_openTermsUrl` helper (lifted into a small shared util or duplicated — implementation detail for the plan)
+- "Create Account" `ElevatedButton` (primary) — disabled until `isLoading || !_eulaChecked`
+- Error banner same pattern as other auth screens
+- Footer: "Already have an account? Sign in" `TextButton` that pops the route
+- Auto-pop on `isAuthenticated` flip — same `Consumer<AuthViewModel>` + `addPostFrameCallback` pattern that `LoginScreen` uses today, copied to `SignUpScreen`. After signup completes, `SignUpScreen` pops first (closing itself), then `LoginScreen`'s own auto-pop fires for the same auth flip and unwinds back to `MapScreen`.
+- Post-signup behavior unchanged from today's `_handleSignUp`: record agreement acceptance via `AgreementsRepository.recordAgreementAcceptance`, show "Account created! Check your email to confirm." snackbar via the app-level `ScaffoldMessenger` so it survives the pop
+
+### `_openTermsUrl` duplication
+
+`LoginScreen._openTermsUrl` is currently a private method. After the split, only `SignUpScreen` needs it (and the existing `EulaModal`, which already has its own copy via `onReadTerms`). Two options for the plan:
+- Move it to a small shared helper (e.g., `lib/presentation/utils/terms_url.dart`)
+- Inline the 4-line method into `SignUpScreen` and delete from `LoginScreen`
+
+Either is fine; pick when writing the plan. Lean toward the small helper to avoid duplication.
+
 ## UI details
 
 ### `ForgotPasswordScreen`
@@ -140,9 +222,6 @@ The new wiring is:
 - "Update password" elevated button
 - On success: pop to map (no extra confirmation needed — the `MapScreen` will show the now-authenticated state)
 - Error banner same pattern as other auth screens
-
-### `LoginScreen` change
-- New `TextButton` "Forgot password?" placed in a right-aligned `Align` widget directly below the password `TextFormField`, before the EULA checkbox row. Disabled while `isLoading`.
 
 ## Error handling & edge cases
 
@@ -190,23 +269,34 @@ Following project targets: ViewModels 80%+, UI smoke tests, mappers/domain 100%.
 ### Widget tests
 - `ForgotPasswordScreen`: empty email shows validation error; valid email + submit shows success state; error from VM shows red banner
 - `ResetPasswordScreen`: mismatched passwords blocks submit; both valid + submit calls VM; cancel calls `signOut` + `clearRecoveryState`
-- `LoginScreen`: "Forgot password?" link present and tappable; tap pushes `ForgotPasswordScreen`
+- `LoginScreen`: "Forgot password?" link present and tappable, pushes `ForgotPasswordScreen`; "Sign up" footer link present, pushes `SignUpScreen`; EULA checkbox and "Create Account" button are no longer rendered; sign-in submits with a 5-character password (validates server-side, not client-side)
+- `SignUpScreen`: empty email and password show validation errors; mismatched passwords block submit; "Create Account" button disabled until EULA checked; valid form + EULA + submit calls VM; "Sign in" footer link pops the route
 
 ### Fake updates
 Extend `FakeAuthRepository` with `sendPasswordResetEmail`, `updatePassword`, recovery-event stream controller, and configurable failure toggles (`sendShouldThrow`, `updateShouldThrow`).
 
 ### Manual test plan (Android first per SP cadence)
-1. Tap "Forgot password?" on login → email-entry screen
-2. Submit known email → success message
-3. Open email link on phone → app opens → reset screen pushed
-4. Mismatched passwords → submit blocked
-5. Set valid new password → returned to map, signed in
-6. Sign out, sign in with new password → succeeds
-7. Tap an expired link (>1 hour old) → friendly expired-link error, not pushed to reset screen
-8. Cancel mid-reset → returned to map as guest
+
+**Auth-screen redesign**
+1. From map, open `SignInPromptSheet` → tap to open `LoginScreen` → no EULA checkbox visible, no "Create Account" button visible
+2. Tap "Sign up" footer link → `SignUpScreen` pushed
+3. Submit empty form → email and password validation errors render
+4. Enter mismatched passwords → "Create Account" stays disabled until EULA checked, then submit blocks with mismatch error
+5. Enter matching passwords + check EULA + submit → success snackbar, both screens pop, user is on map signed in
+6. Sign out, return to `LoginScreen`, tap "Already have an account? Sign in" footer of `SignUpScreen` → pops back to `LoginScreen`
+
+**Forgot-password flow**
+7. Tap "Forgot password?" on login → email-entry screen
+8. Submit known email → success message
+9. Open email link on phone → app opens → reset screen pushed
+10. Mismatched passwords → submit blocked
+11. Set valid new password → returned to map, signed in
+12. Sign out, sign in with new password → succeeds
+13. Tap an expired link (>1 hour old) → friendly expired-link error, not pushed to reset screen
+14. Cancel mid-reset → returned to map as guest
 
 ### Test count impact
-Adds ~15 unit + ~6 widget tests. Current count is 109; expect ~130 after.
+Adds ~15 unit + ~12 widget tests (~6 for new auth screens, ~6 for redesigned LoginScreen + new SignUpScreen). Current count is 109; expect ~135 after.
 
 ## Out of scope (deferred)
 
