@@ -40,7 +40,7 @@ abstract class AuthRepository {
   Future<void> sendPasswordResetEmail(String email);
 
   /// Updates the password for the user in the current recovery session.
-  /// Must only be called while a recovery session is active.
+  /// Must only be called while [AuthViewModel.isInPasswordRecovery] is true.
   /// Throws AuthException on weak password, expired session, etc.
   Future<void> updatePassword(String newPassword);
 
