@@ -53,8 +53,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> _handleCancel() async {
     final vm = context.read<AuthViewModel>();
-    await vm.signOut();
+    // Clear the recovery flag first so _AppRoot does not observe a window
+    // where isInPasswordRecovery is true while currentUser is null.
     vm.clearRecoveryState();
+    await vm.signOut();
     if (!mounted) return;
     Navigator.of(context).pop();
   }
