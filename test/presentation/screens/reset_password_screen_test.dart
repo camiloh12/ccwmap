@@ -7,19 +7,44 @@ import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 
-Widget _hosted(AuthViewModel vm) {
-  return ChangeNotifierProvider<AuthViewModel>.value(
-    value: vm,
-    child: const MaterialApp(home: ResetPasswordScreen()),
+Future<void> _pumpAndPushResetScreen(WidgetTester tester, AuthViewModel vm) async {
+  await tester.pumpWidget(
+    ChangeNotifierProvider<AuthViewModel>.value(
+      value: vm,
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ResetPasswordScreen(),
+                  ),
+                ),
+                child: const Text('open reset'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
+  await tester.tap(find.text('open reset'));
+  // Drive the push animation to completion frame-by-frame.
+  // pumpAndSettle() deadlocks when the pushed screen contains
+  // PopScope(canPop: false) in some Flutter versions; explicit pump calls
+  // advance exactly one frame each and always return.
+  await tester.pump(); // schedule the push
+  await tester.pump(const Duration(milliseconds: 300)); // complete the route animation
 }
 
 Future<(FakeAuthRepository, AuthViewModel)> _setupRecoveryVm() async {
   final fake = FakeAuthRepository();
   final vm = AuthViewModel(fake);
   await vm.initialize();
+  // emitPasswordRecovery delivers synchronously to the broadcast stream listener,
+  // so _isInPasswordRecovery is already true after this call — no delay needed.
   fake.emitPasswordRecovery();
-  await Future<void>.delayed(Duration.zero);
   return (fake, vm);
 }
 
@@ -28,7 +53,7 @@ void main() {
     testWidgets('mismatched passwords block submit with validation error',
         (tester) async {
       final (fake, vm) = await _setupRecoveryVm();
-      await tester.pumpWidget(_hosted(vm));
+      await _pumpAndPushResetScreen(tester, vm);
 
       final fields = find.byType(TextFormField);
       await tester.enterText(fields.at(0), 'newpass123');
@@ -45,7 +70,7 @@ void main() {
 
     testWidgets('matching passwords + submit calls VM', (tester) async {
       final (fake, vm) = await _setupRecoveryVm();
-      await tester.pumpWidget(_hosted(vm));
+      await _pumpAndPushResetScreen(tester, vm);
 
       final fields = find.byType(TextFormField);
       await tester.enterText(fields.at(0), 'newpass123');
@@ -65,7 +90,7 @@ void main() {
       final (fake, vm) = await _setupRecoveryVm();
       // Make the VM look like a logged-in recovery session.
       fake.setCurrentUser(User(id: 'u1', email: 'u1@example.com'));
-      await tester.pumpWidget(_hosted(vm));
+      await _pumpAndPushResetScreen(tester, vm);
 
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
