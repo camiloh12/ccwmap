@@ -24,6 +24,10 @@ class SupabaseAuthRepository implements AuthRepository {
     // Surface password-recovery events from the underlying Supabase auth
     // stream as a separate stream consumers can listen to. This is the
     // signal that distinguishes a recovery callback from a normal sign-in.
+    //
+    // Subscription handle is intentionally not retained: this repository
+    // is constructed once at app startup and lives for the whole process,
+    // so the listener is co-mortal with the underlying Supabase singleton.
     _supabase.auth.onAuthStateChange.listen((state) {
       if (state.event == supabase.AuthChangeEvent.passwordRecovery) {
         _passwordRecoveryController.add(null);
