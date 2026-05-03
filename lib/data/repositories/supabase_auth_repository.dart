@@ -133,7 +133,15 @@ class SupabaseAuthRepository implements AuthRepository {
     try {
       await _supabase.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'https://camiloh12.github.io/ccwmap/auth/callback',
+        // Append ?type=recovery so the GitHub Pages fallback page (which
+        // a user lands on if the deep-link doesn't fire — e.g., desktop)
+        // can render reset-specific copy instead of the default
+        // "Email Confirmed!" heading. The app side does NOT need this
+        // hint: the SDK fires AuthChangeEvent.passwordRecovery on its
+        // own, based on the codeVerifier tag stored locally when this
+        // method was called.
+        redirectTo:
+            'https://camiloh12.github.io/ccwmap/auth/callback?type=recovery',
       );
     } on supabase.AuthException {
       rethrow;
