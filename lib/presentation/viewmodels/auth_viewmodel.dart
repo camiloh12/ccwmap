@@ -48,11 +48,16 @@ class AuthViewModel extends ChangeNotifier {
     // Listen for password-recovery events. When fired, the current session
     // is recovery-mode and the UI must route the user to a "set new password"
     // screen instead of the regular post-login state.
-    _recoverySubscription = _repository.passwordRecoveryEvents().listen((_) {
-      debugPrint('AuthViewModel: passwordRecovery event received');
-      _isInPasswordRecovery = true;
-      notifyListeners();
-    });
+    _recoverySubscription = _repository.passwordRecoveryEvents().listen(
+      (_) {
+        debugPrint('AuthViewModel: passwordRecovery event received');
+        _isInPasswordRecovery = true;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('AuthViewModel: passwordRecovery stream error: $error');
+      },
+    );
 
     debugPrint(
       'AuthViewModel: Initialization complete. User: ${_currentUser?.email}',
