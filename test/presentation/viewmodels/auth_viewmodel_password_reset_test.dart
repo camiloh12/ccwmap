@@ -134,4 +134,49 @@ void main() {
       fake.dispose();
     });
   });
+
+  group('AuthViewModel.handleDeepLink error propagation', () {
+    test(
+      'expired recovery link: AuthException is caught and formatted to friendly copy',
+      () async {
+        final fake = FakeAuthRepository();
+        final vm = AuthViewModel(fake);
+        fake.handleDeepLinkShouldThrow = true;
+        fake.handleDeepLinkThrownError = const supabase.AuthException(
+          'Token has expired or is invalid (otp_expired).',
+        );
+
+        await vm.handleDeepLink(
+          Uri.parse('com.ccwmap.app://auth/callback'
+              '?token_hash=stale&type=recovery'),
+        );
+
+        expect(vm.error, contains('expired'));
+        expect(vm.isInPasswordRecovery, isFalse);
+
+        vm.dispose();
+        fake.dispose();
+      },
+    );
+
+    test(
+      'non-AuthException is caught and surfaces a generic error',
+      () async {
+        final fake = FakeAuthRepository();
+        final vm = AuthViewModel(fake);
+        fake.handleDeepLinkShouldThrow = true;
+        fake.handleDeepLinkThrownError = Exception('network down');
+
+        await vm.handleDeepLink(
+          Uri.parse('com.ccwmap.app://auth/callback'),
+        );
+
+        expect(vm.error, isNotNull);
+        expect(vm.isInPasswordRecovery, isFalse);
+
+        vm.dispose();
+        fake.dispose();
+      },
+    );
+  });
 }

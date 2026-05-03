@@ -52,8 +52,19 @@ class FakeAuthRepository implements AuthRepository {
     setCurrentUser(null);
   }
 
+  bool handleDeepLinkShouldThrow = false;
+  Object handleDeepLinkThrownError =
+      Exception('simulated deep link failure');
+  int handleDeepLinkCallCount = 0;
+  Uri? handleDeepLinkLastUri;
+
   @override
   Future<void> handleDeepLink(Uri uri) async {
+    handleDeepLinkCallCount++;
+    handleDeepLinkLastUri = uri;
+    if (handleDeepLinkShouldThrow) {
+      throw handleDeepLinkThrownError;
+    }
     // Simulate deep link handling
     final user = User(id: 'test-id', email: 'deeplink@test.com');
     setCurrentUser(user);
