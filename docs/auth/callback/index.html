@@ -212,20 +212,34 @@
             console.log('Query params:', window.location.search);
             console.log('Hash params:', hash);
 
-            // Check for PKCE flow (token_hash in query params)
+            // PKCE OTP flow (older Supabase email links: ?token_hash=&type=)
             const tokenHash = urlParams.get('token_hash');
             const type = urlParams.get('type');
 
-            // Check for implicit flow (access_token in hash)
+            // PKCE Auth Code flow (modern Supabase email links: ?code=)
+            // This is the default for supabase_flutter v2 SDK with
+            // AuthFlowType.pkce, used by both signup confirmations and
+            // password-reset emails.
+            const code = urlParams.get('code');
+
+            // Implicit flow (legacy: #access_token=&refresh_token=)
             const accessToken = hashParams.get('access_token');
             const refreshToken = hashParams.get('refresh_token');
 
             let deepLink = null;
 
             if (tokenHash && type) {
-                // PKCE flow - pass token_hash to app
+                // PKCE OTP flow - pass token_hash to app
                 deepLink = `com.ccwmap.app://auth/callback?token_hash=${encodeURIComponent(tokenHash)}&type=${encodeURIComponent(type)}`;
-                console.log('Using PKCE flow with token_hash');
+                console.log('Using PKCE OTP flow with token_hash');
+            } else if (code) {
+                // PKCE Auth Code flow - pass code (and type, if present) to app.
+                // The app's getSessionFromUrl reads the code, exchanges it via
+                // exchangeCodeForSession, and fires the right auth event
+                // based on the locally-stored codeVerifier metadata.
+                deepLink = `com.ccwmap.app://auth/callback?code=${encodeURIComponent(code)}`;
+                if (type) deepLink += `&type=${encodeURIComponent(type)}`;
+                console.log('Using PKCE Auth Code flow with code');
             } else if (accessToken && refreshToken) {
                 // Implicit flow - pass tokens in hash
                 deepLink = `com.ccwmap.app://auth/callback#access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
