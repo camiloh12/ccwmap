@@ -161,17 +161,17 @@
 <body>
     <div class="container">
         <div class="checkmark"></div>
-        <h1>Email Confirmed!</h1>
-        <p class="subtitle">Your CCW Map account has been verified.</p>
+        <h1 id="page-title">Email Confirmed!</h1>
+        <p class="subtitle" id="page-subtitle">Your CCW Map account has been verified.</p>
 
         <div class="instructions">
-            <h3>Next Steps</h3>
+            <h3 id="next-steps-heading">Next Steps</h3>
 
             <div class="instruction-item">
                 <div class="instruction-icon">1</div>
                 <div class="instruction-text">
                     <strong>On Mobile Device</strong>
-                    The CCW Map app should open automatically. If not, tap the button below.
+                    <span id="mobile-copy">The CCW Map app should open automatically. If not, tap the button below.</span>
                 </div>
             </div>
 
@@ -179,7 +179,7 @@
                 <div class="instruction-icon">2</div>
                 <div class="instruction-text">
                     <strong>On Desktop</strong>
-                    Open the CCW Map app on your phone and sign in with your email and password.
+                    <span id="desktop-copy">Open the CCW Map app on your phone and sign in with your email and password.</span>
                 </div>
             </div>
         </div>
@@ -189,7 +189,7 @@
             <p style="margin-top: 10px; color: #666;">Opening app...</p>
         </div>
 
-        <button class="button" onclick="tryOpenApp()">Open CCW Map App</button>
+        <button class="button" id="open-app-button" onclick="tryOpenApp()">Open CCW Map App</button>
 
         <div class="footer">
             Need help? Contact support or check the app for more information.
@@ -197,6 +197,23 @@
     </div>
 
     <script>
+        // Branch the visible copy based on the OTP `type` query param so
+        // the password-recovery flow doesn't render "Email Confirmed!".
+        (function applyTypeCopy() {
+            const params = new URLSearchParams(window.location.search);
+            const type = params.get('type');
+            if (type === 'recovery') {
+                document.getElementById('page-title').textContent = 'Reset Your Password';
+                document.getElementById('page-subtitle').textContent =
+                    'Open this link in the CCW Map app to set a new password.';
+                document.getElementById('mobile-copy').textContent =
+                    'The CCW Map app should open automatically. If not, tap the button below.';
+                document.getElementById('desktop-copy').textContent =
+                    'Open this email on the device where CCW Map is installed and tap the link there to set a new password.';
+                document.getElementById('open-app-button').textContent = 'Open CCW Map App';
+            }
+        })();
+
         function tryOpenApp() {
             // Show loading indicator
             document.querySelector('.button').style.display = 'none';
