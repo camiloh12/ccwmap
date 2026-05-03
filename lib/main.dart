@@ -43,6 +43,14 @@ Future<void> main() async {
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       autoRefreshToken: true,
+      // We run our own deep-link listener in _AppRoot so we can surface
+      // expired-link errors as a SnackBar. Leaving the SDK's built-in
+      // observer enabled means BOTH consumers process every deep link;
+      // the second call to getSessionFromUrl finds the auth code already
+      // consumed and throws AuthApiException(flow_state_not_found),
+      // surfacing as a spurious error banner on ResetPasswordScreen even
+      // though the recovery succeeded.
+      detectSessionInUri: false,
     ),
   );
 
