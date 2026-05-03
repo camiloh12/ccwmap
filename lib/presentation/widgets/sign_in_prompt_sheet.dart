@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:ccwmap/presentation/screens/login_screen.dart';
+import 'package:ccwmap/presentation/screens/sign_up_screen.dart';
 
 /// A bottom-sheet prompt shown to guests when they attempt an action that
-/// requires an account. Offers Sign In / Create Account (both route to the
-/// same [LoginScreen], which exposes both affordances) and Cancel.
+/// requires an account. Offers Sign In / Create Account (Sign In opens
+/// LoginScreen; Create Account opens LoginScreen with SignUpScreen pushed
+/// on top so the back stack reads as Map → Login → Signup) and Cancel.
 class SignInPromptSheet extends StatelessWidget {
   final String title;
   final String body;
@@ -11,13 +13,22 @@ class SignInPromptSheet extends StatelessWidget {
   const SignInPromptSheet({super.key, required this.title, required this.body});
 
   void _openLogin(BuildContext context) {
-    // Close the sheet, then push LoginScreen on the root navigator so the
-    // returning user pops back to the map.
     Navigator.of(context).pop();
     Navigator.of(
       context,
       rootNavigator: true,
     ).push(MaterialPageRoute<void>(builder: (_) => const LoginScreen()));
+  }
+
+  void _openSignUp(BuildContext context) {
+    Navigator.of(context).pop();
+    final navigator = Navigator.of(context, rootNavigator: true);
+    navigator.push(MaterialPageRoute<void>(
+      builder: (_) => const LoginScreen(),
+    ));
+    navigator.push(MaterialPageRoute<void>(
+      builder: (_) => const SignUpScreen(),
+    ));
   }
 
   @override
@@ -31,9 +42,10 @@ class SignInPromptSheet extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(body, style: Theme.of(context).textTheme.bodyMedium),
@@ -47,7 +59,7 @@ class SignInPromptSheet extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             OutlinedButton(
-              onPressed: () => _openLogin(context),
+              onPressed: () => _openSignUp(context),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
               ),
