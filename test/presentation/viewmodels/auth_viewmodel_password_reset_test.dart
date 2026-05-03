@@ -19,8 +19,8 @@ void main() {
       fake.dispose();
     });
 
-    test('trims email before delegating', () async {
-      await vm.sendPasswordReset('  user@example.com  ');
+    test('passes email through to repository without modification', () async {
+      await vm.sendPasswordReset('user@example.com');
       expect(fake.sendResetCallCount, 1);
       expect(fake.sendResetLastEmail, 'user@example.com');
       expect(vm.error, isNull);

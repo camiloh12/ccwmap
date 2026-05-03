@@ -41,7 +41,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (!_formKey.currentState!.validate()) return;
     final vm = context.read<AuthViewModel>();
     vm.clearError();
-    await vm.sendPasswordReset(_emailController.text);
+    await vm.sendPasswordReset(_emailController.text.trim());
     if (!mounted) return;
     if (vm.error == null) {
       setState(() => _sent = true);

@@ -181,7 +181,7 @@ class AuthViewModel extends ChangeNotifier {
 
     try {
       debugPrint('AuthViewModel: Sending password reset for: $email');
-      await _repository.sendPasswordResetEmail(email.trim());
+      await _repository.sendPasswordResetEmail(email);
       debugPrint('AuthViewModel: Password reset email sent');
     } on supabase.AuthException catch (e) {
       debugPrint('AuthViewModel: Password reset failed: ${e.message}');
