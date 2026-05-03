@@ -338,7 +338,7 @@ class _AppRootState extends State<_AppRoot> {
               builder: (_) => const ResetPasswordScreen(),
             ))
             .then((_) {
-          _resetScreenPushed = false;
+          if (mounted) _resetScreenPushed = false;
         });
       });
     }
