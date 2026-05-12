@@ -71,6 +71,35 @@ void main() {
       fakeRepo.dispose();
       authViewModel.dispose();
     });
+
+    testWidgets(
+        'does NOT auto-pop when auth flips during password recovery '
+        '(_AppRoot is responsible for pushing ResetPasswordScreen on top, and '
+        'a self-pop here pops that screen out from under the user)',
+        (tester) async {
+      final fakeRepo = FakeAuthRepository();
+      final authViewModel = AuthViewModel(fakeRepo);
+      await authViewModel.initialize();
+
+      await tester.pumpWidget(_wrappedLoginEntry(authViewModel));
+      await tester.tap(find.text('open login'));
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+
+      // Real flow: getSessionFromUrl on a recovery code creates a session
+      // AND fires AuthChangeEvent.passwordRecovery in the same SDK callback.
+      // Both reach AuthViewModel before the next frame.
+      fakeRepo.emitPasswordRecovery();
+      fakeRepo.setCurrentUser(User(id: 'test-id', email: 'me@example.com'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(LoginScreen), findsOneWidget,
+          reason: 'LoginScreen must remain so the recovery screen pushed by '
+              '_AppRoot stays on top instead of being popped.');
+
+      fakeRepo.dispose();
+      authViewModel.dispose();
+    });
   });
 
   group('LoginScreen post-split structure', () {

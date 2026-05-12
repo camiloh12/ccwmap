@@ -69,9 +69,15 @@ class _LoginScreenState extends State<LoginScreen> {
         // top of MapScreen, so popping reveals the now-authenticated map.
         // Pop runs in addPostFrameCallback to stay out of the build phase;
         // guards make it idempotent across rebuilds.
+        //
+        // Skip the auto-pop during a password-recovery deep link: the session
+        // becomes authenticated, but _AppRoot pushes ResetPasswordScreen on
+        // top in the same frame. Popping here pops that screen out from
+        // under the user. The recovery screen owns the post-update navigation.
         if (authViewModel.isAuthenticated &&
             authViewModel.error == null &&
-            !authViewModel.isLoading) {
+            !authViewModel.isLoading &&
+            !authViewModel.isInPasswordRecovery) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();

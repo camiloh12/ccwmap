@@ -90,8 +90,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     return Consumer<AuthViewModel>(
       builder: (context, vm, _) {
-        // Auto-pop on auth flip — same pattern LoginScreen uses.
-        if (vm.isAuthenticated && vm.error == null && !vm.isLoading) {
+        // Auto-pop on auth flip — same pattern LoginScreen uses, including
+        // the recovery-flow guard (see LoginScreen for rationale).
+        if (vm.isAuthenticated &&
+            vm.error == null &&
+            !vm.isLoading &&
+            !vm.isInPasswordRecovery) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
