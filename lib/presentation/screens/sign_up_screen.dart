@@ -58,10 +58,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final agreements = context.read<AgreementsRepository>();
     vm.clearError();
 
-    await vm.signUp(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
+    await vm.signUp(_emailController.text.trim(), _passwordController.text);
     if (!mounted) return;
 
     if (vm.error == null) {
@@ -124,9 +121,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       const SizedBox(height: 16),
                       Text(
                         'CCW Map',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
+                        style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center,
                       ),
@@ -155,11 +150,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           prefixIcon: const Icon(Icons.lock),
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword
-                                ? Icons.visibility
-                                : Icons.visibility_off),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
                             onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                       ),
@@ -174,11 +172,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           prefixIcon: const Icon(Icons.lock_outline),
                           border: const OutlineInputBorder(),
                           suffixIcon: IconButton(
-                            icon: Icon(_obscureConfirm
-                                ? Icons.visibility
-                                : Icons.visibility_off),
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
                             onPressed: () => setState(
-                                () => _obscureConfirm = !_obscureConfirm),
+                              () => _obscureConfirm = !_obscureConfirm,
+                            ),
                           ),
                         ),
                       ),
@@ -190,8 +191,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                             value: _eulaChecked,
                             onChanged: isLoading
                                 ? null
-                                : (v) => setState(
-                                    () => _eulaChecked = v ?? false),
+                                : (v) =>
+                                      setState(() => _eulaChecked = v ?? false),
                           ),
                           Expanded(
                             child: Padding(
@@ -255,7 +256,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 2),
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Text('Create Account'),
                       ),

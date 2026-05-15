@@ -23,12 +23,12 @@ class SignInPromptSheet extends StatelessWidget {
   void _openSignUp(BuildContext context) {
     Navigator.of(context).pop();
     final navigator = Navigator.of(context, rootNavigator: true);
-    navigator.push(MaterialPageRoute<void>(
-      builder: (_) => const LoginScreen(),
-    ));
-    navigator.push(MaterialPageRoute<void>(
-      builder: (_) => const SignUpScreen(),
-    ));
+    navigator.push(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+    );
+    navigator.push(
+      MaterialPageRoute<void>(builder: (_) => const SignUpScreen()),
+    );
   }
 
   @override
@@ -42,10 +42,9 @@ class SignInPromptSheet extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(body, style: Theme.of(context).textTheme.bodyMedium),

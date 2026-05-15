@@ -18,9 +18,7 @@ Widget _wrappedLoginEntry(AuthViewModel vm) {
           body: Center(
             child: ElevatedButton(
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const LoginScreen(),
-                ),
+                MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
               ),
               child: const Text('open login'),
             ),
@@ -33,8 +31,9 @@ Widget _wrappedLoginEntry(AuthViewModel vm) {
 
 void main() {
   group('LoginScreen auto-pop on auth', () {
-    testWidgets('pops when authStateChanges emits an authenticated user',
-        (tester) async {
+    testWidgets('pops when authStateChanges emits an authenticated user', (
+      tester,
+    ) async {
       final fakeRepo = FakeAuthRepository();
       final authViewModel = AuthViewModel(fakeRepo);
       await authViewModel.initialize();
@@ -53,8 +52,9 @@ void main() {
       authViewModel.dispose();
     });
 
-    testWidgets('stays when authStateChanges emits null (still guest)',
-        (tester) async {
+    testWidgets('stays when authStateChanges emits null (still guest)', (
+      tester,
+    ) async {
       final fakeRepo = FakeAuthRepository();
       final authViewModel = AuthViewModel(fakeRepo);
       await authViewModel.initialize();
@@ -72,11 +72,11 @@ void main() {
       authViewModel.dispose();
     });
 
-    testWidgets(
-        'does NOT auto-pop when auth flips during password recovery '
+    testWidgets('does NOT auto-pop when auth flips during password recovery '
         '(_AppRoot is responsible for pushing ResetPasswordScreen on top, and '
-        'a self-pop here pops that screen out from under the user)',
-        (tester) async {
+        'a self-pop here pops that screen out from under the user)', (
+      tester,
+    ) async {
       final fakeRepo = FakeAuthRepository();
       final authViewModel = AuthViewModel(fakeRepo);
       await authViewModel.initialize();
@@ -93,9 +93,13 @@ void main() {
       fakeRepo.setCurrentUser(User(id: 'test-id', email: 'me@example.com'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(LoginScreen), findsOneWidget,
-          reason: 'LoginScreen must remain so the recovery screen pushed by '
-              '_AppRoot stays on top instead of being popped.');
+      expect(
+        find.byType(LoginScreen),
+        findsOneWidget,
+        reason:
+            'LoginScreen must remain so the recovery screen pushed by '
+            '_AppRoot stays on top instead of being popped.',
+      );
 
       fakeRepo.dispose();
       authViewModel.dispose();
@@ -103,8 +107,9 @@ void main() {
   });
 
   group('LoginScreen post-split structure', () {
-    testWidgets('does not render EULA checkbox or Create Account button',
-        (tester) async {
+    testWidgets('does not render EULA checkbox or Create Account button', (
+      tester,
+    ) async {
       final fakeRepo = FakeAuthRepository();
       final authViewModel = AuthViewModel(fakeRepo);
       await authViewModel.initialize();
@@ -120,8 +125,9 @@ void main() {
       authViewModel.dispose();
     });
 
-    testWidgets('"Forgot password?" link pushes ForgotPasswordScreen',
-        (tester) async {
+    testWidgets('"Forgot password?" link pushes ForgotPasswordScreen', (
+      tester,
+    ) async {
       final fakeRepo = FakeAuthRepository();
       final authViewModel = AuthViewModel(fakeRepo);
       await authViewModel.initialize();

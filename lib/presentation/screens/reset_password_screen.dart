@@ -172,7 +172,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                   height: 20,
                                   width: 20,
                                   child: CircularProgressIndicator(
-                                      strokeWidth: 2),
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Update password'),
                         ),

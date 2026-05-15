@@ -51,8 +51,9 @@ Future<void> _setTallViewport(WidgetTester tester) async {
 
 void main() {
   group('SignUpScreen', () {
-    testWidgets('Create Account is disabled until EULA is checked',
-        (tester) async {
+    testWidgets('Create Account is disabled until EULA is checked', (
+      tester,
+    ) async {
       await _setTallViewport(tester);
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);
@@ -95,8 +96,9 @@ void main() {
       fake.dispose();
     });
 
-    testWidgets('valid form submits, records agreement, shows snackbar',
-        (tester) async {
+    testWidgets('valid form submits, records agreement, shows snackbar', (
+      tester,
+    ) async {
       await _setTallViewport(tester);
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);

@@ -7,7 +7,10 @@ import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 
 import '../../fakes/fake_auth_repository.dart';
 
-Future<void> _pumpAndPushResetScreen(WidgetTester tester, AuthViewModel vm) async {
+Future<void> _pumpAndPushResetScreen(
+  WidgetTester tester,
+  AuthViewModel vm,
+) async {
   await tester.pumpWidget(
     ChangeNotifierProvider<AuthViewModel>.value(
       value: vm,
@@ -35,7 +38,9 @@ Future<void> _pumpAndPushResetScreen(WidgetTester tester, AuthViewModel vm) asyn
   // PopScope(canPop: false) in some Flutter versions; explicit pump calls
   // advance exactly one frame each and always return.
   await tester.pump(); // schedule the push
-  await tester.pump(const Duration(milliseconds: 300)); // complete the route animation
+  await tester.pump(
+    const Duration(milliseconds: 300),
+  ); // complete the route animation
 }
 
 Future<(FakeAuthRepository, AuthViewModel)> _setupRecoveryVm() async {
@@ -50,8 +55,9 @@ Future<(FakeAuthRepository, AuthViewModel)> _setupRecoveryVm() async {
 
 void main() {
   group('ResetPasswordScreen', () {
-    testWidgets('mismatched passwords block submit with validation error',
-        (tester) async {
+    testWidgets('mismatched passwords block submit with validation error', (
+      tester,
+    ) async {
       final (fake, vm) = await _setupRecoveryVm();
       await _pumpAndPushResetScreen(tester, vm);
 

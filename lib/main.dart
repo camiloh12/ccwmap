@@ -342,12 +342,14 @@ class _AppRootState extends State<_AppRoot> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         Navigator.of(context, rootNavigator: true)
-            .push(MaterialPageRoute<void>(
-              builder: (_) => const ResetPasswordScreen(),
-            ))
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ResetPasswordScreen(),
+              ),
+            )
             .then((_) {
-          if (mounted) _resetScreenPushed = false;
-        });
+              if (mounted) _resetScreenPushed = false;
+            });
       });
     }
 

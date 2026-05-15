@@ -63,8 +63,7 @@ void main() {
       fake.dispose();
     });
 
-    test('precondition: recovery flag is set after the synthetic event',
-        () {
+    test('precondition: recovery flag is set after the synthetic event', () {
       expect(vm.isInPasswordRecovery, isTrue);
     });
 
@@ -76,8 +75,7 @@ void main() {
       expect(vm.error, isNull);
     });
 
-    test('failure: surfaces error and leaves the recovery flag set',
-        () async {
+    test('failure: surfaces error and leaves the recovery flag set', () async {
       fake.updatePasswordShouldThrow = true;
       fake.updatePasswordThrownError = const supabase.AuthException(
         'New password should be different from the old password.',
@@ -98,8 +96,7 @@ void main() {
   });
 
   group('AuthViewModel password-recovery flag plumbing', () {
-    test('emitPasswordRecovery sets the flag and notifies listeners',
-        () async {
+    test('emitPasswordRecovery sets the flag and notifies listeners', () async {
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);
       await vm.initialize();
@@ -117,8 +114,7 @@ void main() {
       fake.dispose();
     });
 
-    test('clearRecoveryState resets the flag without signing out',
-        () async {
+    test('clearRecoveryState resets the flag without signing out', () async {
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);
       await vm.initialize();
@@ -147,8 +143,10 @@ void main() {
         );
 
         await vm.handleDeepLink(
-          Uri.parse('com.ccwmap.app://auth/callback'
-              '?token_hash=stale&type=recovery'),
+          Uri.parse(
+            'com.ccwmap.app://auth/callback'
+            '?token_hash=stale&type=recovery',
+          ),
         );
 
         expect(vm.error, contains('expired'));
@@ -159,24 +157,19 @@ void main() {
       },
     );
 
-    test(
-      'non-AuthException is caught and surfaces a generic error',
-      () async {
-        final fake = FakeAuthRepository();
-        final vm = AuthViewModel(fake);
-        fake.handleDeepLinkShouldThrow = true;
-        fake.handleDeepLinkThrownError = Exception('network down');
+    test('non-AuthException is caught and surfaces a generic error', () async {
+      final fake = FakeAuthRepository();
+      final vm = AuthViewModel(fake);
+      fake.handleDeepLinkShouldThrow = true;
+      fake.handleDeepLinkThrownError = Exception('network down');
 
-        await vm.handleDeepLink(
-          Uri.parse('com.ccwmap.app://auth/callback'),
-        );
+      await vm.handleDeepLink(Uri.parse('com.ccwmap.app://auth/callback'));
 
-        expect(vm.error, isNotNull);
-        expect(vm.isInPasswordRecovery, isFalse);
+      expect(vm.error, isNotNull);
+      expect(vm.isInPasswordRecovery, isFalse);
 
-        vm.dispose();
-        fake.dispose();
-      },
-    );
+      vm.dispose();
+      fake.dispose();
+    });
   });
 }

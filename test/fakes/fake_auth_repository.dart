@@ -53,8 +53,7 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   bool handleDeepLinkShouldThrow = false;
-  Object handleDeepLinkThrownError =
-      Exception('simulated deep link failure');
+  Object handleDeepLinkThrownError = Exception('simulated deep link failure');
   int handleDeepLinkCallCount = 0;
   Uri? handleDeepLinkLastUri;
 
@@ -99,8 +98,9 @@ class FakeAuthRepository implements AuthRepository {
   }
 
   bool updatePasswordShouldThrow = false;
-  Object updatePasswordThrownError =
-      Exception('simulated update-password failure');
+  Object updatePasswordThrownError = Exception(
+    'simulated update-password failure',
+  );
   int updatePasswordCallCount = 0;
   String? updatePasswordLastValue;
 

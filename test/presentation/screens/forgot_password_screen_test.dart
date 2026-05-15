@@ -15,8 +15,9 @@ Widget _hostedScreen(AuthViewModel vm) {
 
 void main() {
   group('ForgotPasswordScreen', () {
-    testWidgets('empty email blocks submit with validation error',
-        (tester) async {
+    testWidgets('empty email blocks submit with validation error', (
+      tester,
+    ) async {
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);
       await tester.pumpWidget(_hostedScreen(vm));
@@ -31,8 +32,9 @@ void main() {
       fake.dispose();
     });
 
-    testWidgets('valid email + submit calls VM and shows success state',
-        (tester) async {
+    testWidgets('valid email + submit calls VM and shows success state', (
+      tester,
+    ) async {
       final fake = FakeAuthRepository();
       final vm = AuthViewModel(fake);
       await tester.pumpWidget(_hostedScreen(vm));

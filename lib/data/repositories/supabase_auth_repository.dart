@@ -19,8 +19,8 @@ class SupabaseAuthRepository implements AuthRepository {
     this._supabase, {
     SyncManager? syncManager,
     FlutterSecureStorage? secureStorage,
-  })  : _syncManager = syncManager,
-        _secureStorage = secureStorage ?? const FlutterSecureStorage() {
+  }) : _syncManager = syncManager,
+       _secureStorage = secureStorage ?? const FlutterSecureStorage() {
     // Surface password-recovery events from the underlying Supabase auth
     // stream as a separate stream consumers can listen to. This is the
     // signal that distinguishes a recovery callback from a normal sign-in.
