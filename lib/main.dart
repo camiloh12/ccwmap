@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:app_links/app_links.dart';
 import 'package:ccwmap/presentation/screens/map_screen.dart';
+import 'package:ccwmap/presentation/screens/reset_password_screen.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/supabase_remote_data_source.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
@@ -22,7 +23,7 @@ import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/eula_modal.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:ccwmap/presentation/utils/terms_url.dart';
 
 // Global database instance
 late final AppDatabase database;
@@ -42,6 +43,14 @@ Future<void> main() async {
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       autoRefreshToken: true,
+      // We run our own deep-link listener in _AppRoot so we can surface
+      // expired-link errors as a SnackBar. Leaving the SDK's built-in
+      // observer enabled means BOTH consumers process every deep link;
+      // the second call to getSessionFromUrl finds the auth code already
+      // consumed and throws AuthApiException(flow_state_not_found),
+      // surfacing as a spurious error banner on ResetPasswordScreen even
+      // though the recovery succeeded.
+      detectSessionInUri: false,
     ),
   );
 
@@ -162,6 +171,7 @@ class _AppRootState extends State<_AppRoot> {
   StreamSubscription<Uri>? _deepLinkSubscription;
   bool _passiveEulaShown = false;
   bool _retroactiveEulaChecked = false;
+  bool _resetScreenPushed = false;
   User? _lastAuthUser;
 
   @override
@@ -178,11 +188,27 @@ class _AppRootState extends State<_AppRoot> {
   Future<void> _initializeDeepLinkListener(AuthViewModel authViewModel) async {
     final appLinks = AppLinks();
 
+    Future<void> processAndMaybeShowError(Uri uri) async {
+      await authViewModel.handleDeepLink(uri);
+      if (!mounted) return;
+      final err = authViewModel.error;
+      if (err != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(err),
+            backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        authViewModel.clearError();
+      }
+    }
+
     try {
       final initialLink = await appLinks.getInitialLink();
       if (initialLink != null) {
         debugPrint('_AppRoot: Processing initial deep link: $initialLink');
-        await authViewModel.handleDeepLink(initialLink);
+        await processAndMaybeShowError(initialLink);
       }
     } catch (e) {
       debugPrint('_AppRoot: Failed to process initial deep link: $e');
@@ -192,7 +218,7 @@ class _AppRootState extends State<_AppRoot> {
     _deepLinkSubscription = appLinks.uriLinkStream.listen(
       (Uri uri) {
         debugPrint('_AppRoot: Processing runtime deep link: $uri');
-        authViewModel.handleDeepLink(uri);
+        processAndMaybeShowError(uri);
       },
       onError: (err) {
         debugPrint('_AppRoot: Deep link stream error: $err');
@@ -220,7 +246,7 @@ class _AppRootState extends State<_AppRoot> {
           await prefs.setBool(_eulaFlagKey, true);
           if (ctx.mounted) Navigator.of(ctx).pop();
         },
-        onReadTerms: _openTermsUrl,
+        onReadTerms: openTermsUrl,
       ),
     );
   }
@@ -270,7 +296,7 @@ class _AppRootState extends State<_AppRoot> {
             }
             if (ctx.mounted) Navigator.of(ctx).pop();
           },
-          onReadTerms: _openTermsUrl,
+          onReadTerms: openTermsUrl,
           onSignOut: () async {
             if (ctx.mounted) Navigator.of(ctx).pop();
             await auth.signOut();
@@ -278,13 +304,6 @@ class _AppRootState extends State<_AppRoot> {
         ),
       ),
     );
-  }
-
-  Future<void> _openTermsUrl() async {
-    final uri = Uri.parse('https://camiloh12.github.io/ccwmap/terms');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
@@ -313,6 +332,27 @@ class _AppRootState extends State<_AppRoot> {
       _lastAuthUser = null;
       _retroactiveEulaChecked = false;
     }
+
+    // When a password-recovery deep link is processed, the AuthViewModel
+    // flips isInPasswordRecovery to true. Push the ResetPasswordScreen on
+    // the root navigator and block further pushes until the screen pops
+    // (whether via successful update or Cancel).
+    if (auth.isInPasswordRecovery && !_resetScreenPushed) {
+      _resetScreenPushed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context, rootNavigator: true)
+            .push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ResetPasswordScreen(),
+              ),
+            )
+            .then((_) {
+              if (mounted) _resetScreenPushed = false;
+            });
+      });
+    }
+
     return const MapScreen();
   }
 }
