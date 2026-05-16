@@ -51,7 +51,7 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   @override
   Future<void> updatePin(SupabasePinDto pin) async {
     try {
-      await _supabase.from('pins').update(pin.toJson()).eq('id', pin.id);
+      await _supabase.from('pins').update(pin.toJsonForUpdate()).eq('id', pin.id);
     } catch (e) {
       rethrow;
     }

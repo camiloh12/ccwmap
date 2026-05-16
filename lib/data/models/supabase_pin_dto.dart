@@ -75,6 +75,26 @@ class SupabasePinDto {
     };
   }
 
+  /// Returns only the columns granted UPDATE to `authenticated` in
+  /// migration 008. Sending `toJson()` (which includes immutable
+  /// columns like `id`, `created_by`, `created_at`, and server-managed
+  /// `last_modified`) would trigger a Postgres permission error after
+  /// the column-level GRANT replaces the blanket UPDATE grant.
+  Map<String, dynamic> toJsonForUpdate() {
+    return {
+      'name': name,
+      'latitude': latitude,
+      'longitude': longitude,
+      'status': status,
+      'restriction_tag': restrictionTag,
+      'has_security_screening': hasSecurityScreening,
+      'has_posted_signage': hasPostedSignage,
+      'notes': notes,
+      'photo_uri': photoUri,
+      'votes': votes,
+    };
+  }
+
   @override
   String toString() {
     return 'SupabasePinDto(id: $id, name: $name, status: $status)';
