@@ -141,8 +141,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(
           pushedRoutes,
-          countAfterSecondSheetOpen + 1,
-        ); // second LoginScreen pushed
+          countAfterSecondSheetOpen + 2,
+        ); // LoginScreen pushed, then SignUpScreen pushed on top
 
         fakeAuthRepo.dispose();
       },

@@ -33,4 +33,20 @@ abstract class AuthRepository {
   ///
   /// Throws on network error or if the server rejects the deletion.
   Future<void> deleteAccount();
+
+  /// Sends a password reset email to [email]. Always succeeds-looking from
+  /// the caller's perspective even when the email is unregistered (Supabase
+  /// prevents enumeration). Throws on network/transport errors only.
+  Future<void> sendPasswordResetEmail(String email);
+
+  /// Updates the password for the user in the current recovery session.
+  /// Must only be called while [AuthViewModel.isInPasswordRecovery] is true.
+  /// Throws AuthException on weak password, expired session, etc.
+  Future<void> updatePassword(String newPassword);
+
+  /// Stream that emits whenever the underlying auth provider signals that
+  /// the session was created via a password-recovery flow. The viewmodel
+  /// uses this to flag the session as recovery-mode and route to the reset
+  /// screen.
+  Stream<void> passwordRecoveryEvents();
 }

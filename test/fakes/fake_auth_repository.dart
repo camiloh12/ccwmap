@@ -8,11 +8,19 @@ class FakeAuthRepository implements AuthRepository {
   User? _currentUser;
   final StreamController<User?> _authStateController =
       StreamController<User?>.broadcast();
+  final StreamController<void> _passwordRecoveryController =
+      StreamController<void>.broadcast();
 
   /// Set the current user (simulates sign in)
   void setCurrentUser(User? user) {
     _currentUser = user;
     _authStateController.add(user);
+  }
+
+  /// Emit a synthetic password-recovery event (simulates the callback that
+  /// fires when verifyOTP completes for a recovery deep link).
+  void emitPasswordRecovery() {
+    _passwordRecoveryController.add(null);
   }
 
   @override
@@ -44,8 +52,18 @@ class FakeAuthRepository implements AuthRepository {
     setCurrentUser(null);
   }
 
+  bool handleDeepLinkShouldThrow = false;
+  Object handleDeepLinkThrownError = Exception('simulated deep link failure');
+  int handleDeepLinkCallCount = 0;
+  Uri? handleDeepLinkLastUri;
+
   @override
   Future<void> handleDeepLink(Uri uri) async {
+    handleDeepLinkCallCount++;
+    handleDeepLinkLastUri = uri;
+    if (handleDeepLinkShouldThrow) {
+      throw handleDeepLinkThrownError;
+    }
     // Simulate deep link handling
     final user = User(id: 'test-id', email: 'deeplink@test.com');
     setCurrentUser(user);
@@ -63,8 +81,44 @@ class FakeAuthRepository implements AuthRepository {
     setCurrentUser(null);
   }
 
+  // --- Password reset ---
+
+  bool sendResetShouldThrow = false;
+  Object sendResetThrownError = Exception('simulated reset send failure');
+  int sendResetCallCount = 0;
+  String? sendResetLastEmail;
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    sendResetCallCount++;
+    sendResetLastEmail = email;
+    if (sendResetShouldThrow) {
+      throw sendResetThrownError;
+    }
+  }
+
+  bool updatePasswordShouldThrow = false;
+  Object updatePasswordThrownError = Exception(
+    'simulated update-password failure',
+  );
+  int updatePasswordCallCount = 0;
+  String? updatePasswordLastValue;
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    updatePasswordCallCount++;
+    updatePasswordLastValue = newPassword;
+    if (updatePasswordShouldThrow) {
+      throw updatePasswordThrownError;
+    }
+  }
+
+  @override
+  Stream<void> passwordRecoveryEvents() => _passwordRecoveryController.stream;
+
   /// Clean up resources
   void dispose() {
     _authStateController.close();
+    _passwordRecoveryController.close();
   }
 }
