@@ -1,0 +1,85 @@
+name: Supabase Migration Validate (staging)
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'supabase/migrations/**'
+
+concurrency:
+  group: supabase-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apply-to-staging:
+    name: Apply new migrations to staging
+    runs-on: ubuntu-latest
+    env:
+      STAGING_DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need history to diff master vs PR
+
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Determine migrations added by this PR
+        id: changed
+        run: |
+          # Identify new .sql files under supabase/migrations/ vs master.
+          git fetch origin master --depth=1
+          ADDED=$(git diff --name-only --diff-filter=A origin/master...HEAD \
+                  -- 'supabase/migrations/*.sql' | sort)
+          if [ -z "$ADDED" ]; then
+            echo "No new migrations in this PR."
+            echo "files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Will apply:"
+          echo "$ADDED"
+          # Multi-line output via heredoc-style.
+          {
+            echo "files<<EOF"
+            echo "$ADDED"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply migrations to staging
+        if: steps.changed.outputs.files != ''
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "::group::Applying $f"
+            psql "$STAGING_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done <<< "${{ steps.changed.outputs.files }}"
+
+      - name: Schema-drift sanity check (migration count parity)
+        if: steps.changed.outputs.files != ''
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: |
+          # If PROD_DB_URL isn't set (Phase 0 may not have wired it yet),
+          # skip with a notice rather than failing.
+          if [ -z "${PROD_DB_URL:-}" ]; then
+            echo "::notice::PROD_DB_URL not configured; skipping drift check."
+            exit 0
+          fi
+          STAGING_COUNT=$(psql "$STAGING_DB_URL" -At -c \
+            "SELECT count(*) FROM supabase_migrations.schema_migrations;")
+          PROD_COUNT=$(psql "$PROD_DB_URL" -At -c \
+            "SELECT count(*) FROM supabase_migrations.schema_migrations;")
+          echo "Staging migrations: $STAGING_COUNT"
+          echo "Prod migrations:    $PROD_COUNT"
+          # Expectation: after this PR applies to staging but before merge,
+          # staging is exactly one ahead of prod (assuming a single new
+          # migration). More than one ahead → drift. Behind → bug.
+          DIFF=$((STAGING_COUNT - PROD_COUNT))
+          if [ "$DIFF" -lt 1 ]; then
+            echo "::error::Staging is not ahead of prod ($DIFF). Drift detected."
+            exit 1
+          fi
