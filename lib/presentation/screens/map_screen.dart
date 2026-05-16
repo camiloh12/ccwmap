@@ -878,6 +878,15 @@ class _MapScreenState extends State<MapScreen> {
       // Show create dialog with empty name
       if (mounted) {
         debugPrint('Opening create dialog for right-click');
+        final auth = Provider.of<AuthViewModel>(context, listen: false);
+        if (!auth.isAuthenticated) {
+          _promptSignIn(
+            title: 'Sign in to add pins',
+            body:
+                'Create an account or sign in to contribute to the community map.',
+          );
+          return;
+        }
         _showPinDialog(
           isEditMode: false,
           poiName: '', // Empty name - user will enter their own
