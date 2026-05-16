@@ -996,7 +996,7 @@ class _MapScreenState extends State<MapScreen> {
                 hasSecurityScreening: result.hasSecurityScreening,
                 hasPostedSignage: result.hasPostedSignage,
                 metadata: PinMetadata(
-                  createdBy: currentUser?.id ?? 'anonymous',
+                  createdBy: currentUser!.id,
                   createdAt: DateTime.now(),
                   lastModified: DateTime.now(),
                 ),
