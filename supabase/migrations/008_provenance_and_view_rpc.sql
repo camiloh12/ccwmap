@@ -37,12 +37,13 @@ CREATE INDEX IF NOT EXISTS pins_source_external_id_idx
   WHERE source_external_id IS NOT NULL;
 
 -- =============================================================================
--- §2  Spatial index used by get_pins_in_view (likely already present;
---     CREATE IF NOT EXISTS makes the migration safe on either project state)
+-- §2  Spatial index used by get_pins_in_view
+--     Prod already has `idx_pins_location` (GIST on location) from the
+--     001-003 baseline. The pre-implementation MCP audit confirmed it
+--     exists, so this migration intentionally does NOT create a redundant
+--     index. If a future environment ships without it, add the index
+--     explicitly there rather than here.
 -- =============================================================================
-
-CREATE INDEX IF NOT EXISTS pins_location_gist
-  ON pins USING GIST (location);
 
 -- =============================================================================
 -- §3  pin_deletions  (server-side tombstones, mirrored to local DB by
@@ -118,12 +119,17 @@ ALTER TABLE recent_deletes ENABLE ROW LEVEL SECURITY;
 
 -- 6a. set_user_modified — fire on UPDATE from anyone except service_role.
 --     Tracks that a user has touched the row so the importer skips it on
---     subsequent runs.
+--     subsequent runs. NOTE: last_modified is bumped by the pre-existing
+--     `set_last_modified` trigger (calls public.update_last_modified),
+--     which already fires unconditionally on every UPDATE — we deliberately
+--     do NOT also set last_modified here to avoid double-writes. A side
+--     effect is that importer-driven (service_role) updates still bump
+--     last_modified; that's acceptable since the importer's reconciliation
+--     branches on user_modified, not last_modified.
 CREATE OR REPLACE FUNCTION set_user_modified() RETURNS TRIGGER AS $$
 BEGIN
   IF current_user <> 'service_role' THEN
     NEW.user_modified := true;
-    NEW.last_modified := now();
   END IF;
   RETURN NEW;
 END;
@@ -231,7 +237,12 @@ LANGUAGE plpgsql
 SECURITY INVOKER  -- respect RLS on pins; caller's auth.uid() reads through
 AS $$
 DECLARE
-  bbox geography := ST_MakeEnvelope(sw_lng, sw_lat, ne_lng, ne_lat, 4326)::geography;
+  -- pins.location is a generated `geometry` column (SRID 4326), per the
+  -- existing baseline schema. Keep the bbox in geometry too so the
+  -- ST_Intersects(geometry, geometry) overload resolves cleanly — mixing
+  -- in `::geography` casts would fail because PostGIS has no
+  -- ST_Intersects(geometry, geography) overload.
+  bbox geometry := ST_MakeEnvelope(sw_lng, sw_lat, ne_lng, ne_lat, 4326);
   candidate_count INT;
   grid_size double precision;
 BEGIN
@@ -285,7 +296,7 @@ BEGIN
     RETURN QUERY
     WITH bucketed AS (
       SELECT
-        ST_SnapToGrid(p.location::geometry, grid_size) AS cell,
+        ST_SnapToGrid(p.location, grid_size) AS cell,
         p.status,
         p.restriction_tag
       FROM pins p
