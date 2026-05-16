@@ -160,6 +160,108 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('user'),
+  );
+  static const VerificationMeta _sourceExternalIdMeta = const VerificationMeta(
+    'sourceExternalId',
+  );
+  @override
+  late final GeneratedColumn<String> sourceExternalId = GeneratedColumn<String>(
+    'source_external_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _sourceDatasetVersionMeta =
+      const VerificationMeta('sourceDatasetVersion');
+  @override
+  late final GeneratedColumn<String> sourceDatasetVersion =
+      GeneratedColumn<String>(
+        'source_dataset_version',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _importedAtMeta = const VerificationMeta(
+    'importedAt',
+  );
+  @override
+  late final GeneratedColumn<int> importedAt = GeneratedColumn<int>(
+    'imported_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _userModifiedMeta = const VerificationMeta(
+    'userModified',
+  );
+  @override
+  late final GeneratedColumn<bool> userModified = GeneratedColumn<bool>(
+    'user_modified',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("user_modified" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _confidenceMeta = const VerificationMeta(
+    'confidence',
+  );
+  @override
+  late final GeneratedColumn<String> confidence = GeneratedColumn<String>(
+    'confidence',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _legalCitationMeta = const VerificationMeta(
+    'legalCitation',
+  );
+  @override
+  late final GeneratedColumn<String> legalCitation = GeneratedColumn<String>(
+    'legal_citation',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _legalCitationVerifiedDateMeta =
+      const VerificationMeta('legalCitationVerifiedDate');
+  @override
+  late final GeneratedColumn<String> legalCitationVerifiedDate =
+      GeneratedColumn<String>(
+        'legal_citation_verified_date',
+        aliasedName,
+        true,
+        type: DriftSqlType.string,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _sourceOrphanedAtMeta = const VerificationMeta(
+    'sourceOrphanedAt',
+  );
+  @override
+  late final GeneratedColumn<int> sourceOrphanedAt = GeneratedColumn<int>(
+    'source_orphaned_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -176,6 +278,15 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
     photoUri,
     notes,
     votes,
+    source,
+    sourceExternalId,
+    sourceDatasetVersion,
+    importedAt,
+    userModified,
+    confidence,
+    legalCitation,
+    legalCitationVerifiedDate,
+    sourceOrphanedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -296,6 +407,78 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
         votes.isAcceptableOrUnknown(data['votes']!, _votesMeta),
       );
     }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('source_external_id')) {
+      context.handle(
+        _sourceExternalIdMeta,
+        sourceExternalId.isAcceptableOrUnknown(
+          data['source_external_id']!,
+          _sourceExternalIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_dataset_version')) {
+      context.handle(
+        _sourceDatasetVersionMeta,
+        sourceDatasetVersion.isAcceptableOrUnknown(
+          data['source_dataset_version']!,
+          _sourceDatasetVersionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('imported_at')) {
+      context.handle(
+        _importedAtMeta,
+        importedAt.isAcceptableOrUnknown(data['imported_at']!, _importedAtMeta),
+      );
+    }
+    if (data.containsKey('user_modified')) {
+      context.handle(
+        _userModifiedMeta,
+        userModified.isAcceptableOrUnknown(
+          data['user_modified']!,
+          _userModifiedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('confidence')) {
+      context.handle(
+        _confidenceMeta,
+        confidence.isAcceptableOrUnknown(data['confidence']!, _confidenceMeta),
+      );
+    }
+    if (data.containsKey('legal_citation')) {
+      context.handle(
+        _legalCitationMeta,
+        legalCitation.isAcceptableOrUnknown(
+          data['legal_citation']!,
+          _legalCitationMeta,
+        ),
+      );
+    }
+    if (data.containsKey('legal_citation_verified_date')) {
+      context.handle(
+        _legalCitationVerifiedDateMeta,
+        legalCitationVerifiedDate.isAcceptableOrUnknown(
+          data['legal_citation_verified_date']!,
+          _legalCitationVerifiedDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('source_orphaned_at')) {
+      context.handle(
+        _sourceOrphanedAtMeta,
+        sourceOrphanedAt.isAcceptableOrUnknown(
+          data['source_orphaned_at']!,
+          _sourceOrphanedAtMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -361,6 +544,42 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
         DriftSqlType.int,
         data['${effectivePrefix}votes'],
       )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      sourceExternalId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_external_id'],
+      ),
+      sourceDatasetVersion: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source_dataset_version'],
+      ),
+      importedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}imported_at'],
+      ),
+      userModified: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}user_modified'],
+      )!,
+      confidence: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}confidence'],
+      ),
+      legalCitation: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}legal_citation'],
+      ),
+      legalCitationVerifiedDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}legal_citation_verified_date'],
+      ),
+      sourceOrphanedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}source_orphaned_at'],
+      ),
     );
   }
 
@@ -385,6 +604,37 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
   final String? photoUri;
   final String? notes;
   final int votes;
+
+  /// Origin of this pin. `'user'` for user-created, otherwise the source
+  /// module name (`'nces'`, `'hifld_courts'`, `'osm'`, etc.).
+  final String source;
+
+  /// Stable per-source identifier. Used as the upsert key by the importer.
+  /// Null for user-created pins.
+  final String? sourceExternalId;
+
+  /// Version/snapshot of the upstream source data, e.g. `NCES-2024-25`.
+  final String? sourceDatasetVersion;
+
+  /// Milliseconds since epoch — when the importer last touched this row.
+  final int? importedAt;
+
+  /// True once any non-importer write hits the row. Server-side trigger
+  /// is authoritative; we just mirror the value when we sync down.
+  final bool userModified;
+
+  /// `'high'` / `'medium'` / `'low'` from the state-law lookup table.
+  final String? confidence;
+
+  /// Statute citation, e.g. `'18 USC 930(a)'` or `'TX Penal Code §46.035(b)(1)'`.
+  final String? legalCitation;
+
+  /// ISO date string (YYYY-MM-DD) — when the citation was last reconciled.
+  final String? legalCitationVerifiedDate;
+
+  /// Milliseconds since epoch — when the pin disappeared from its source
+  /// dataset. Surfaces in dry-run reports; never auto-deletes.
+  final int? sourceOrphanedAt;
   const PinEntity({
     required this.id,
     required this.name,
@@ -400,6 +650,15 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     this.photoUri,
     this.notes,
     required this.votes,
+    required this.source,
+    this.sourceExternalId,
+    this.sourceDatasetVersion,
+    this.importedAt,
+    required this.userModified,
+    this.confidence,
+    this.legalCitation,
+    this.legalCitationVerifiedDate,
+    this.sourceOrphanedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -426,6 +685,31 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       map['notes'] = Variable<String>(notes);
     }
     map['votes'] = Variable<int>(votes);
+    map['source'] = Variable<String>(source);
+    if (!nullToAbsent || sourceExternalId != null) {
+      map['source_external_id'] = Variable<String>(sourceExternalId);
+    }
+    if (!nullToAbsent || sourceDatasetVersion != null) {
+      map['source_dataset_version'] = Variable<String>(sourceDatasetVersion);
+    }
+    if (!nullToAbsent || importedAt != null) {
+      map['imported_at'] = Variable<int>(importedAt);
+    }
+    map['user_modified'] = Variable<bool>(userModified);
+    if (!nullToAbsent || confidence != null) {
+      map['confidence'] = Variable<String>(confidence);
+    }
+    if (!nullToAbsent || legalCitation != null) {
+      map['legal_citation'] = Variable<String>(legalCitation);
+    }
+    if (!nullToAbsent || legalCitationVerifiedDate != null) {
+      map['legal_citation_verified_date'] = Variable<String>(
+        legalCitationVerifiedDate,
+      );
+    }
+    if (!nullToAbsent || sourceOrphanedAt != null) {
+      map['source_orphaned_at'] = Variable<int>(sourceOrphanedAt);
+    }
     return map;
   }
 
@@ -453,6 +737,30 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
           ? const Value.absent()
           : Value(notes),
       votes: Value(votes),
+      source: Value(source),
+      sourceExternalId: sourceExternalId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceExternalId),
+      sourceDatasetVersion: sourceDatasetVersion == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceDatasetVersion),
+      importedAt: importedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(importedAt),
+      userModified: Value(userModified),
+      confidence: confidence == null && nullToAbsent
+          ? const Value.absent()
+          : Value(confidence),
+      legalCitation: legalCitation == null && nullToAbsent
+          ? const Value.absent()
+          : Value(legalCitation),
+      legalCitationVerifiedDate:
+          legalCitationVerifiedDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(legalCitationVerifiedDate),
+      sourceOrphanedAt: sourceOrphanedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(sourceOrphanedAt),
     );
   }
 
@@ -478,6 +786,19 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       photoUri: serializer.fromJson<String?>(json['photoUri']),
       notes: serializer.fromJson<String?>(json['notes']),
       votes: serializer.fromJson<int>(json['votes']),
+      source: serializer.fromJson<String>(json['source']),
+      sourceExternalId: serializer.fromJson<String?>(json['sourceExternalId']),
+      sourceDatasetVersion: serializer.fromJson<String?>(
+        json['sourceDatasetVersion'],
+      ),
+      importedAt: serializer.fromJson<int?>(json['importedAt']),
+      userModified: serializer.fromJson<bool>(json['userModified']),
+      confidence: serializer.fromJson<String?>(json['confidence']),
+      legalCitation: serializer.fromJson<String?>(json['legalCitation']),
+      legalCitationVerifiedDate: serializer.fromJson<String?>(
+        json['legalCitationVerifiedDate'],
+      ),
+      sourceOrphanedAt: serializer.fromJson<int?>(json['sourceOrphanedAt']),
     );
   }
   @override
@@ -498,6 +819,17 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       'photoUri': serializer.toJson<String?>(photoUri),
       'notes': serializer.toJson<String?>(notes),
       'votes': serializer.toJson<int>(votes),
+      'source': serializer.toJson<String>(source),
+      'sourceExternalId': serializer.toJson<String?>(sourceExternalId),
+      'sourceDatasetVersion': serializer.toJson<String?>(sourceDatasetVersion),
+      'importedAt': serializer.toJson<int?>(importedAt),
+      'userModified': serializer.toJson<bool>(userModified),
+      'confidence': serializer.toJson<String?>(confidence),
+      'legalCitation': serializer.toJson<String?>(legalCitation),
+      'legalCitationVerifiedDate': serializer.toJson<String?>(
+        legalCitationVerifiedDate,
+      ),
+      'sourceOrphanedAt': serializer.toJson<int?>(sourceOrphanedAt),
     };
   }
 
@@ -516,6 +848,15 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     Value<String?> photoUri = const Value.absent(),
     Value<String?> notes = const Value.absent(),
     int? votes,
+    String? source,
+    Value<String?> sourceExternalId = const Value.absent(),
+    Value<String?> sourceDatasetVersion = const Value.absent(),
+    Value<int?> importedAt = const Value.absent(),
+    bool? userModified,
+    Value<String?> confidence = const Value.absent(),
+    Value<String?> legalCitation = const Value.absent(),
+    Value<String?> legalCitationVerifiedDate = const Value.absent(),
+    Value<int?> sourceOrphanedAt = const Value.absent(),
   }) => PinEntity(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -533,6 +874,25 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     photoUri: photoUri.present ? photoUri.value : this.photoUri,
     notes: notes.present ? notes.value : this.notes,
     votes: votes ?? this.votes,
+    source: source ?? this.source,
+    sourceExternalId: sourceExternalId.present
+        ? sourceExternalId.value
+        : this.sourceExternalId,
+    sourceDatasetVersion: sourceDatasetVersion.present
+        ? sourceDatasetVersion.value
+        : this.sourceDatasetVersion,
+    importedAt: importedAt.present ? importedAt.value : this.importedAt,
+    userModified: userModified ?? this.userModified,
+    confidence: confidence.present ? confidence.value : this.confidence,
+    legalCitation: legalCitation.present
+        ? legalCitation.value
+        : this.legalCitation,
+    legalCitationVerifiedDate: legalCitationVerifiedDate.present
+        ? legalCitationVerifiedDate.value
+        : this.legalCitationVerifiedDate,
+    sourceOrphanedAt: sourceOrphanedAt.present
+        ? sourceOrphanedAt.value
+        : this.sourceOrphanedAt,
   );
   PinEntity copyWithCompanion(PinsCompanion data) {
     return PinEntity(
@@ -558,6 +918,31 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       photoUri: data.photoUri.present ? data.photoUri.value : this.photoUri,
       notes: data.notes.present ? data.notes.value : this.notes,
       votes: data.votes.present ? data.votes.value : this.votes,
+      source: data.source.present ? data.source.value : this.source,
+      sourceExternalId: data.sourceExternalId.present
+          ? data.sourceExternalId.value
+          : this.sourceExternalId,
+      sourceDatasetVersion: data.sourceDatasetVersion.present
+          ? data.sourceDatasetVersion.value
+          : this.sourceDatasetVersion,
+      importedAt: data.importedAt.present
+          ? data.importedAt.value
+          : this.importedAt,
+      userModified: data.userModified.present
+          ? data.userModified.value
+          : this.userModified,
+      confidence: data.confidence.present
+          ? data.confidence.value
+          : this.confidence,
+      legalCitation: data.legalCitation.present
+          ? data.legalCitation.value
+          : this.legalCitation,
+      legalCitationVerifiedDate: data.legalCitationVerifiedDate.present
+          ? data.legalCitationVerifiedDate.value
+          : this.legalCitationVerifiedDate,
+      sourceOrphanedAt: data.sourceOrphanedAt.present
+          ? data.sourceOrphanedAt.value
+          : this.sourceOrphanedAt,
     );
   }
 
@@ -577,13 +962,22 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
           ..write('lastModified: $lastModified, ')
           ..write('photoUri: $photoUri, ')
           ..write('notes: $notes, ')
-          ..write('votes: $votes')
+          ..write('votes: $votes, ')
+          ..write('source: $source, ')
+          ..write('sourceExternalId: $sourceExternalId, ')
+          ..write('sourceDatasetVersion: $sourceDatasetVersion, ')
+          ..write('importedAt: $importedAt, ')
+          ..write('userModified: $userModified, ')
+          ..write('confidence: $confidence, ')
+          ..write('legalCitation: $legalCitation, ')
+          ..write('legalCitationVerifiedDate: $legalCitationVerifiedDate, ')
+          ..write('sourceOrphanedAt: $sourceOrphanedAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     name,
     latitude,
@@ -598,7 +992,16 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     photoUri,
     notes,
     votes,
-  );
+    source,
+    sourceExternalId,
+    sourceDatasetVersion,
+    importedAt,
+    userModified,
+    confidence,
+    legalCitation,
+    legalCitationVerifiedDate,
+    sourceOrphanedAt,
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -616,7 +1019,16 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
           other.lastModified == this.lastModified &&
           other.photoUri == this.photoUri &&
           other.notes == this.notes &&
-          other.votes == this.votes);
+          other.votes == this.votes &&
+          other.source == this.source &&
+          other.sourceExternalId == this.sourceExternalId &&
+          other.sourceDatasetVersion == this.sourceDatasetVersion &&
+          other.importedAt == this.importedAt &&
+          other.userModified == this.userModified &&
+          other.confidence == this.confidence &&
+          other.legalCitation == this.legalCitation &&
+          other.legalCitationVerifiedDate == this.legalCitationVerifiedDate &&
+          other.sourceOrphanedAt == this.sourceOrphanedAt);
 }
 
 class PinsCompanion extends UpdateCompanion<PinEntity> {
@@ -634,6 +1046,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
   final Value<String?> photoUri;
   final Value<String?> notes;
   final Value<int> votes;
+  final Value<String> source;
+  final Value<String?> sourceExternalId;
+  final Value<String?> sourceDatasetVersion;
+  final Value<int?> importedAt;
+  final Value<bool> userModified;
+  final Value<String?> confidence;
+  final Value<String?> legalCitation;
+  final Value<String?> legalCitationVerifiedDate;
+  final Value<int?> sourceOrphanedAt;
   final Value<int> rowid;
   const PinsCompanion({
     this.id = const Value.absent(),
@@ -650,6 +1071,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     this.photoUri = const Value.absent(),
     this.notes = const Value.absent(),
     this.votes = const Value.absent(),
+    this.source = const Value.absent(),
+    this.sourceExternalId = const Value.absent(),
+    this.sourceDatasetVersion = const Value.absent(),
+    this.importedAt = const Value.absent(),
+    this.userModified = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.legalCitation = const Value.absent(),
+    this.legalCitationVerifiedDate = const Value.absent(),
+    this.sourceOrphanedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PinsCompanion.insert({
@@ -667,6 +1097,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     this.photoUri = const Value.absent(),
     this.notes = const Value.absent(),
     this.votes = const Value.absent(),
+    this.source = const Value.absent(),
+    this.sourceExternalId = const Value.absent(),
+    this.sourceDatasetVersion = const Value.absent(),
+    this.importedAt = const Value.absent(),
+    this.userModified = const Value.absent(),
+    this.confidence = const Value.absent(),
+    this.legalCitation = const Value.absent(),
+    this.legalCitationVerifiedDate = const Value.absent(),
+    this.sourceOrphanedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -690,6 +1129,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     Expression<String>? photoUri,
     Expression<String>? notes,
     Expression<int>? votes,
+    Expression<String>? source,
+    Expression<String>? sourceExternalId,
+    Expression<String>? sourceDatasetVersion,
+    Expression<int>? importedAt,
+    Expression<bool>? userModified,
+    Expression<String>? confidence,
+    Expression<String>? legalCitation,
+    Expression<String>? legalCitationVerifiedDate,
+    Expression<int>? sourceOrphanedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -708,6 +1156,17 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
       if (photoUri != null) 'photo_uri': photoUri,
       if (notes != null) 'notes': notes,
       if (votes != null) 'votes': votes,
+      if (source != null) 'source': source,
+      if (sourceExternalId != null) 'source_external_id': sourceExternalId,
+      if (sourceDatasetVersion != null)
+        'source_dataset_version': sourceDatasetVersion,
+      if (importedAt != null) 'imported_at': importedAt,
+      if (userModified != null) 'user_modified': userModified,
+      if (confidence != null) 'confidence': confidence,
+      if (legalCitation != null) 'legal_citation': legalCitation,
+      if (legalCitationVerifiedDate != null)
+        'legal_citation_verified_date': legalCitationVerifiedDate,
+      if (sourceOrphanedAt != null) 'source_orphaned_at': sourceOrphanedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -727,6 +1186,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     Value<String?>? photoUri,
     Value<String?>? notes,
     Value<int>? votes,
+    Value<String>? source,
+    Value<String?>? sourceExternalId,
+    Value<String?>? sourceDatasetVersion,
+    Value<int?>? importedAt,
+    Value<bool>? userModified,
+    Value<String?>? confidence,
+    Value<String?>? legalCitation,
+    Value<String?>? legalCitationVerifiedDate,
+    Value<int?>? sourceOrphanedAt,
     Value<int>? rowid,
   }) {
     return PinsCompanion(
@@ -744,6 +1212,16 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
       photoUri: photoUri ?? this.photoUri,
       notes: notes ?? this.notes,
       votes: votes ?? this.votes,
+      source: source ?? this.source,
+      sourceExternalId: sourceExternalId ?? this.sourceExternalId,
+      sourceDatasetVersion: sourceDatasetVersion ?? this.sourceDatasetVersion,
+      importedAt: importedAt ?? this.importedAt,
+      userModified: userModified ?? this.userModified,
+      confidence: confidence ?? this.confidence,
+      legalCitation: legalCitation ?? this.legalCitation,
+      legalCitationVerifiedDate:
+          legalCitationVerifiedDate ?? this.legalCitationVerifiedDate,
+      sourceOrphanedAt: sourceOrphanedAt ?? this.sourceOrphanedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -795,6 +1273,37 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     if (votes.present) {
       map['votes'] = Variable<int>(votes.value);
     }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (sourceExternalId.present) {
+      map['source_external_id'] = Variable<String>(sourceExternalId.value);
+    }
+    if (sourceDatasetVersion.present) {
+      map['source_dataset_version'] = Variable<String>(
+        sourceDatasetVersion.value,
+      );
+    }
+    if (importedAt.present) {
+      map['imported_at'] = Variable<int>(importedAt.value);
+    }
+    if (userModified.present) {
+      map['user_modified'] = Variable<bool>(userModified.value);
+    }
+    if (confidence.present) {
+      map['confidence'] = Variable<String>(confidence.value);
+    }
+    if (legalCitation.present) {
+      map['legal_citation'] = Variable<String>(legalCitation.value);
+    }
+    if (legalCitationVerifiedDate.present) {
+      map['legal_citation_verified_date'] = Variable<String>(
+        legalCitationVerifiedDate.value,
+      );
+    }
+    if (sourceOrphanedAt.present) {
+      map['source_orphaned_at'] = Variable<int>(sourceOrphanedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -818,6 +1327,15 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
           ..write('photoUri: $photoUri, ')
           ..write('notes: $notes, ')
           ..write('votes: $votes, ')
+          ..write('source: $source, ')
+          ..write('sourceExternalId: $sourceExternalId, ')
+          ..write('sourceDatasetVersion: $sourceDatasetVersion, ')
+          ..write('importedAt: $importedAt, ')
+          ..write('userModified: $userModified, ')
+          ..write('confidence: $confidence, ')
+          ..write('legalCitation: $legalCitation, ')
+          ..write('legalCitationVerifiedDate: $legalCitationVerifiedDate, ')
+          ..write('sourceOrphanedAt: $sourceOrphanedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1493,6 +2011,15 @@ typedef $$PinsTableCreateCompanionBuilder =
       Value<String?> photoUri,
       Value<String?> notes,
       Value<int> votes,
+      Value<String> source,
+      Value<String?> sourceExternalId,
+      Value<String?> sourceDatasetVersion,
+      Value<int?> importedAt,
+      Value<bool> userModified,
+      Value<String?> confidence,
+      Value<String?> legalCitation,
+      Value<String?> legalCitationVerifiedDate,
+      Value<int?> sourceOrphanedAt,
       Value<int> rowid,
     });
 typedef $$PinsTableUpdateCompanionBuilder =
@@ -1511,6 +2038,15 @@ typedef $$PinsTableUpdateCompanionBuilder =
       Value<String?> photoUri,
       Value<String?> notes,
       Value<int> votes,
+      Value<String> source,
+      Value<String?> sourceExternalId,
+      Value<String?> sourceDatasetVersion,
+      Value<int?> importedAt,
+      Value<bool> userModified,
+      Value<String?> confidence,
+      Value<String?> legalCitation,
+      Value<String?> legalCitationVerifiedDate,
+      Value<int?> sourceOrphanedAt,
       Value<int> rowid,
     });
 
@@ -1589,6 +2125,51 @@ class $$PinsTableFilterComposer extends Composer<_$AppDatabase, $PinsTable> {
 
   ColumnFilters<int> get votes => $composableBuilder(
     column: $table.votes,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceExternalId => $composableBuilder(
+    column: $table.sourceExternalId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sourceDatasetVersion => $composableBuilder(
+    column: $table.sourceDatasetVersion,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get importedAt => $composableBuilder(
+    column: $table.importedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get userModified => $composableBuilder(
+    column: $table.userModified,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get legalCitation => $composableBuilder(
+    column: $table.legalCitation,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get legalCitationVerifiedDate => $composableBuilder(
+    column: $table.legalCitationVerifiedDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sourceOrphanedAt => $composableBuilder(
+    column: $table.sourceOrphanedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1670,6 +2251,51 @@ class $$PinsTableOrderingComposer extends Composer<_$AppDatabase, $PinsTable> {
     column: $table.votes,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceExternalId => $composableBuilder(
+    column: $table.sourceExternalId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sourceDatasetVersion => $composableBuilder(
+    column: $table.sourceDatasetVersion,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get importedAt => $composableBuilder(
+    column: $table.importedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get userModified => $composableBuilder(
+    column: $table.userModified,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get legalCitation => $composableBuilder(
+    column: $table.legalCitation,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get legalCitationVerifiedDate => $composableBuilder(
+    column: $table.legalCitationVerifiedDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sourceOrphanedAt => $composableBuilder(
+    column: $table.sourceOrphanedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PinsTableAnnotationComposer
@@ -1730,6 +2356,49 @@ class $$PinsTableAnnotationComposer
 
   GeneratedColumn<int> get votes =>
       $composableBuilder(column: $table.votes, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get sourceExternalId => $composableBuilder(
+    column: $table.sourceExternalId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sourceDatasetVersion => $composableBuilder(
+    column: $table.sourceDatasetVersion,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get importedAt => $composableBuilder(
+    column: $table.importedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get userModified => $composableBuilder(
+    column: $table.userModified,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get confidence => $composableBuilder(
+    column: $table.confidence,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get legalCitation => $composableBuilder(
+    column: $table.legalCitation,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get legalCitationVerifiedDate => $composableBuilder(
+    column: $table.legalCitationVerifiedDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get sourceOrphanedAt => $composableBuilder(
+    column: $table.sourceOrphanedAt,
+    builder: (column) => column,
+  );
 }
 
 class $$PinsTableTableManager
@@ -1774,6 +2443,15 @@ class $$PinsTableTableManager
                 Value<String?> photoUri = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> votes = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> sourceExternalId = const Value.absent(),
+                Value<String?> sourceDatasetVersion = const Value.absent(),
+                Value<int?> importedAt = const Value.absent(),
+                Value<bool> userModified = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> legalCitation = const Value.absent(),
+                Value<String?> legalCitationVerifiedDate = const Value.absent(),
+                Value<int?> sourceOrphanedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PinsCompanion(
                 id: id,
@@ -1790,6 +2468,15 @@ class $$PinsTableTableManager
                 photoUri: photoUri,
                 notes: notes,
                 votes: votes,
+                source: source,
+                sourceExternalId: sourceExternalId,
+                sourceDatasetVersion: sourceDatasetVersion,
+                importedAt: importedAt,
+                userModified: userModified,
+                confidence: confidence,
+                legalCitation: legalCitation,
+                legalCitationVerifiedDate: legalCitationVerifiedDate,
+                sourceOrphanedAt: sourceOrphanedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1808,6 +2495,15 @@ class $$PinsTableTableManager
                 Value<String?> photoUri = const Value.absent(),
                 Value<String?> notes = const Value.absent(),
                 Value<int> votes = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<String?> sourceExternalId = const Value.absent(),
+                Value<String?> sourceDatasetVersion = const Value.absent(),
+                Value<int?> importedAt = const Value.absent(),
+                Value<bool> userModified = const Value.absent(),
+                Value<String?> confidence = const Value.absent(),
+                Value<String?> legalCitation = const Value.absent(),
+                Value<String?> legalCitationVerifiedDate = const Value.absent(),
+                Value<int?> sourceOrphanedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PinsCompanion.insert(
                 id: id,
@@ -1824,6 +2520,15 @@ class $$PinsTableTableManager
                 photoUri: photoUri,
                 notes: notes,
                 votes: votes,
+                source: source,
+                sourceExternalId: sourceExternalId,
+                sourceDatasetVersion: sourceDatasetVersion,
+                importedAt: importedAt,
+                userModified: userModified,
+                confidence: confidence,
+                legalCitation: legalCitation,
+                legalCitationVerifiedDate: legalCitationVerifiedDate,
+                sourceOrphanedAt: sourceOrphanedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

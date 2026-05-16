@@ -65,6 +65,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
 
       final pin = PinMapper.fromEntity(entity);

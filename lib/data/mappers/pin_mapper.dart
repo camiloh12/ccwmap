@@ -22,6 +22,8 @@ class PinMapper {
       photoUri: pin.metadata.photoUri,
       notes: pin.metadata.notes,
       votes: pin.metadata.votes,
+      source: 'user',
+      userModified: false,
     );
   }
 
