@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math' show Point;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+    show kIsWeb, defaultTargetPlatform, TargetPlatform, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:ccwmap/core/build_flags.dart';
+import 'package:ccwmap/core/system_constants.dart';
 import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
@@ -34,6 +35,20 @@ class MapScreen extends StatefulWidget {
 
   @override
   State<MapScreen> createState() => _MapScreenState();
+}
+
+/// Returns true when [pinCreatorId] belongs to a different real user
+/// (not null, not the viewer, not a pre-populated system pin). Used to
+/// gate the Report/Block buttons on the pin edit dialog.
+@visibleForTesting
+bool isOtherUserPin({
+  required String? pinCreatorId,
+  required String? currentUserId,
+}) {
+  if (pinCreatorId == null) return false;
+  if (pinCreatorId == currentUserId) return false;
+  if (pinCreatorId == kSystemUserId) return false;
+  return true;
 }
 
 class _MapScreenState extends State<MapScreen> {
@@ -924,12 +939,10 @@ class _MapScreenState extends State<MapScreen> {
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
-    final canModerate =
-        isEditMode &&
+    final canModerate = isEditMode &&
         currentUserId != null &&
-        pinCreatorId != null &&
-        pinCreatorId != 'anonymous' &&
-        pinCreatorId != currentUserId;
+        isOtherUserPin(
+            pinCreatorId: pinCreatorId, currentUserId: currentUserId);
 
     await showDialog<void>(
       context: context,
