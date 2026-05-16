@@ -127,4 +127,4 @@ runtime.
 | 005_pin_reports                  | 2026-05-16 | (per Supabase migrations table) | |
 | 006_blocked_users                | 2026-05-16 | (per Supabase migrations table) | |
 | 007_pin_name_length              | 2026-05-16 | (per Supabase migrations table) | |
-| 008_provenance_and_view_rpc      | 2026-05-16 | _pending_                       | Phase 0 of pre-populate-pins; no app-visible changes |
+| 008_provenance_and_view_rpc      | 2026-05-16 | _deferred until post-release_   | Phase 0 of pre-populate-pins. The column-level UPDATE grant in §8 requires the `SupabasePinDto.toJsonForUpdate()` change (commit 3d45680) to be live in users' app builds — applying earlier would break pin editing for every existing user. Apply via MCP `apply_migration` only after a tagged release (≥ v0.5.1) reaches the stores. |
