@@ -1,4 +1,9 @@
 import 'package:ccwmap/data/database/database.dart';
+// `hide isNull` is load-bearing — without it Drift's query helper
+// `isNull` shadows the flutter_test matcher and `expect(x, isNull)` calls
+// stop compiling. The analyzer can't see the directive as "using" the
+// package, hence the ignore.
+// ignore: unused_import
 import 'package:drift/drift.dart' hide isNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,19 +21,23 @@ void main() {
       addTearDown(db.close);
 
       // Insert a minimal pin without touching any provenance column.
-      await db.into(db.pins).insert(PinsCompanion.insert(
-            id: 'pin-1',
-            name: 'Test',
-            latitude: 30.0,
-            longitude: -95.0,
-            status: 0,
-            createdAt: DateTime.now().millisecondsSinceEpoch,
-            lastModified: DateTime.now().millisecondsSinceEpoch,
-          ));
+      await db
+          .into(db.pins)
+          .insert(
+            PinsCompanion.insert(
+              id: 'pin-1',
+              name: 'Test',
+              latitude: 30.0,
+              longitude: -95.0,
+              status: 0,
+              createdAt: DateTime.now().millisecondsSinceEpoch,
+              lastModified: DateTime.now().millisecondsSinceEpoch,
+            ),
+          );
 
-      final row = await (db.select(db.pins)
-            ..where((t) => t.id.equals('pin-1')))
-          .getSingle();
+      final row = await (db.select(
+        db.pins,
+      )..where((t) => t.id.equals('pin-1'))).getSingle();
 
       expect(row.source, 'user');
       expect(row.sourceExternalId, isNull);
