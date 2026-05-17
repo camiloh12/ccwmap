@@ -215,6 +215,15 @@ class _MapScreenState extends State<MapScreen> {
     String layerId,
     dynamic annotation,
   ) async {
+    // Cluster taps zoom in on the centroid; the resulting onCameraIdle
+    // re-fetches the viewport so the user sees finer detail (either a
+    // sub-cluster or individual pins).
+    if (layerId == 'clusters-circle-layer' ||
+        layerId == 'clusters-count-layer') {
+      await _onClusterTapped(coordinates);
+      return;
+    }
+
     // Only handle taps on our pins layer
     if (layerId != 'pins-layer') {
       return;
@@ -289,6 +298,18 @@ class _MapScreenState extends State<MapScreen> {
       initialHasSecurityScreening: pin.hasSecurityScreening,
       initialHasPostedSignage: pin.hasPostedSignage,
       pinId: pin.id,
+    );
+  }
+
+  /// Zoom in on a cluster's centroid. The resulting [animateCamera] completion
+  /// triggers [_onCameraIdle], which the viewmodel debounces and dispatches as
+  /// a fresh bbox fetch — surfacing either a finer cluster or individual pins.
+  Future<void> _onClusterTapped(LatLng centroid) async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final currentZoom = controller.cameraPosition?.zoom ?? _initialZoom;
+    await controller.animateCamera(
+      CameraUpdate.newLatLngZoom(centroid, (currentZoom + 2).clamp(4.0, 18.0)),
     );
   }
 
