@@ -109,16 +109,13 @@ Future<void> main() async {
   );
 
   // Create ViewModels
-  // MapViewModel ctor signature will be widened in Task 12 to accept
-  // viewportPinsManager. Until then we instantiate it stand-alone and
-  // silence the unused-variable warning so the analyzer stays clean.
   final mapViewModel = MapViewModel(
     pinRepository,
     networkMonitor,
     blocklistService,
+    viewportPinsManager: viewportPinsManager,
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
   );
-  // ignore: unused_local_variable, no_leading_underscores_for_local_identifiers
-  final _viewportPinsManagerHandle = viewportPinsManager;
   final authViewModel = AuthViewModel(authRepository);
 
   runApp(
