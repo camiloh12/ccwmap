@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show Value;
+
 import '../../domain/models/location.dart';
 import '../../domain/models/pin.dart';
 import '../../domain/models/pin_metadata.dart';
@@ -24,6 +26,7 @@ class PinMapper {
       votes: pin.metadata.votes,
       source: 'user',
       userModified: false,
+      cachedAt: null,
     );
   }
 
@@ -48,5 +51,14 @@ class PinMapper {
         votes: entity.votes,
       ),
     );
+  }
+
+  /// Build a [PinEntity] for the bbox-cache flow. Sets `cachedAt` so the LRU
+  /// eviction in `ViewportPinsManager` can find this row. `source` is left
+  /// at the default `'user'` — Phase 1 callers should overwrite from the RPC
+  /// row before insert when provenance is known.
+  static PinEntity toCachedEntity(Pin pin, {required DateTime cachedAt}) {
+    final base = toEntity(pin);
+    return base.copyWith(cachedAt: Value(cachedAt.millisecondsSinceEpoch));
   }
 }

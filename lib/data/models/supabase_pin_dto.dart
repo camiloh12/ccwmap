@@ -17,6 +17,11 @@ class SupabasePinDto {
   final String? photoUri;
   final String? notes;
   final int votes;
+  final String source; // 'user' | 'nces' | 'osm' | ...
+  final String? sourceExternalId;
+  final String? confidence; // 'high' | 'medium' | 'low'
+  final String? legalCitation;
+  final String? legalCitationVerifiedDate; // ISO date string (YYYY-MM-DD)
 
   const SupabasePinDto({
     required this.id,
@@ -33,6 +38,11 @@ class SupabasePinDto {
     this.photoUri,
     this.notes,
     required this.votes,
+    this.source = 'user',
+    this.sourceExternalId,
+    this.confidence,
+    this.legalCitation,
+    this.legalCitationVerifiedDate,
   });
 
   /// Create DTO from Supabase JSON response
@@ -52,10 +62,21 @@ class SupabasePinDto {
       photoUri: json['photo_uri'] as String?,
       notes: json['notes'] as String?,
       votes: json['votes'] as int? ?? 0,
+      source: (json['source'] as String?) ?? 'user',
+      sourceExternalId: json['source_external_id'] as String?,
+      confidence: json['confidence'] as String?,
+      legalCitation: json['legal_citation'] as String?,
+      legalCitationVerifiedDate: json['legal_citation_verified_date'] as String?,
     );
   }
 
-  /// Convert DTO to JSON for Supabase API
+  /// Convert DTO to JSON for Supabase API (insert path).
+  ///
+  /// Provenance fields are included here because the server allows them on
+  /// insert when the caller has service-role (the bulk-import path).
+  /// Authenticated user inserts that include provenance will be silently
+  /// ignored or rejected at the column-grant level — callers building a
+  /// user-authored pin should leave them at their defaults.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -72,6 +93,11 @@ class SupabasePinDto {
       'photo_uri': photoUri,
       'notes': notes,
       'votes': votes,
+      'source': source,
+      'source_external_id': sourceExternalId,
+      'confidence': confidence,
+      'legal_citation': legalCitation,
+      'legal_citation_verified_date': legalCitationVerifiedDate,
     };
   }
 
@@ -80,6 +106,11 @@ class SupabasePinDto {
   /// columns like `id`, `created_by`, `created_at`, and server-managed
   /// `last_modified`) would trigger a Postgres permission error after
   /// the column-level GRANT replaces the blanket UPDATE grant.
+  ///
+  /// Provenance columns (`source`, `source_external_id`, `confidence`,
+  /// `legal_citation`, `legal_citation_verified_date`) are deliberately
+  /// excluded — migration 008 §8 REVOKEs UPDATE on those from
+  /// `authenticated`, so including them would 403.
   Map<String, dynamic> toJsonForUpdate() {
     return {
       'name': name,

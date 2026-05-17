@@ -264,4 +264,95 @@ void main() {
       }
     });
   });
+
+  group('SupabasePinDto provenance round-trip', () {
+    test('fromJson reads source/confidence/legal_citation', () {
+      final dto = SupabasePinDto.fromJson({
+        'id': 'pin-1',
+        'name': 'Federal Courthouse',
+        'latitude': 30.0,
+        'longitude': -95.0,
+        'status': 2,
+        'restriction_tag': 'FEDERAL_PROPERTY',
+        'has_security_screening': true,
+        'has_posted_signage': true,
+        'created_by': '81775f8b-1a6a-47d6-b793-e9ab7e38634e',
+        'created_at': '2026-01-01T00:00:00Z',
+        'last_modified': '2026-01-01T00:00:00Z',
+        'photo_uri': null,
+        'notes': null,
+        'votes': 0,
+        'source': 'hifld_courts',
+        'source_external_id': 'HIFLD-COURT-12345',
+        'confidence': 'high',
+        'legal_citation': '18 USC 930(a)',
+        'legal_citation_verified_date': '2026-01-15',
+      });
+
+      expect(dto.source, 'hifld_courts');
+      expect(dto.sourceExternalId, 'HIFLD-COURT-12345');
+      expect(dto.confidence, 'high');
+      expect(dto.legalCitation, '18 USC 930(a)');
+      expect(dto.legalCitationVerifiedDate, '2026-01-15');
+    });
+
+    test('fromJson defaults source to "user" when absent', () {
+      final dto = SupabasePinDto.fromJson({
+        'id': 'pin-1',
+        'name': 'My pin',
+        'latitude': 30.0,
+        'longitude': -95.0,
+        'status': 0,
+        'restriction_tag': null,
+        'has_security_screening': false,
+        'has_posted_signage': false,
+        'created_by': null,
+        'created_at': '2026-01-01T00:00:00Z',
+        'last_modified': '2026-01-01T00:00:00Z',
+        'photo_uri': null,
+        'notes': null,
+        'votes': 0,
+        // no source key at all — server omitted it
+      });
+
+      expect(dto.source, 'user');
+      expect(dto.sourceExternalId, isNull);
+      expect(dto.confidence, isNull);
+    });
+
+    test(
+      'toJsonForUpdate omits provenance fields '
+      '(authenticated users have no GRANT on them)',
+      () {
+        final dto = SupabasePinDto(
+          id: 'pin-1',
+          name: 'x',
+          latitude: 30,
+          longitude: -95,
+          status: 0,
+          restrictionTag: null,
+          hasSecurityScreening: false,
+          hasPostedSignage: false,
+          createdBy: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          lastModified: '2026-01-01T00:00:00Z',
+          photoUri: null,
+          notes: null,
+          votes: 0,
+          source: 'osm',
+          sourceExternalId: 'OSM-NODE-42',
+          confidence: 'medium',
+          legalCitation: 'TX Penal Code §46.035(b)(1)',
+          legalCitationVerifiedDate: '2026-01-15',
+        );
+
+        final json = dto.toJsonForUpdate();
+        expect(json.containsKey('source'), isFalse);
+        expect(json.containsKey('source_external_id'), isFalse);
+        expect(json.containsKey('confidence'), isFalse);
+        expect(json.containsKey('legal_citation'), isFalse);
+        expect(json.containsKey('legal_citation_verified_date'), isFalse);
+      },
+    );
+  });
 }
