@@ -23,6 +23,7 @@ import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
 import 'package:ccwmap/presentation/screens/settings_screen.dart';
+import 'package:ccwmap/domain/models/map_item.dart';
 import 'package:ccwmap/domain/models/pin.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
@@ -66,6 +67,8 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastDialogCloseTime;
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
+  bool _isUpdatingClusters = false;
+  bool _pendingClusterUpdate = false;
 
   // Debug state (toggled by long-pressing the title bar — lets user verify
   // iOS POI tap detection on-device without a Mac)
@@ -109,6 +112,9 @@ class _MapScreenState extends State<MapScreen> {
     // Listen to pin changes
     _viewModel!.addListener(_onPinsChanged);
 
+    // Listen to viewport cluster changes (low-zoom server aggregates).
+    _viewModel!.viewportClusters.addListener(_onClustersChanged);
+
     // Initialize ViewModel (loads sample data if needed)
     await _viewModel!.initialize();
   }
@@ -125,6 +131,15 @@ class _MapScreenState extends State<MapScreen> {
     if (_mapController != null) {
       _updatePinsLayer();
     }
+  }
+
+  /// Called when the server-side cluster aggregates change. Reads the
+  /// latest value off the notifier (not a closure-captured snapshot) so a
+  /// rapid succession of fires always renders the freshest list.
+  void _onClustersChanged() {
+    if (!mounted) return;
+    final clusters = _viewModel?.viewportClusters.value ?? const [];
+    _updateClustersLayer(clusters);
   }
 
   /// Request location permission and get current location
@@ -391,6 +406,123 @@ class _MapScreenState extends State<MapScreen> {
       if (_pendingLayerUpdate) {
         _pendingLayerUpdate = false;
         _updatePinsLayer();
+      }
+    }
+  }
+
+  /// Render server-aggregated cluster circles at low zoom levels.
+  ///
+  /// Mirrors `_updatePinsLayer`'s pattern: tear down existing layers/source
+  /// in reverse order, then add a GeoJSON source, a count-sized circle
+  /// layer, and a count-text symbol layer on top. The symbol layer has
+  /// `enableInteraction: false` so taps fall through to the circle (Task 15
+  /// wires cluster tap routing).
+  ///
+  /// Reentrancy: if a fire arrives mid-await, set the pending flag and
+  /// re-trigger from `finally` with the freshest value from the notifier
+  /// (the captured `clusters` arg could be stale by then).
+  Future<void> _updateClustersLayer(List<MapItemCluster> clusters) async {
+    if (_mapController == null) return;
+    if (_isUpdatingClusters) {
+      _pendingClusterUpdate = true;
+      return;
+    }
+    _isUpdatingClusters = true;
+    _pendingClusterUpdate = false;
+
+    try {
+      final features = clusters
+          .map(
+            (c) => {
+              'type': 'Feature',
+              'geometry': {
+                'type': 'Point',
+                'coordinates': [c.centroidLng, c.centroidLat],
+              },
+              'properties': {
+                'count': c.count,
+                'status': c.dominantStatus.colorCode,
+              },
+            },
+          )
+          .toList();
+
+      final geojson = {'type': 'FeatureCollection', 'features': features};
+
+      // Tear down in reverse order of creation (layers before source).
+      try {
+        await _mapController!.removeLayer('clusters-count-layer');
+      } catch (_) {
+        // Layer doesn't exist yet, that's ok
+      }
+      try {
+        await _mapController!.removeLayer('clusters-circle-layer');
+      } catch (_) {
+        // Layer doesn't exist yet, that's ok
+      }
+      try {
+        await _mapController!.removeSource('clusters-source');
+      } catch (_) {
+        // Source doesn't exist yet, that's ok
+      }
+
+      await _mapController!.addGeoJsonSource('clusters-source', geojson);
+
+      // Cluster circle: radius scales with count, color matches dominant
+      // status (same palette as individual pins).
+      await _mapController!.addCircleLayer(
+        'clusters-source',
+        'clusters-circle-layer',
+        CircleLayerProperties(
+          circleRadius: [
+            'interpolate',
+            ['linear'],
+            ['get', 'count'],
+            1, 14,
+            10, 20,
+            100, 30,
+            1000, 40,
+          ],
+          circleColor: [
+            'match',
+            ['get', 'status'],
+            0, '#4CAF50', // ALLOWED - Green
+            1, '#FFC107', // UNCERTAIN - Yellow
+            2, '#F44336', // NO_GUN - Red
+            '#999999', // Default gray
+          ],
+          circleStrokeWidth: 2.0,
+          circleStrokeColor: '#FFFFFF',
+          circleOpacity: 0.85,
+        ),
+      );
+
+      // Count label on top. enableInteraction: false so the underlying
+      // circle still receives taps (Task 15 routes them).
+      await _mapController!.addSymbolLayer(
+        'clusters-source',
+        'clusters-count-layer',
+        SymbolLayerProperties(
+          textField: ['get', 'count'],
+          textSize: 14.0,
+          textColor: '#FFFFFF',
+          textHaloColor: '#000000',
+          textHaloWidth: 1.0,
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        ),
+        enableInteraction: false,
+      );
+    } catch (e) {
+      debugPrint('MapScreen: Error updating clusters layer: $e');
+    } finally {
+      _isUpdatingClusters = false;
+      if (_pendingClusterUpdate) {
+        _pendingClusterUpdate = false;
+        // Re-pull from viewModel — captured cluster list could be stale.
+        _updateClustersLayer(
+          _viewModel?.viewportClusters.value ?? const [],
+        );
       }
     }
   }
@@ -2082,6 +2214,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _viewModel?.removeListener(_onPinsChanged);
+    _viewModel?.viewportClusters.removeListener(_onClustersChanged);
     _mapController?.onFeatureTapped.remove(_onFeatureTapped);
     _mapController?.dispose();
     super.dispose();
