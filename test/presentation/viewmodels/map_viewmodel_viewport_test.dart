@@ -34,15 +34,13 @@ class _FakeRemote implements RemoteDataSourceInterface {
   Future<List<SupabasePinDto>> getMyPinsModifiedSince({
     required String userId,
     required DateTime since,
-  }) async =>
-      [];
+  }) async => [];
 
   @override
   Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince({
     required String userId,
     required DateTime since,
-  }) async =>
-      [];
+  }) async => [];
 
   @override
   Future<void> insertPin(SupabasePinDto pin) async {}
@@ -84,50 +82,46 @@ class _NullModeration implements ModerationRepository {
 }
 
 void main() {
-  test('onCameraIdle dispatches debounced bbox fetch and publishes clusters',
-      () async {
-    final db = AppDatabase.forTesting(NativeDatabase.memory());
-    addTearDown(db.close);
-    final remote = _FakeRemote();
-    remote.bboxResult = [
-      const MapItemCluster(
-        centroidLat: 30,
-        centroidLng: -95,
-        count: 5,
-        dominantStatus: PinStatus.ALLOWED,
-        dominantRestrictionTag: null,
-      ),
-    ];
-    final vpm = ViewportPinsManager(
-      remote: remote,
-      pinDao: db.pinDao,
-      tombstoneDao: db.pinTombstoneDao,
-      fetchedBboxDao: db.fetchedBboxDao,
-      userIdProvider: () => null,
-    );
-    final repo = PinRepositoryImpl(
-      db.pinDao,
-      db.syncQueueDao,
-      db.pinTombstoneDao,
-    );
-    final vm = MapViewModel(
-      repo,
-      _AlwaysOnline(),
-      BlocklistService(_NullModeration()),
-      viewportPinsManager: vpm,
-      bboxDebounce: const Duration(milliseconds: 50),
-    );
+  test(
+    'onCameraIdle dispatches debounced bbox fetch and publishes clusters',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final remote = _FakeRemote();
+      remote.bboxResult = [
+        const MapItemCluster(
+          centroidLat: 30,
+          centroidLng: -95,
+          count: 5,
+          dominantStatus: PinStatus.ALLOWED,
+          dominantRestrictionTag: null,
+        ),
+      ];
+      final vpm = ViewportPinsManager(
+        remote: remote,
+        pinDao: db.pinDao,
+        tombstoneDao: db.pinTombstoneDao,
+        fetchedBboxDao: db.fetchedBboxDao,
+        userIdProvider: () => null,
+      );
+      final repo = PinRepositoryImpl(
+        db.pinDao,
+        db.syncQueueDao,
+        db.pinTombstoneDao,
+      );
+      final vm = MapViewModel(
+        repo,
+        _AlwaysOnline(),
+        BlocklistService(_NullModeration()),
+        viewportPinsManager: vpm,
+        bboxDebounce: const Duration(milliseconds: 50),
+      );
 
-    vm.onCameraIdle(
-      swLat: 30,
-      swLng: -96,
-      neLat: 32,
-      neLng: -94,
-      zoom: 8,
-    );
+      vm.onCameraIdle(swLat: 30, swLng: -96, neLat: 32, neLng: -94, zoom: 8);
 
-    await Future<void>.delayed(const Duration(milliseconds: 150));
-    expect(remote.bboxCalls, 1);
-    expect(vm.viewportClusters.value, hasLength(1));
-  });
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(remote.bboxCalls, 1);
+      expect(vm.viewportClusters.value, hasLength(1));
+    },
+  );
 }

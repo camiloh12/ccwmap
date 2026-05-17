@@ -33,7 +33,9 @@ class GetPinsInViewRow {
         (j['longitude'] as num).toDouble(),
       ),
       status: PinStatus.fromColorCode(j['status'] as int),
-      restrictionTag: RestrictionTag.fromString(j['restriction_tag'] as String?),
+      restrictionTag: RestrictionTag.fromString(
+        j['restriction_tag'] as String?,
+      ),
       hasSecurityScreening: (j['has_security_screening'] as bool?) ?? false,
       hasPostedSignage: (j['has_posted_signage'] as bool?) ?? false,
       metadata: PinMetadata(
@@ -50,8 +52,9 @@ class GetPinsInViewRow {
       centroidLng: (j['longitude'] as num).toDouble(),
       count: j['cluster_count'] as int,
       dominantStatus: PinStatus.fromColorCode(j['dominant_status'] as int),
-      dominantRestrictionTag:
-          RestrictionTag.fromString(j['dominant_restriction_tag'] as String?),
+      dominantRestrictionTag: RestrictionTag.fromString(
+        j['dominant_restriction_tag'] as String?,
+      ),
     );
   }
 }

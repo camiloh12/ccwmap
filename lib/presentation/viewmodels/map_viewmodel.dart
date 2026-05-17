@@ -55,8 +55,8 @@ class MapViewModel extends ChangeNotifier {
     ViewportPinsManager? viewportPinsManager,
     String? Function()? userIdProvider,
     Duration bboxDebounce = const Duration(milliseconds: 500),
-  })  : _viewportPinsManager = viewportPinsManager,
-        _userIdProvider = userIdProvider {
+  }) : _viewportPinsManager = viewportPinsManager,
+       _userIdProvider = userIdProvider {
     _bboxDebouncer = viewportPinsManager == null
         ? null
         : BboxRequestDebouncer(
@@ -73,8 +73,9 @@ class MapViewModel extends ChangeNotifier {
   ValueListenable<List<MapItemCluster>> get viewportClusters {
     final vpm = _viewportPinsManager;
     if (vpm != null) return vpm.clusters;
-    return _emptyClustersFallback ??=
-        ValueNotifier<List<MapItemCluster>>(const []);
+    return _emptyClustersFallback ??= ValueNotifier<List<MapItemCluster>>(
+      const [],
+    );
   }
 
   /// Map screen calls this from `onCameraIdle`. Stores the viewport and
@@ -147,8 +148,9 @@ class MapViewModel extends ChangeNotifier {
         final myId = _resolveMyUserId();
         if (myId != null) {
           final all = await _repository.getPins();
-          final nonMineCount =
-              all.where((p) => p.metadata.createdBy != myId).length;
+          final nonMineCount = all
+              .where((p) => p.metadata.createdBy != myId)
+              .length;
           if (nonMineCount > _pathologicalCacheCap) {
             await vpm.reset();
           }

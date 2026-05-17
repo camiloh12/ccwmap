@@ -48,7 +48,9 @@ class MyPinsSync {
     }
     if (!networkMonitor.isOnline) {
       return const SyncResult(
-        uploaded: 0, downloaded: 0, errors: 0,
+        uploaded: 0,
+        downloaded: 0,
+        errors: 0,
         errorMessage: 'Device is offline',
       );
     }
@@ -168,12 +170,14 @@ class MyPinsSync {
         if (entity == null) return;
         try {
           await remote.insertPin(
-              SupabasePinMapper.toDto(PinMapper.fromEntity(entity)));
+            SupabasePinMapper.toDto(PinMapper.fromEntity(entity)),
+          );
         } catch (e) {
           final m = e.toString();
           if (m.contains('duplicate') ||
               m.contains('already exists') ||
-              m.contains('unique')) return;
+              m.contains('unique'))
+            return;
           rethrow;
         }
         break;
@@ -182,7 +186,8 @@ class MyPinsSync {
         if (entity == null) return;
         try {
           await remote.updatePin(
-              SupabasePinMapper.toDto(PinMapper.fromEntity(entity)));
+            SupabasePinMapper.toDto(PinMapper.fromEntity(entity)),
+          );
         } catch (e) {
           final m = e.toString();
           if (m.contains('not found') || m.contains('no rows')) return;
@@ -214,8 +219,10 @@ class MyPinsSync {
 
     try {
       final since = await watermarks.readPinsWatermark(userId);
-      final remotePins =
-          await remote.getMyPinsModifiedSince(userId: userId, since: since);
+      final remotePins = await remote.getMyPinsModifiedSince(
+        userId: userId,
+        since: since,
+      );
 
       final pending = (await syncQueueDao.getPendingOperationsSorted())
           .where((o) => o.operationType == 'DELETE')
@@ -239,8 +246,9 @@ class MyPinsSync {
             downloaded++;
           } else {
             final localDomain = PinMapper.fromEntity(local);
-            if (remotePin.metadata.lastModified
-                .isAfter(localDomain.metadata.lastModified)) {
+            if (remotePin.metadata.lastModified.isAfter(
+              localDomain.metadata.lastModified,
+            )) {
               toUpdate.add(entity);
               downloaded++;
             }
@@ -260,8 +268,9 @@ class MyPinsSync {
 
       // Advance the watermark to the newest row we saw (or fetchStartedAt
       // if no rows came back — keeps subsequent queries cheap).
-      final advanceTo =
-          maxLastModified == since ? fetchStartedAt : maxLastModified;
+      final advanceTo = maxLastModified == since
+          ? fetchStartedAt
+          : maxLastModified;
       await watermarks.writePinsWatermark(userId, advanceTo);
     } catch (e) {
       errors++;
@@ -283,14 +292,18 @@ class MyPinsSync {
 
     try {
       final since = await watermarks.readDeletionsWatermark(userId);
-      final tombstones =
-          await remote.getMyPinDeletionsSince(userId: userId, since: since);
+      final tombstones = await remote.getMyPinDeletionsSince(
+        userId: userId,
+        since: since,
+      );
 
       DateTime maxDeletedAt = since;
       for (final t in tombstones) {
         try {
           await serverDeletionDao.upsert(
-              pinId: t.pinId, deletedAt: t.deletedAt);
+            pinId: t.pinId,
+            deletedAt: t.deletedAt,
+          );
           await pinDao.deletePin(t.pinId);
           if (t.deletedAt.isAfter(maxDeletedAt)) maxDeletedAt = t.deletedAt;
         } catch (e) {

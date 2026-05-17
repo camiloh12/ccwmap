@@ -66,7 +66,8 @@ class SupabasePinDto {
       sourceExternalId: json['source_external_id'] as String?,
       confidence: json['confidence'] as String?,
       legalCitation: json['legal_citation'] as String?,
-      legalCitationVerifiedDate: json['legal_citation_verified_date'] as String?,
+      legalCitationVerifiedDate:
+          json['legal_citation_verified_date'] as String?,
     );
   }
 

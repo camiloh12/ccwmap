@@ -35,9 +35,8 @@ class LastSyncedAtStore {
     return iso == null ? _epoch : DateTime.parse(iso);
   }
 
-  Future<void> writeDeletionsWatermark(String userId, DateTime at) =>
-      _prefs.setString(
-          '$_deletionsPrefix$userId', at.toUtc().toIso8601String());
+  Future<void> writeDeletionsWatermark(String userId, DateTime at) => _prefs
+      .setString('$_deletionsPrefix$userId', at.toUtc().toIso8601String());
 
   Future<void> clearForUser(String userId) async {
     await _prefs.remove('$_pinsPrefix$userId');

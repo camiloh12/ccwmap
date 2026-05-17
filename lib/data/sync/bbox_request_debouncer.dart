@@ -17,10 +17,7 @@ class BboxRequestDebouncer {
   Timer? _timer;
   int _generation = 0;
 
-  BboxRequestDebouncer({
-    required this.interval,
-    required this.onFire,
-  });
+  BboxRequestDebouncer({required this.interval, required this.onFire});
 
   int get currentGeneration => _generation;
 

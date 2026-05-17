@@ -13,11 +13,7 @@ void main() {
     await db.close();
   });
 
-  PinEntity _pin({
-    required String id,
-    String? createdBy,
-    int? cachedAt,
-  }) {
+  PinEntity _pin({required String id, String? createdBy, int? cachedAt}) {
     return PinEntity(
       id: id,
       name: 'p',
@@ -53,77 +49,88 @@ void main() {
       expect(count, 2); // other-1 and anon-cached
     });
 
-    test('evictOldestCachedNonMine keeps my pins and newer cached entries',
-        () async {
-      await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
-      await db.pinDao
-          .insertPin(_pin(id: 'old', createdBy: 'x', cachedAt: 100));
-      await db.pinDao
-          .insertPin(_pin(id: 'mid', createdBy: 'x', cachedAt: 200));
-      await db.pinDao
-          .insertPin(_pin(id: 'new', createdBy: 'x', cachedAt: 300));
+    test(
+      'evictOldestCachedNonMine keeps my pins and newer cached entries',
+      () async {
+        await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
+        await db.pinDao.insertPin(
+          _pin(id: 'old', createdBy: 'x', cachedAt: 100),
+        );
+        await db.pinDao.insertPin(
+          _pin(id: 'mid', createdBy: 'x', cachedAt: 200),
+        );
+        await db.pinDao.insertPin(
+          _pin(id: 'new', createdBy: 'x', cachedAt: 300),
+        );
 
-      // Cap at 2: should evict 'old' first.
-      await db.pinDao.evictOldestCachedNonMine(myUserId: 'me', maxRows: 2);
+        // Cap at 2: should evict 'old' first.
+        await db.pinDao.evictOldestCachedNonMine(myUserId: 'me', maxRows: 2);
 
-      final remaining = await db.pinDao.getAllPins();
-      final ids = remaining.map((p) => p.id).toSet();
-      expect(ids, {'mine', 'mid', 'new'});
-    });
+        final remaining = await db.pinDao.getAllPins();
+        final ids = remaining.map((p) => p.id).toSet();
+        expect(ids, {'mine', 'mid', 'new'});
+      },
+    );
 
-    test('evictOldestCachedNonMine never touches pins with cachedAt = null',
-        () async {
-      await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
-      // Pin created by another user but NOT via bbox cache (e.g. older
-      // sync model leftover) — cachedAt is null. Eviction must skip it.
-      await db.pinDao
-          .insertPin(_pin(id: 'legacy-other', createdBy: 'x', cachedAt: null));
-      await db.pinDao
-          .insertPin(_pin(id: 'cached-other', createdBy: 'x', cachedAt: 100));
+    test(
+      'evictOldestCachedNonMine never touches pins with cachedAt = null',
+      () async {
+        await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
+        // Pin created by another user but NOT via bbox cache (e.g. older
+        // sync model leftover) — cachedAt is null. Eviction must skip it.
+        await db.pinDao.insertPin(
+          _pin(id: 'legacy-other', createdBy: 'x', cachedAt: null),
+        );
+        await db.pinDao.insertPin(
+          _pin(id: 'cached-other', createdBy: 'x', cachedAt: 100),
+        );
 
-      await db.pinDao.evictOldestCachedNonMine(myUserId: 'me', maxRows: 1);
+        await db.pinDao.evictOldestCachedNonMine(myUserId: 'me', maxRows: 1);
 
-      final remaining = await db.pinDao.getAllPins();
-      expect(
-        remaining.map((p) => p.id).toSet(),
-        {'mine', 'legacy-other'},
-      );
-    });
+        final remaining = await db.pinDao.getAllPins();
+        expect(remaining.map((p) => p.id).toSet(), {'mine', 'legacy-other'});
+      },
+    );
 
-    test('upsertCachedPins inserts new rows and updates existing ones', () async {
-      await db.pinDao
-          .insertPin(_pin(id: 'existing', createdBy: 'x', cachedAt: 100));
+    test(
+      'upsertCachedPins inserts new rows and updates existing ones',
+      () async {
+        await db.pinDao.insertPin(
+          _pin(id: 'existing', createdBy: 'x', cachedAt: 100),
+        );
 
-      final updated = _pin(id: 'existing', createdBy: 'x', cachedAt: 200)
-          .copyWith(name: 'updated name');
-      final inserted = _pin(id: 'new', createdBy: 'x', cachedAt: 200);
+        final updated = _pin(
+          id: 'existing',
+          createdBy: 'x',
+          cachedAt: 200,
+        ).copyWith(name: 'updated name');
+        final inserted = _pin(id: 'new', createdBy: 'x', cachedAt: 200);
 
-      await db.pinDao.upsertCachedPins([updated, inserted]);
+        await db.pinDao.upsertCachedPins([updated, inserted]);
 
-      final all = await db.pinDao.getAllPins();
-      expect(all.length, 2);
-      expect(
-        all.firstWhere((p) => p.id == 'existing').name,
-        'updated name',
-      );
-      expect(
-        all.firstWhere((p) => p.id == 'existing').cachedAt,
-        200,
-      );
-    });
+        final all = await db.pinDao.getAllPins();
+        expect(all.length, 2);
+        expect(all.firstWhere((p) => p.id == 'existing').name, 'updated name');
+        expect(all.firstWhere((p) => p.id == 'existing').cachedAt, 200);
+      },
+    );
 
-    test('deleteAllCachedNonMinePins removes only cached non-mine rows',
-        () async {
-      await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
-      await db.pinDao
-          .insertPin(_pin(id: 'legacy', createdBy: 'x', cachedAt: null));
-      await db.pinDao
-          .insertPin(_pin(id: 'cached', createdBy: 'x', cachedAt: 100));
+    test(
+      'deleteAllCachedNonMinePins removes only cached non-mine rows',
+      () async {
+        await db.pinDao.insertPin(_pin(id: 'mine', createdBy: 'me'));
+        await db.pinDao.insertPin(
+          _pin(id: 'legacy', createdBy: 'x', cachedAt: null),
+        );
+        await db.pinDao.insertPin(
+          _pin(id: 'cached', createdBy: 'x', cachedAt: 100),
+        );
 
-      await db.pinDao.deleteAllCachedNonMinePins('me');
+        await db.pinDao.deleteAllCachedNonMinePins('me');
 
-      final remaining = await db.pinDao.getAllPins();
-      expect(remaining.map((p) => p.id).toSet(), {'mine', 'legacy'});
-    });
+        final remaining = await db.pinDao.getAllPins();
+        expect(remaining.map((p) => p.id).toSet(), {'mine', 'legacy'});
+      },
+    );
   });
 }

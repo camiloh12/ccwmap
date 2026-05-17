@@ -19,29 +19,32 @@ void main() {
         deletedAt: DateTime.utc(2026, 5, 16),
       );
 
-      final ids = await db.serverPinDeletionDao
-          .getPinIdsDeletedSince(DateTime.utc(2026, 5, 15, 23));
+      final ids = await db.serverPinDeletionDao.getPinIdsDeletedSince(
+        DateTime.utc(2026, 5, 15, 23),
+      );
 
       expect(ids, {'pin-2'});
     });
 
-    test('upsert is idempotent — re-inserting the same pin_id replaces',
-        () async {
-      await db.serverPinDeletionDao.upsert(
-        pinId: 'pin-1',
-        deletedAt: DateTime.utc(2026, 5, 15),
-      );
-      await db.serverPinDeletionDao.upsert(
-        pinId: 'pin-1',
-        deletedAt: DateTime.utc(2026, 5, 16),
-      );
+    test(
+      'upsert is idempotent — re-inserting the same pin_id replaces',
+      () async {
+        await db.serverPinDeletionDao.upsert(
+          pinId: 'pin-1',
+          deletedAt: DateTime.utc(2026, 5, 15),
+        );
+        await db.serverPinDeletionDao.upsert(
+          pinId: 'pin-1',
+          deletedAt: DateTime.utc(2026, 5, 16),
+        );
 
-      final all = await db.serverPinDeletionDao.getAll();
-      expect(all, hasLength(1));
-      expect(
-        all.single.deletedAt,
-        DateTime.utc(2026, 5, 16).millisecondsSinceEpoch,
-      );
-    });
+        final all = await db.serverPinDeletionDao.getAll();
+        expect(all, hasLength(1));
+        expect(
+          all.single.deletedAt,
+          DateTime.utc(2026, 5, 16).millisecondsSinceEpoch,
+        );
+      },
+    );
   });
 }

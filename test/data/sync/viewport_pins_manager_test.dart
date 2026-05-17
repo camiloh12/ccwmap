@@ -22,17 +22,18 @@ class _FakeRemote implements RemoteDataSourceInterface {
     required double neLng,
     required int zoom,
     required String? currentUserId,
-  }) async =>
-      bboxResult;
+  }) async => bboxResult;
 
   @override
-  Future<List<SupabasePinDto>> getMyPinsModifiedSince(
-          {required String userId, required DateTime since}) async =>
-      [];
+  Future<List<SupabasePinDto>> getMyPinsModifiedSince({
+    required String userId,
+    required DateTime since,
+  }) async => [];
   @override
-  Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince(
-          {required String userId, required DateTime since}) async =>
-      [];
+  Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince({
+    required String userId,
+    required DateTime since,
+  }) async => [];
   @override
   Future<void> insertPin(SupabasePinDto pin) async {}
   @override
@@ -44,19 +45,19 @@ class _FakeRemote implements RemoteDataSourceInterface {
 }
 
 Pin _pin(String id, {String createdBy = 'other'}) => Pin(
-      id: id,
-      name: id,
-      location: Location.fromLatLng(30, -95),
-      status: PinStatus.ALLOWED,
-      restrictionTag: null,
-      hasSecurityScreening: false,
-      hasPostedSignage: false,
-      metadata: PinMetadata(
-        createdBy: createdBy,
-        createdAt: DateTime.utc(2026, 1, 1),
-        lastModified: DateTime.utc(2026, 1, 1),
-      ),
-    );
+  id: id,
+  name: id,
+  location: Location.fromLatLng(30, -95),
+  status: PinStatus.ALLOWED,
+  restrictionTag: null,
+  hasSecurityScreening: false,
+  hasPostedSignage: false,
+  metadata: PinMetadata(
+    createdBy: createdBy,
+    createdAt: DateTime.utc(2026, 1, 1),
+    lastModified: DateTime.utc(2026, 1, 1),
+  ),
+);
 
 void main() {
   late AppDatabase db;
@@ -98,8 +99,10 @@ void main() {
   });
 
   test('filters out pins under local tombstones', () async {
-    await db.pinTombstoneDao
-        .insertTombstone('pin-ghost', DateTime.utc(2026, 5, 16));
+    await db.pinTombstoneDao.insertTombstone(
+      'pin-ghost',
+      DateTime.utc(2026, 5, 16),
+    );
     remote.bboxResult = [MapItemPin(_pin('pin-ghost'))];
 
     await vpm.fetch(swLat: 30, swLng: -96, neLat: 32, neLng: -94, zoom: 12);
@@ -161,7 +164,12 @@ void main() {
     remote.bboxResult = [MapItemPin(_pin('new'))];
 
     await vpmSmall.fetch(
-        swLat: 30, swLng: -96, neLat: 32, neLng: -94, zoom: 12);
+      swLat: 30,
+      swLng: -96,
+      neLat: 32,
+      neLng: -94,
+      zoom: 12,
+    );
 
     final remaining = (await db.pinDao.getAllPins()).map((p) => p.id).toSet();
     expect(remaining, contains('new'));

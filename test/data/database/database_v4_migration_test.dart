@@ -20,7 +20,9 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      await db.into(db.pins).insert(
+      await db
+          .into(db.pins)
+          .insert(
             PinsCompanion.insert(
               id: 'pin-1',
               name: 'Test',
@@ -32,9 +34,9 @@ void main() {
             ),
           );
 
-      final row = await (db.select(db.pins)
-            ..where((t) => t.id.equals('pin-1')))
-          .getSingle();
+      final row = await (db.select(
+        db.pins,
+      )..where((t) => t.id.equals('pin-1'))).getSingle();
       expect(row.cachedAt, isNull);
     });
 
@@ -42,7 +44,9 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      await db.into(db.fetchedBboxes).insert(
+      await db
+          .into(db.fetchedBboxes)
+          .insert(
             FetchedBboxesCompanion.insert(
               swLat: 30.0,
               swLng: -95.5,
@@ -63,11 +67,10 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      await db.into(db.serverPinDeletions).insert(
-            ServerPinDeletionsCompanion.insert(
-              pinId: 'pin-1',
-              deletedAt: 1,
-            ),
+      await db
+          .into(db.serverPinDeletions)
+          .insert(
+            ServerPinDeletionsCompanion.insert(pinId: 'pin-1', deletedAt: 1),
           );
 
       final rows = await db.select(db.serverPinDeletions).get();

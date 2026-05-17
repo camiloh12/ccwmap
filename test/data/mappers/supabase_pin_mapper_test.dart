@@ -320,54 +320,51 @@ void main() {
       expect(dto.confidence, isNull);
     });
 
-    test(
-      'toJsonForUpdate omits provenance fields '
-      '(authenticated users have no GRANT on them)',
-      () {
-        final dto = SupabasePinDto(
-          id: 'pin-1',
-          name: 'x',
-          latitude: 30,
-          longitude: -95,
-          status: 0,
-          restrictionTag: null,
-          hasSecurityScreening: false,
-          hasPostedSignage: false,
-          createdBy: null,
-          createdAt: '2026-01-01T00:00:00Z',
-          lastModified: '2026-01-01T00:00:00Z',
-          photoUri: null,
-          notes: null,
-          votes: 0,
-          source: 'osm',
-          sourceExternalId: 'OSM-NODE-42',
-          confidence: 'medium',
-          legalCitation: 'TX Penal Code §46.035(b)(1)',
-          legalCitationVerifiedDate: '2026-01-15',
-        );
+    test('toJsonForUpdate omits provenance fields '
+        '(authenticated users have no GRANT on them)', () {
+      final dto = SupabasePinDto(
+        id: 'pin-1',
+        name: 'x',
+        latitude: 30,
+        longitude: -95,
+        status: 0,
+        restrictionTag: null,
+        hasSecurityScreening: false,
+        hasPostedSignage: false,
+        createdBy: null,
+        createdAt: '2026-01-01T00:00:00Z',
+        lastModified: '2026-01-01T00:00:00Z',
+        photoUri: null,
+        notes: null,
+        votes: 0,
+        source: 'osm',
+        sourceExternalId: 'OSM-NODE-42',
+        confidence: 'medium',
+        legalCitation: 'TX Penal Code §46.035(b)(1)',
+        legalCitationVerifiedDate: '2026-01-15',
+      );
 
-        final json = dto.toJsonForUpdate();
-        expect(json.containsKey('source'), isFalse);
-        expect(json.containsKey('source_external_id'), isFalse);
-        expect(json.containsKey('confidence'), isFalse);
-        expect(json.containsKey('legal_citation'), isFalse);
-        expect(json.containsKey('legal_citation_verified_date'), isFalse);
+      final json = dto.toJsonForUpdate();
+      expect(json.containsKey('source'), isFalse);
+      expect(json.containsKey('source_external_id'), isFalse);
+      expect(json.containsKey('confidence'), isFalse);
+      expect(json.containsKey('legal_citation'), isFalse);
+      expect(json.containsKey('legal_citation_verified_date'), isFalse);
 
-        // Pin the exact set of updatable columns to migration 008 §8's
-        // column-level GRANT. Any drift fails loudly.
-        expect(json.keys.toSet(), {
-          'name',
-          'latitude',
-          'longitude',
-          'status',
-          'restriction_tag',
-          'has_security_screening',
-          'has_posted_signage',
-          'notes',
-          'photo_uri',
-          'votes',
-        });
-      },
-    );
+      // Pin the exact set of updatable columns to migration 008 §8's
+      // column-level GRANT. Any drift fails loudly.
+      expect(json.keys.toSet(), {
+        'name',
+        'latitude',
+        'longitude',
+        'status',
+        'restriction_tag',
+        'has_security_screening',
+        'has_posted_signage',
+        'notes',
+        'photo_uri',
+        'votes',
+      });
+    });
   });
 }

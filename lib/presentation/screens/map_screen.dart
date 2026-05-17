@@ -501,10 +501,14 @@ class _MapScreenState extends State<MapScreen> {
             'interpolate',
             ['linear'],
             ['get', 'count'],
-            1, 14,
-            10, 20,
-            100, 30,
-            1000, 40,
+            1,
+            14,
+            10,
+            20,
+            100,
+            30,
+            1000,
+            40,
           ],
           circleColor: [
             'match',
@@ -545,9 +549,7 @@ class _MapScreenState extends State<MapScreen> {
       if (_pendingClusterUpdate) {
         _pendingClusterUpdate = false;
         // Re-pull from viewModel — captured cluster list could be stale.
-        _updateClustersLayer(
-          _viewModel?.viewportClusters.value ?? const [],
-        );
+        _updateClustersLayer(_viewModel?.viewportClusters.value ?? const []);
       }
     }
   }

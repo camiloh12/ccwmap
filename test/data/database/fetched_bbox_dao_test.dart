@@ -27,12 +27,22 @@ void main() {
 
     test('pruneOlderThan removes rows older than threshold', () async {
       await db.fetchedBboxDao.recordFetch(
-        swLat: 0, swLng: 0, neLat: 1, neLng: 1, zoom: 10,
-        fetchedAt: DateTime.utc(2026, 1, 1), pinCount: 1,
+        swLat: 0,
+        swLng: 0,
+        neLat: 1,
+        neLng: 1,
+        zoom: 10,
+        fetchedAt: DateTime.utc(2026, 1, 1),
+        pinCount: 1,
       );
       await db.fetchedBboxDao.recordFetch(
-        swLat: 0, swLng: 0, neLat: 1, neLng: 1, zoom: 10,
-        fetchedAt: DateTime.utc(2026, 5, 1), pinCount: 1,
+        swLat: 0,
+        swLng: 0,
+        neLat: 1,
+        neLng: 1,
+        zoom: 10,
+        fetchedAt: DateTime.utc(2026, 5, 1),
+        pinCount: 1,
       );
 
       await db.fetchedBboxDao.pruneOlderThan(DateTime.utc(2026, 3, 1));

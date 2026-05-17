@@ -19,10 +19,12 @@ class ServerPinDeletionDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<Set<String>> getPinIdsDeletedSince(DateTime since) async {
-    final rows = await (select(serverPinDeletions)
-          ..where((t) =>
-              t.deletedAt.isBiggerThanValue(since.millisecondsSinceEpoch)))
-        .get();
+    final rows =
+        await (select(serverPinDeletions)..where(
+              (t) =>
+                  t.deletedAt.isBiggerThanValue(since.millisecondsSinceEpoch),
+            ))
+            .get();
     return rows.map((r) => r.pinId).toSet();
   }
 

@@ -105,10 +105,11 @@ class PinDao extends DatabaseAccessor<AppDatabase> with _$PinDaoMixin {
   /// on app start (spec §6: "if cached count > 2× soft limit, drop all
   /// created_by != me rows, rebuild via bbox").
   Future<void> deleteAllCachedNonMinePins(String myUserId) async {
-    await (delete(pins)
-          ..where((t) =>
+    await (delete(pins)..where(
+          (t) =>
               t.cachedAt.isNotNull() &
-              (t.createdBy.equals(myUserId).not() | t.createdBy.isNull())))
+              (t.createdBy.equals(myUserId).not() | t.createdBy.isNull()),
+        ))
         .go();
   }
 }

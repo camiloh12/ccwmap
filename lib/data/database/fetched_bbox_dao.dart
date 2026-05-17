@@ -30,9 +30,10 @@ class FetchedBboxDao extends DatabaseAccessor<AppDatabase>
   Future<List<FetchedBboxEntity>> getAll() => select(fetchedBboxes).get();
 
   Future<void> pruneOlderThan(DateTime threshold) async {
-    await (delete(fetchedBboxes)
-          ..where((t) =>
-              t.fetchedAt.isSmallerThanValue(threshold.millisecondsSinceEpoch)))
+    await (delete(fetchedBboxes)..where(
+          (t) =>
+              t.fetchedAt.isSmallerThanValue(threshold.millisecondsSinceEpoch),
+        ))
         .go();
   }
 }
