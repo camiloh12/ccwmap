@@ -10,7 +10,7 @@ import 'package:ccwmap/domain/repositories/pin_repository.dart';
 
 /// Bidirectional sync for `created_by = auth.uid()` pins only.
 ///
-/// Replaces the legacy [SyncManager] in two ways:
+/// Replaces the legacy SyncManager in two ways:
 /// 1. Download is a delta query (`last_modified > watermark`) instead of a
 ///    full fetch.
 /// 2. Tombstones for *my* pins are mirrored from server-side `pin_deletions`
@@ -86,7 +86,7 @@ class MyPinsSync {
     );
   }
 
-  // --- Upload path: identical semantics to the deleted SyncManager. --
+  // --- Upload path: identical semantics to the deleted legacy sync path. --
 
   Future<void> _optimizeQueue() async {
     final all = await syncQueueDao.getPendingOperationsSorted();

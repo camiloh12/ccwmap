@@ -6,22 +6,22 @@ import '../../domain/repositories/pin_repository.dart';
 import '../database/database.dart';
 import '../mappers/pin_mapper.dart';
 import '../mappers/sync_operation_mapper.dart';
-import '../sync/sync_manager.dart';
+import '../sync/my_pins_sync.dart';
 
 /// Implementation of PinRepository with offline-first sync queue
 class PinRepositoryImpl implements PinRepository {
   final PinDao _pinDao;
   final SyncQueueDao _syncQueueDao;
   final PinTombstoneDao _tombstoneDao;
-  final SyncManager? _syncManager;
+  final MyPinsSync? _myPinsSync;
   final Uuid _uuid = const Uuid();
 
   PinRepositoryImpl(
     this._pinDao,
     this._syncQueueDao,
     this._tombstoneDao, {
-    SyncManager? syncManager,
-  }) : _syncManager = syncManager;
+    MyPinsSync? myPinsSync,
+  }) : _myPinsSync = myPinsSync;
 
   @override
   Stream<List<Pin>> watchPins() {
@@ -107,18 +107,13 @@ class PinRepositoryImpl implements PinRepository {
 
   @override
   Future<SyncResult> syncWithRemote() async {
-    // Delegate to SyncManager if available (Iteration 10+)
-    final syncManager = _syncManager;
-    if (syncManager != null) {
-      return await syncManager.sync();
-    }
-
-    // Fallback: No sync manager available
-    return SyncResult(
+    final s = _myPinsSync;
+    if (s != null) return s.sync();
+    return const SyncResult(
       uploaded: 0,
       downloaded: 0,
       errors: 0,
-      errorMessage: 'SyncManager not initialized',
+      errorMessage: 'MyPinsSync not initialized',
     );
   }
 }

@@ -14,8 +14,10 @@ import 'package:ccwmap/data/repositories/supabase_agreements_repository.dart';
 import 'package:ccwmap/data/repositories/supabase_moderation_repository.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
-import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/data/sync/last_synced_at_store.dart';
+import 'package:ccwmap/data/sync/my_pins_sync.dart';
+import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
 import 'package:ccwmap/domain/models/user.dart';
 import 'package:ccwmap/domain/repositories/agreements_repository.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
@@ -71,13 +73,27 @@ Future<void> main() async {
   final agreementsRepository = SupabaseAgreementsRepository(remoteDataSource);
   final blocklistService = BlocklistService(moderationRepository);
 
-  // Create sync manager
-  final syncManager = SyncManager(
+  // Create sync components (Phase 1: tiered sync)
+  final watermarks = await LastSyncedAtStore.create();
+
+  final myPinsSync = MyPinsSync(
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
     syncQueueDao: database.syncQueueDao,
     pinDao: database.pinDao,
     tombstoneDao: database.pinTombstoneDao,
-    remoteDataSource: remoteDataSource,
+    serverDeletionDao: database.serverPinDeletionDao,
+    remote: remoteDataSource,
     networkMonitor: networkMonitor,
+    watermarks: watermarks,
+  );
+
+  final viewportPinsManager = ViewportPinsManager(
+    remote: remoteDataSource,
+    pinDao: database.pinDao,
+    tombstoneDao: database.pinTombstoneDao,
+    fetchedBboxDao: database.fetchedBboxDao,
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
+    // Default cacheRowLimit (20000) per spec.
   );
 
   // Create repositories
@@ -85,19 +101,24 @@ Future<void> main() async {
     database.pinDao,
     database.syncQueueDao,
     database.pinTombstoneDao,
-    syncManager: syncManager,
+    myPinsSync: myPinsSync,
   );
   final authRepository = SupabaseAuthRepository(
     supabaseClient,
-    syncManager: syncManager,
+    myPinsSync: myPinsSync,
   );
 
   // Create ViewModels
+  // MapViewModel ctor signature will be widened in Task 12 to accept
+  // viewportPinsManager. Until then we instantiate it stand-alone and
+  // silence the unused-variable warning so the analyzer stays clean.
   final mapViewModel = MapViewModel(
     pinRepository,
     networkMonitor,
     blocklistService,
   );
+  // ignore: unused_local_variable, no_leading_underscores_for_local_identifiers
+  final _viewportPinsManagerHandle = viewportPinsManager;
   final authViewModel = AuthViewModel(authRepository);
 
   runApp(
