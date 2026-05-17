@@ -25,7 +25,7 @@ void main() {
     });
 
     group('toJson', () {
-      test('includes all 14 columns (full DTO for INSERT)', () {
+      test('includes all 19 columns (full DTO for INSERT)', () {
         final json = dto.toJson();
 
         expect(json.keys.toSet(), {
@@ -43,6 +43,11 @@ void main() {
           'photo_uri',
           'notes',
           'votes',
+          'source',
+          'source_external_id',
+          'confidence',
+          'legal_citation',
+          'legal_citation_verified_date',
         });
       });
 
