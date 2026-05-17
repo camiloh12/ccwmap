@@ -16,11 +16,14 @@ class MapViewModel extends ChangeNotifier {
   final NetworkMonitor _networkMonitor;
   final BlocklistService _blocklist;
   final ViewportPinsManager? _viewportPinsManager;
-  // Wired in Task 12; consumed by Task 17 (user-pin tap routing). The plan
-  // asks for the ctor param now so main.dart can finalize wiring without a
-  // follow-up signature bump.
-  // ignore: unused_field
+  // Wired in Task 12; consumed by Task 17 — used by the pathological-cache
+  // safety check in [initialize] to scope "non-mine" rows.
   final String? Function()? _userIdProvider;
+
+  /// Hard cap per spec §6 — twice the soft cache limit (default 20000).
+  /// If the on-disk cache exceeds this on startup, we drop the non-mine rows
+  /// and let the next `onCameraIdle` rebuild via bbox.
+  static const int _pathologicalCacheCap = 40000;
   late final BboxRequestDebouncer? _bboxDebouncer;
   StreamSubscription<List<Pin>>? _pinsSubscription;
   StreamSubscription<bool>? _networkSubscription;
@@ -133,6 +136,25 @@ class MapViewModel extends ChangeNotifier {
   Future<void> initialize() async {
     _setLoading(true);
     try {
+      // Pathological-cache safety (spec §6): if the on-disk cache somehow
+      // exceeded its soft limit (e.g. crashed mid-eviction in a prior run,
+      // schema migration didn't run), drop the non-mine rows and let the
+      // next onCameraIdle rebuild via bbox. Runs before the pins stream is
+      // subscribed so the first emission reflects the post-reset state, and
+      // before any debounced bbox fetch could fire.
+      final vpm = _viewportPinsManager;
+      if (vpm != null) {
+        final myId = _resolveMyUserId();
+        if (myId != null) {
+          final all = await _repository.getPins();
+          final nonMineCount =
+              all.where((p) => p.metadata.createdBy != myId).length;
+          if (nonMineCount > _pathologicalCacheCap) {
+            await vpm.reset();
+          }
+        }
+      }
+
       // Start watching pins
       _pinsSubscription = _repository.watchPins().listen(
         (pins) {
@@ -230,6 +252,8 @@ class MapViewModel extends ChangeNotifier {
       return null;
     }
   }
+
+  String? _resolveMyUserId() => _userIdProvider?.call();
 
   void _setLoading(bool value) {
     _isLoading = value;
