@@ -35,10 +35,11 @@ class FakeSupabaseRemoteDataSource implements RemoteDataSourceInterface {
     required String userId,
     required DateTime since,
   }) async {
-    if (shouldThrowError) {
-      throw Exception('Simulated network error');
-    }
-    return const <ServerPinDeletionDto>[];
+    throw UnimplementedError(
+      'FakeSupabaseRemoteDataSource does not model server deletions. '
+      'Use a per-test fake (see test/data/sync/my_pins_sync_test.dart, '
+      'Phase 1 Task 8) if you need deletion behavior.',
+    );
   }
 
   @override
@@ -50,10 +51,11 @@ class FakeSupabaseRemoteDataSource implements RemoteDataSourceInterface {
     required int zoom,
     required String? currentUserId,
   }) async {
-    if (shouldThrowError) {
-      throw Exception('Simulated network error');
-    }
-    return const <MapItem>[];
+    throw UnimplementedError(
+      'FakeSupabaseRemoteDataSource does not model bbox queries. '
+      'Use a per-test fake (see test/data/sync/viewport_pins_manager_test.dart, '
+      'Phase 1 Task 10) if you need viewport behavior.',
+    );
   }
 
   @override

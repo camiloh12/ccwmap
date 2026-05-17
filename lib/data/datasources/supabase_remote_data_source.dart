@@ -60,6 +60,13 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
     required int zoom,
     required String? currentUserId,
   }) async {
+    // NOTE: currentUserId is intentionally NOT forwarded to the RPC. The
+    // server-side function `get_pins_in_view` (migration 008 §7) reads
+    // `auth.uid()` directly to filter out the caller's own pins (those
+    // come down via MyPinsSync). The Dart parameter exists for call-site
+    // clarity and to give callers a chance to make decisions that don't
+    // round-trip — e.g. ViewportPinsManager skipping non-essential bbox
+    // fetches when unauthenticated.
     final response = await _supabase.rpc(
       'get_pins_in_view',
       params: {

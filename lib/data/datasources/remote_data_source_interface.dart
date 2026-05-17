@@ -23,8 +23,12 @@ abstract class RemoteDataSourceInterface {
   });
 
   /// Fetch pins (or server-side clusters) inside the bbox. Excludes pins
-  /// created by [currentUserId] (those come down via MyPinsSync). Pass
-  /// `null` when unauthenticated.
+  /// created by the caller (enforced server-side via `auth.uid()` in the
+  /// `get_pins_in_view` Postgres function — see migration 008 §7).
+  ///
+  /// The [currentUserId] parameter is NOT forwarded to the RPC. It is here
+  /// so callers can make local decisions (skip the call when unauthenticated,
+  /// adjust caching strategy, etc.). Pass `null` when unauthenticated.
   Future<List<MapItem>> getPinsInView({
     required double swLat,
     required double swLng,
