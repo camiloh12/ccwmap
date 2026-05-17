@@ -3,6 +3,7 @@ import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
 import 'package:ccwmap/data/mappers/pin_mapper.dart';
 import 'package:ccwmap/data/mappers/supabase_pin_mapper.dart';
 import 'package:ccwmap/data/mappers/sync_operation_mapper.dart';
+import 'package:ccwmap/data/models/supabase_pin_dto.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
 import 'package:ccwmap/domain/models/sync_operation.dart';
 import 'package:ccwmap/domain/repositories/pin_repository.dart';
@@ -283,7 +284,9 @@ class SyncManager {
     String? errorMessage;
 
     try {
-      final remotePins = await _remoteDataSource.getAllPins();
+      // Temporarily disabled — see Phase 1 plan Task 11 (sync_manager.dart
+      // is being deleted in favor of MyPinsSync + ViewportPinsManager).
+      final remotePins = <SupabasePinDto>[];
 
       // Collect pins to insert/update in batch
       final List<PinEntity> pinsToInsert = [];

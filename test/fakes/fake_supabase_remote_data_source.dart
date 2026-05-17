@@ -1,5 +1,7 @@
-import 'package:ccwmap/data/models/supabase_pin_dto.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
+import 'package:ccwmap/data/models/server_pin_deletion_dto.dart';
+import 'package:ccwmap/data/models/supabase_pin_dto.dart';
+import 'package:ccwmap/domain/models/map_item.dart';
 
 /// Fake implementation of remote data source for testing
 ///
@@ -11,11 +13,47 @@ class FakeSupabaseRemoteDataSource implements RemoteDataSourceInterface {
   FakeSupabaseRemoteDataSource();
 
   @override
-  Future<List<SupabasePinDto>> getAllPins() async {
+  Future<List<SupabasePinDto>> getMyPinsModifiedSince({
+    required String userId,
+    required DateTime since,
+  }) async {
     if (shouldThrowError) {
       throw Exception('Simulated network error');
     }
-    return _pins.values.toList();
+    return _pins.values
+        .where(
+          (p) =>
+              p.createdBy == userId &&
+              DateTime.parse(p.lastModified).isAfter(since),
+        )
+        .toList()
+      ..sort((a, b) => a.lastModified.compareTo(b.lastModified));
+  }
+
+  @override
+  Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince({
+    required String userId,
+    required DateTime since,
+  }) async {
+    if (shouldThrowError) {
+      throw Exception('Simulated network error');
+    }
+    return const <ServerPinDeletionDto>[];
+  }
+
+  @override
+  Future<List<MapItem>> getPinsInView({
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    required int zoom,
+    required String? currentUserId,
+  }) async {
+    if (shouldThrowError) {
+      throw Exception('Simulated network error');
+    }
+    return const <MapItem>[];
   }
 
   @override
