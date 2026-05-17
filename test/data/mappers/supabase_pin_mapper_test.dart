@@ -352,6 +352,21 @@ void main() {
         expect(json.containsKey('confidence'), isFalse);
         expect(json.containsKey('legal_citation'), isFalse);
         expect(json.containsKey('legal_citation_verified_date'), isFalse);
+
+        // Pin the exact set of updatable columns to migration 008 §8's
+        // column-level GRANT. Any drift fails loudly.
+        expect(json.keys.toSet(), {
+          'name',
+          'latitude',
+          'longitude',
+          'status',
+          'restriction_tag',
+          'has_security_screening',
+          'has_posted_signage',
+          'notes',
+          'photo_uri',
+          'votes',
+        });
       },
     );
   });

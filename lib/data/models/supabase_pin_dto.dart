@@ -70,13 +70,15 @@ class SupabasePinDto {
     );
   }
 
-  /// Convert DTO to JSON for Supabase API (insert path).
-  ///
-  /// Provenance fields are included here because the server allows them on
-  /// insert when the caller has service-role (the bulk-import path).
-  /// Authenticated user inserts that include provenance will be silently
-  /// ignored or rejected at the column-grant level — callers building a
-  /// user-authored pin should leave them at their defaults.
+  /// Returns every column in the row, including the provenance fields.
+  /// Used for INSERT. The server does *not* currently restrict provenance
+  /// columns on insert (migration 008's column-level GRANTs only apply to
+  /// UPDATE). The client-side convention is: authored-by-the-user pins
+  /// leave the provenance fields at their constructor defaults (`source =
+  /// 'user'`, the rest null), and the importer (service-role) is the only
+  /// writer that ever sets them to anything else. If a future change wires
+  /// non-default provenance into [SupabasePinMapper.toDto], add a column-
+  /// level INSERT grant to migration 009+ to lock down forgery.
   Map<String, dynamic> toJson() {
     return {
       'id': id,
