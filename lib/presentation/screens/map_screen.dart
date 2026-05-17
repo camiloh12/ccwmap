@@ -419,6 +419,8 @@ class _MapScreenState extends State<MapScreen> {
         ),
         enableInteraction: false,
       );
+
+      await _applyPinLayerVisibility();
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
     } finally {
@@ -534,6 +536,8 @@ class _MapScreenState extends State<MapScreen> {
         ),
         enableInteraction: false,
       );
+
+      await _applyPinLayerVisibility();
     } catch (e) {
       debugPrint('MapScreen: Error updating clusters layer: $e');
     } finally {
@@ -545,6 +549,30 @@ class _MapScreenState extends State<MapScreen> {
           _viewModel?.viewportClusters.value ?? const [],
         );
       }
+    }
+  }
+
+  /// Hide the individual pin layers when server-aggregated clusters are
+  /// being rendered, so the map doesn't double-render the same data at
+  /// low zoom (cluster circle overlaying the pins it aggregates).
+  ///
+  /// Called from both `_updatePinsLayer` and `_updateClustersLayer` so
+  /// visibility stays in sync regardless of which side updated last.
+  /// Reads `viewportClusters.value` at call time (not closure-captured)
+  /// so it always reflects the latest cluster set.
+  Future<void> _applyPinLayerVisibility() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final hideForClusters =
+        (_viewModel?.viewportClusters.value ?? const []).isNotEmpty;
+    try {
+      await controller.setLayerVisibility('pins-layer', !hideForClusters);
+      await controller.setLayerVisibility(
+        'pins-labels-layer',
+        !hideForClusters,
+      );
+    } catch (e) {
+      debugPrint('MapScreen: setLayerVisibility failed: $e');
     }
   }
 
