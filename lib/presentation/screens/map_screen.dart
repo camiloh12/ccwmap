@@ -285,6 +285,9 @@ class _MapScreenState extends State<MapScreen> {
 
     // Add pins layer to map
     _updatePinsLayer();
+
+    // Initial bbox fetch for the starting viewport.
+    _onCameraIdle();
   }
 
   /// Update pins on the map using circle layers
@@ -591,6 +594,29 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('User location marker added successfully');
     } catch (e) {
       debugPrint('Error adding user location marker: $e');
+    }
+  }
+
+  /// Called by MapLibre after the camera settles from pan/zoom/rotate.
+  /// Computes the visible bounding box + integer zoom and forwards to the
+  /// view model, which debounces and dispatches to ViewportPinsManager.
+  Future<void> _onCameraIdle() async {
+    final controller = _mapController;
+    final viewModel = _viewModel;
+    if (controller == null || viewModel == null) return;
+
+    try {
+      final bounds = await controller.getVisibleRegion();
+      final z = controller.cameraPosition?.zoom ?? _initialZoom;
+      viewModel.onCameraIdle(
+        swLat: bounds.southwest.latitude,
+        swLng: bounds.southwest.longitude,
+        neLat: bounds.northeast.latitude,
+        neLng: bounds.northeast.longitude,
+        zoom: z.round(),
+      );
+    } catch (e) {
+      debugPrint('MapScreen: getVisibleRegion failed: $e');
     }
   }
 
@@ -1746,6 +1772,7 @@ class _MapScreenState extends State<MapScreen> {
                   onStyleLoadedCallback: _onStyleLoadedCallback,
                   onMapClick: _onMapClick,
                   onMapLongClick: _onMapLongClick,
+                  onCameraIdle: _onCameraIdle,
                   myLocationEnabled:
                       !kIsWeb, // Disable on web (use custom marker instead)
                   myLocationTrackingMode: MyLocationTrackingMode.none,
