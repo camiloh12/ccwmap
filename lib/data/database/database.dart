@@ -33,8 +33,7 @@ class Pins extends Table {
 
   /// Origin of this pin. `'user'` for user-created, otherwise the source
   /// module name (`'nces'`, `'hifld_courts'`, `'osm'`, etc.).
-  TextColumn get source =>
-      text().withDefault(const Constant('user'))();
+  TextColumn get source => text().withDefault(const Constant('user'))();
 
   /// Stable per-source identifier. Used as the upsert key by the importer.
   /// Null for user-created pins.
@@ -48,8 +47,7 @@ class Pins extends Table {
 
   /// True once any non-importer write hits the row. Server-side trigger
   /// is authoritative; we just mirror the value when we sync down.
-  BoolColumn get userModified =>
-      boolean().withDefault(const Constant(false))();
+  BoolColumn get userModified => boolean().withDefault(const Constant(false))();
 
   /// `'high'` / `'medium'` / `'low'` from the state-law lookup table.
   TextColumn get confidence => text().nullable()();

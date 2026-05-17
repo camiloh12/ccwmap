@@ -939,10 +939,13 @@ class _MapScreenState extends State<MapScreen> {
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
-    final canModerate = isEditMode &&
+    final canModerate =
+        isEditMode &&
         currentUserId != null &&
         isOtherUserPin(
-            pinCreatorId: pinCreatorId, currentUserId: currentUserId);
+          pinCreatorId: pinCreatorId,
+          currentUserId: currentUserId,
+        );
 
     await showDialog<void>(
       context: context,

@@ -161,7 +161,9 @@ CREATE TRIGGER record_pin_deletion_trigger
 -- 6c. enforce_delete_rate_limit — per-user 100-deletes-per-hour limit.
 --     Permissive enough for legitimate cleanup; tight enough that
 --     scripted attacks fail loudly. Skipped for service_role and for
---     unauthenticated (anon) actions.
+--     unauthenticated (anon) actions. Each invocation prunes the calling
+--     user's stale rows first so recent_deletes stays bounded even before
+--     the Phase 6 health-check pruning job lands.
 CREATE OR REPLACE FUNCTION enforce_delete_rate_limit() RETURNS TRIGGER AS $$
 DECLARE
   v_user UUID := auth.uid();
@@ -170,6 +172,12 @@ BEGIN
   IF v_user IS NULL OR current_user = 'service_role' THEN
     RETURN OLD;
   END IF;
+
+  -- Drop this user's expired entries before counting. Bounded work — at
+  -- most ~100 rows per user thanks to the rate limit itself.
+  DELETE FROM recent_deletes
+  WHERE user_id = v_user
+    AND deleted_at <= now() - interval '1 hour';
 
   INSERT INTO recent_deletes (user_id, deleted_at) VALUES (v_user, now());
 
@@ -357,17 +365,42 @@ GRANT UPDATE
 -- =============================================================================
 -- §9  System-user deny-write RLS policy
 --     Even if the system user's password leaks, an authenticated session
---     attempting to write rows attributed to the system user is rejected.
---     The importer uses service_role, which bypasses RLS entirely.
+--     attempting to insert/update/delete rows attributed to the system
+--     user is rejected. The importer uses service_role, which bypasses
+--     RLS entirely.
+--
+--     IMPORTANT: scoped to INSERT/UPDATE/DELETE only. A `FOR ALL` policy
+--     would AND its USING clause into every SELECT and silently hide
+--     system-owned (pre-populated) pins from authenticated viewers once
+--     Phase 2 imports data. Splitting into three explicit write-only
+--     policies preserves the read path. The previous `deny_system_user_writes`
+--     policy name is dropped so re-applying this migration cleanly
+--     replaces it on already-migrated environments.
 -- =============================================================================
 
 DROP POLICY IF EXISTS "deny_system_user_writes" ON pins;
-CREATE POLICY "deny_system_user_writes" ON pins
+DROP POLICY IF EXISTS "deny_system_user_insert" ON pins;
+DROP POLICY IF EXISTS "deny_system_user_update" ON pins;
+DROP POLICY IF EXISTS "deny_system_user_delete" ON pins;
+
+CREATE POLICY "deny_system_user_insert" ON pins
   AS RESTRICTIVE
-  FOR ALL
+  FOR INSERT
   TO authenticated
-  USING (created_by IS DISTINCT FROM '81775f8b-1a6a-47d6-b793-e9ab7e38634e'::uuid)
   WITH CHECK (created_by IS DISTINCT FROM '81775f8b-1a6a-47d6-b793-e9ab7e38634e'::uuid);
+
+CREATE POLICY "deny_system_user_update" ON pins
+  AS RESTRICTIVE
+  FOR UPDATE
+  TO authenticated
+  USING      (created_by IS DISTINCT FROM '81775f8b-1a6a-47d6-b793-e9ab7e38634e'::uuid)
+  WITH CHECK (created_by IS DISTINCT FROM '81775f8b-1a6a-47d6-b793-e9ab7e38634e'::uuid);
+
+CREATE POLICY "deny_system_user_delete" ON pins
+  AS RESTRICTIVE
+  FOR DELETE
+  TO authenticated
+  USING (created_by IS DISTINCT FROM '81775f8b-1a6a-47d6-b793-e9ab7e38634e'::uuid);
 
 -- =============================================================================
 -- End of migration 008.

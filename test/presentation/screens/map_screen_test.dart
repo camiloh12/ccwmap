@@ -8,31 +8,38 @@ void main() {
     const otherUser = 'f7e6d5c4-2222-4333-9444-555555555555';
 
     test('returns false when pin has no creator', () {
-      expect(isOtherUserPin(pinCreatorId: null, currentUserId: someUser),
-          isFalse);
+      expect(
+        isOtherUserPin(pinCreatorId: null, currentUserId: someUser),
+        isFalse,
+      );
     });
 
     test('returns false when current user is the creator', () {
-      expect(isOtherUserPin(pinCreatorId: someUser, currentUserId: someUser),
-          isFalse);
+      expect(
+        isOtherUserPin(pinCreatorId: someUser, currentUserId: someUser),
+        isFalse,
+      );
     });
 
     test('returns false for pre-populated system pins', () {
       expect(
-          isOtherUserPin(
-              pinCreatorId: kSystemUserId, currentUserId: someUser),
-          isFalse);
+        isOtherUserPin(pinCreatorId: kSystemUserId, currentUserId: someUser),
+        isFalse,
+      );
     });
 
     test('returns true for another real user\'s pin', () {
       expect(
-          isOtherUserPin(pinCreatorId: otherUser, currentUserId: someUser),
-          isTrue);
+        isOtherUserPin(pinCreatorId: otherUser, currentUserId: someUser),
+        isTrue,
+      );
     });
 
     test('returns true even when current user is null (guest viewer)', () {
-      expect(isOtherUserPin(pinCreatorId: otherUser, currentUserId: null),
-          isTrue);
+      expect(
+        isOtherUserPin(pinCreatorId: otherUser, currentUserId: null),
+        isTrue,
+      );
     });
   });
 }
