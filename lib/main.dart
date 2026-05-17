@@ -125,6 +125,8 @@ Future<void> main() async {
       blocklistService: blocklistService,
       agreementsRepository: agreementsRepository,
       moderationRepository: moderationRepository,
+      viewportPinsManager: viewportPinsManager,
+      lastSyncedAtStore: watermarks,
     ),
   );
 }
@@ -135,6 +137,8 @@ class CCWMapApp extends StatelessWidget {
   final BlocklistService blocklistService;
   final AgreementsRepository agreementsRepository;
   final ModerationRepository moderationRepository;
+  final ViewportPinsManager viewportPinsManager;
+  final LastSyncedAtStore lastSyncedAtStore;
 
   const CCWMapApp({
     super.key,
@@ -143,6 +147,8 @@ class CCWMapApp extends StatelessWidget {
     required this.blocklistService,
     required this.agreementsRepository,
     required this.moderationRepository,
+    required this.viewportPinsManager,
+    required this.lastSyncedAtStore,
   });
 
   @override
@@ -154,6 +160,8 @@ class CCWMapApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: blocklistService),
         Provider<AgreementsRepository>.value(value: agreementsRepository),
         Provider<ModerationRepository>.value(value: moderationRepository),
+        Provider<ViewportPinsManager>.value(value: viewportPinsManager),
+        Provider<LastSyncedAtStore>.value(value: lastSyncedAtStore),
       ],
       child: MaterialApp(
         title: 'CCW Map',
@@ -345,7 +353,14 @@ class _AppRootState extends State<_AppRoot> {
       });
     }
     if (current == null && _lastAuthUser != null) {
-      // User signed out — clear cached blocklist and reset retroactive flag.
+      // User signed out — capture the departing user's id BEFORE nulling
+      // _lastAuthUser, then drop their bbox-cached pins and watermark keys.
+      // Without this, prior-session pins linger as cachedAt=null rows that
+      // LRU eviction can't reach, accumulating across sign-out/sign-in cycles.
+      // Fire-and-forget: errors are non-fatal (worst case is the prior leak).
+      final formerUserId = _lastAuthUser!.id;
+      context.read<ViewportPinsManager>().resetForSignedOutUser(formerUserId);
+      context.read<LastSyncedAtStore>().clearForUser(formerUserId);
       context.read<BlocklistService>().clear();
       _lastAuthUser = null;
       _retroactiveEulaChecked = false;

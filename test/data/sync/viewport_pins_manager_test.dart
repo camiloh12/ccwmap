@@ -204,4 +204,53 @@ void main() {
     expect(await db.pinDao.getAllPins(), isEmpty);
     expect(vpm.clusters.value, isEmpty);
   });
+
+  test(
+    'resetForSignedOutUser() drops cached non-mine pins using the supplied id '
+    'even when userIdProvider has already gone null',
+    () async {
+      // Build a manager whose userIdProvider returns null — simulating the
+      // post-signout state where Supabase has already cleared the session.
+      final signedOutVpm = ViewportPinsManager(
+        remote: remote,
+        pinDao: db.pinDao,
+        tombstoneDao: db.pinTombstoneDao,
+        fetchedBboxDao: db.fetchedBboxDao,
+        userIdProvider: () => null,
+        cacheRowLimit: 100,
+      );
+
+      // Seed a cached pin created by some "other" user (i.e. non-mine).
+      await db.pinDao.upsertCachedPins([
+        PinEntity(
+          id: 'leftover',
+          name: 'x',
+          latitude: 30,
+          longitude: -95,
+          status: 0,
+          restrictionTag: null,
+          hasSecurityScreening: false,
+          hasPostedSignage: false,
+          createdBy: 'other',
+          createdAt: 1,
+          lastModified: 1,
+          photoUri: null,
+          notes: null,
+          votes: 0,
+          source: 'user',
+          userModified: false,
+          cachedAt: 100,
+        ),
+      ]);
+      // Sanity: reset() with a null userIdProvider must NOT delete the pin —
+      // that's the gap this method exists to close.
+      await signedOutVpm.reset();
+      expect(await db.pinDao.getAllPins(), hasLength(1));
+
+      await signedOutVpm.resetForSignedOutUser('former-user');
+
+      expect(await db.pinDao.getAllPins(), isEmpty);
+      expect(signedOutVpm.clusters.value, isEmpty);
+    },
+  );
 }

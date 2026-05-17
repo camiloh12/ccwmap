@@ -126,6 +126,22 @@ class ViewportPinsManager {
     clusters.value = const [];
   }
 
+  /// Cleanup invoked when the user signs out. We need to drop the prior
+  /// user's bbox cache (their pins now look "non-mine" to the new session
+  /// state) BEFORE [userIdProvider] starts returning null, because
+  /// [reset]'s eviction is keyed off the current user id — at sign-out
+  /// time Supabase has already cleared the session, so the provider
+  /// returns null and [reset] would skip the delete entirely.
+  ///
+  /// Pass the departing user's id explicitly to sidestep that race.
+  Future<void> resetForSignedOutUser(String formerUserId) async {
+    await pinDao.deleteAllCachedNonMinePins(formerUserId);
+    await fetchedBboxDao.pruneOlderThan(
+      DateTime.now().toUtc().add(const Duration(days: 365)),
+    );
+    clusters.value = const [];
+  }
+
   void dispose() {
     clusters.dispose();
   }
