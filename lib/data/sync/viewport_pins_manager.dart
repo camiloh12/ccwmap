@@ -102,6 +102,13 @@ class ViewportPinsManager {
       pinCount: pinRowCount,
     );
 
+    // Second defensive check: a newer fetch may have landed during the
+    // DB await chain above. DB writes are idempotent (upsert + LRU
+    // re-converges), but `clusters.value` is replace-semantics — racing
+    // it would render a stale cluster set. The primary serialization
+    // lives in BboxRequestDebouncer (Task 9, 500 ms debounce); this
+    // check is a defensive belt-and-suspenders.
+    if (generation != _fetchGeneration) return generation;
     clusters.value = clustersOut;
     return generation;
   }
