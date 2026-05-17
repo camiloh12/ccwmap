@@ -80,11 +80,20 @@ table definition for whichever piece is missing.
 
 | Secret | Purpose | Required for |
 |---|---|---|
-| `STAGING_DB_URL` | Full Postgres connection string for staging. Format: `postgresql://postgres:<DB_PASSWORD>@db.miihmfhnsfmwgrvgayns.supabase.co:5432/postgres?sslmode=require` | `supabase-migration-validate.yml` |
-| `PROD_DB_URL`    | Optional; enables migration-count drift check between staging and prod. | Same workflow (skipped if unset) |
+| `STAGING_DB_URL` | Postgres connection string via the **Session mode pooler** (port 5432, NOT the direct-connect host). Format: `postgresql://postgres.miihmfhnsfmwgrvgayns:<DB_PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres` | `supabase-migration-validate.yml` |
+| `PROD_DB_URL`    | Optional; enables migration-count drift check between staging and prod. Same pooler format as above. | Same workflow (skipped if unset) |
+
+**IMPORTANT: do not use the direct connection** (`db.<ref>.supabase.co:5432`)
+— it resolves to IPv6 only and GitHub Actions `ubuntu-latest` runners have
+no IPv6 egress, so every workflow run will fail with `Network is unreachable`.
+The session-mode pooler is dual-stack and works from CI. Get the exact
+string from the Supabase dashboard's **Connect** modal or
+Project Settings → Database → Connection pooling, picking **Session mode**
+(transaction mode breaks some session-level DDL we may need in future
+migrations).
 
 Database passwords come from the Supabase dashboard → Project Settings →
-Database. Keep them only in 1Password.
+Database. Keep them only in your password manager.
 
 ## Keeping staging alive
 
