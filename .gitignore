@@ -60,3 +60,4 @@ app.*.map.json
 *.keystore
 android/key.properties
 /android/key.properties
+.local/

@@ -227,7 +227,7 @@ class _PinDialogState extends State<PinDialog> {
 
               // Report / Block (edit mode + writable + callbacks provided).
               // Filtered upstream in MapScreen so these are only wired for
-              // other users' pins (not own pins, not anonymous pins).
+              // other users' pins (not own pins, not pre-populated system pins).
               if (!widget.isReadOnly &&
                   widget.isEditMode &&
                   (widget.onReport != null || widget.onBlock != null)) ...[

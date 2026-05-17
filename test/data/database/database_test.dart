@@ -32,6 +32,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
 
       await database.pinDao.insertPin(pin);
@@ -61,6 +63,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
 
       await database.pinDao.insertPin(pin);
@@ -94,6 +98,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
 
       await database.pinDao.insertPin(pin);
@@ -123,6 +129,8 @@ void main() {
           photoUri: null,
           notes: null,
           votes: 0,
+          source: 'user',
+          userModified: false,
         );
         await database.pinDao.insertPin(pin);
       }
@@ -162,6 +170,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
       await database.pinDao.insertPin(pin);
 
@@ -193,6 +203,8 @@ void main() {
         photoUri: null,
         notes: null,
         votes: 0,
+        source: 'user',
+        userModified: false,
       );
 
       await database.pinDao.insertPin(pin);
