@@ -10,11 +10,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppDatabase schemaVersion 3', () {
-    test('reports schemaVersion == 3', () {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
-      expect(db.schemaVersion, 3);
-    });
+    // The "reports schemaVersion == 3" tripwire was removed when the schema
+    // moved to v4. The v4 migration test owns the current-version assertion;
+    // this group is retained because the provenance columns added in v3 must
+    // still be present (and behave correctly) on the current schema.
 
     test('pins table has provenance columns with safe defaults', () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
