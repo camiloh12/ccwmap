@@ -301,53 +301,50 @@ BEGIN
       ELSE                 0.05  -- density-fallback at zoom>=12 over-dense bbox
     END;
 
-    -- IMPORTANT: every reference to bucketed.status / bucketed.restriction_tag
-    -- below must be qualified (b.status, b.restriction_tag). RETURNS TABLE
-    -- declares OUT variables of the same names; unqualified references would
-    -- raise 42702 "ambiguous column reference" at runtime.
+    -- Every cell in the viewport returns as a cluster row, regardless of
+    -- count. The client (map_screen) renders cnt<5 clusters as small
+    -- pin-sized dots without count labels, and cnt>=5 clusters as scaled
+    -- bubbles with count labels — see docs/dev/CLUSTER_RENDERING.md
+    -- (Option B). This keeps the response shape homogeneous (no mixed
+    -- pin+cluster rows) and lets the client cleanly hide its
+    -- cached-pins-layer whenever clusters are present, eliminating the
+    -- double-render of pins underneath clusters on zoom-out.
+    --
+    -- Centroid: AVG of constituent pin coordinates, NOT the grid anchor.
+    -- Grid anchors land at arbitrary spots (often in oceans for coastal
+    -- cells); the mean position tracks where the pins actually are.
+    --
+    -- IMPORTANT: qualify b.status and b.restriction_tag below — the
+    -- RETURNS TABLE clause implicitly declares OUT variables of the same
+    -- names, and unqualified references raise 42702 at runtime.
     RETURN QUERY
     WITH bucketed AS (
       SELECT
-        p.id, p.latitude, p.longitude, p.name,
-        p.status, p.restriction_tag,
-        p.has_security_screening, p.has_posted_signage,
-        p.created_by, p.created_at, p.last_modified,
-        p.source, p.source_external_id, p.confidence,
-        p.legal_citation, p.legal_citation_verified_date,
-        ST_SnapToGrid(p.location, grid_size) AS cell
+        ST_SnapToGrid(p.location, grid_size) AS cell,
+        p.latitude,
+        p.longitude,
+        p.status          AS bucket_status,
+        p.restriction_tag AS bucket_tag
       FROM pins p
       WHERE ST_Intersects(p.location, bbox)
         AND (auth.uid() IS NULL OR p.created_by IS DISTINCT FROM auth.uid())
     ),
-    cell_counts AS (
-      SELECT cell, count(*) AS cnt
+    aggregated AS (
+      SELECT
+        cell,
+        count(*)                                       AS cnt,
+        avg(latitude)                                  AS centroid_lat,
+        avg(longitude)                                 AS centroid_lng,
+        mode() WITHIN GROUP (ORDER BY bucket_status)   AS dom_status,
+        mode() WITHIN GROUP (ORDER BY bucket_tag)      AS dom_tag
       FROM bucketed
       GROUP BY cell
-    ),
-    -- Dense cells (cnt >= 5) → cluster rows at the *centroid* of the
-    -- constituent pins. AVG(lat,lng) instead of ST_Y/ST_X(cell) keeps
-    -- clusters on top of their data — coastal cells produce coastal
-    -- clusters, not ocean clusters at a grid corner. Also kills the
-    -- visible row/column grid alignment.
-    dense_clusters AS (
-      SELECT
-        cc.cell,
-        cc.cnt,
-        avg(b.latitude)                                  AS centroid_lat,
-        avg(b.longitude)                                 AS centroid_lng,
-        mode() WITHIN GROUP (ORDER BY b.status)          AS dom_status,
-        mode() WITHIN GROUP (ORDER BY b.restriction_tag) AS dom_tag
-      FROM cell_counts cc
-      JOIN bucketed b USING (cell)
-      WHERE cc.cnt >= 5
-      GROUP BY cc.cell, cc.cnt
     )
-    -- Emit clusters for dense cells …
     SELECT
       'cluster'::TEXT,
       NULL::UUID,
-      dc.centroid_lat,
-      dc.centroid_lng,
+      centroid_lat,
+      centroid_lng,
       NULL::TEXT,
       NULL::INTEGER,
       NULL::restriction_tag_type,
@@ -361,42 +358,10 @@ BEGIN
       NULL::TEXT,
       NULL::TEXT,
       NULL::DATE,
-      dc.cnt::INTEGER,
-      dc.dom_status,
-      dc.dom_tag
-    FROM dense_clusters dc
-    UNION ALL
-    -- … and individual pin rows for sparse cells (cnt < 5). Density
-    -- floor avoids the "cluster of 1" / "cluster of 2" visual noise —
-    -- those render as small individual pins instead. The client's
-    -- GetPinsInViewRow parser already handles mixed pin+cluster
-    -- responses (kind discriminator); ViewportPinsManager upserts the
-    -- pin rows to the local cache and adds the cluster rows to its
-    -- ValueNotifier.
-    SELECT
-      'pin'::TEXT,
-      b.id,
-      b.latitude,
-      b.longitude,
-      b.name,
-      b.status,
-      b.restriction_tag,
-      b.has_security_screening,
-      b.has_posted_signage,
-      b.created_by,
-      b.created_at,
-      b.last_modified,
-      b.source,
-      b.source_external_id,
-      b.confidence,
-      b.legal_citation,
-      b.legal_citation_verified_date,
-      NULL::INTEGER,
-      NULL::INTEGER,
-      NULL::restriction_tag_type
-    FROM bucketed b
-    JOIN cell_counts cc USING (cell)
-    WHERE cc.cnt < 5;
+      cnt::INTEGER,
+      dom_status,
+      dom_tag
+    FROM aggregated;
   END IF;
 END;
 $$;

@@ -206,7 +206,8 @@ class _MapScreenState extends State<MapScreen> {
   /// - point: Screen coordinates of the tap
   /// - coordinates: Geographic lat/lng of the tap
   /// - id: Feature ID (should match pin.id from our GeoJSON)
-  /// - layerId: Layer ID (should be 'pins-layer')
+  /// - layerId: Layer ID (one of 'mine-pins-layer', 'cached-pins-layer',
+  ///   'clusters-circle-layer', or 'clusters-count-layer')
   /// - annotation: Additional annotation data (unused)
   void _onFeatureTapped(
     Point<double> point,
@@ -224,8 +225,9 @@ class _MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Only handle taps on our pins layer
-    if (layerId != 'pins-layer') {
+    // Only handle taps on our pin layers. The mine / cached split (see
+    // _updatePinsLayer) means a real pin tap can arrive from either layer.
+    if (layerId != 'mine-pins-layer' && layerId != 'cached-pins-layer') {
       return;
     }
 
@@ -345,17 +347,22 @@ class _MapScreenState extends State<MapScreen> {
       final geojson = _buildPinsGeoJson();
 
       // Remove existing source/layers if present (in correct order)
-      // Must remove layers before source, and in reverse order of creation
-      try {
-        await _mapController!.removeLayer('pins-labels-layer');
-      } catch (e) {
-        // Layer doesn't exist yet, that's ok
-      }
-
-      try {
-        await _mapController!.removeLayer('pins-layer');
-      } catch (e) {
-        // Layer doesn't exist yet, that's ok
+      // Must remove layers before source, and in reverse order of creation.
+      // Includes legacy single-layer ids ('pins-layer', 'pins-labels-layer')
+      // so a hot-reload from an older build cleans up cleanly.
+      for (final layerId in const [
+        'cached-pins-labels-layer',
+        'mine-pins-labels-layer',
+        'cached-pins-layer',
+        'mine-pins-layer',
+        'pins-labels-layer', // legacy
+        'pins-layer', // legacy
+      ]) {
+        try {
+          await _mapController!.removeLayer(layerId);
+        } catch (_) {
+          // Layer doesn't exist yet, that's ok
+        }
       }
 
       try {
@@ -375,34 +382,59 @@ class _MapScreenState extends State<MapScreen> {
         promoteId: 'id',
       );
 
-      // Add circle layer - even though it blocks clicks, our geographic distance
-      // detection will find the closest pin
+      const circleColorByStatus = [
+        'match',
+        ['get', 'status'],
+        0, '#4CAF50', // ALLOWED - Green
+        1, '#FFC107', // UNCERTAIN - Yellow
+        2, '#F44336', // NO_GUN - Red
+        '#999999', // Default gray
+      ];
+
+      // Split the pin features into two layers via filter expressions.
+      // - mine-pins-layer: features where isMine == true.    Always visible.
+      // - cached-pins-layer: features where isMine == false. Hidden by
+      //   _applyCachedPinsVisibility when clusters are present at low zoom,
+      //   so the user never sees cached pins double-rendered underneath
+      //   their containing cluster bubble. See docs/dev/CLUSTER_RENDERING.md.
       await _mapController!.addCircleLayer(
         'pins-source',
-        'pins-layer',
+        'mine-pins-layer',
         CircleLayerProperties(
           circleRadius: 12.0,
-          circleColor: [
-            'match',
-            ['get', 'status'],
-            0, '#4CAF50', // ALLOWED - Green
-            1, '#FFC107', // UNCERTAIN - Yellow
-            2, '#F44336', // NO_GUN - Red
-            '#999999', // Default gray
-          ],
+          circleColor: circleColorByStatus,
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
           circleOpacity: 0.8,
         ),
+        filter: ['==', ['get', 'isMine'], true],
       );
 
-      // Add symbol layer for pin name labels
-      // enableInteraction: false so taps fall through to pins-layer circles
+      await _mapController!.addCircleLayer(
+        'pins-source',
+        'cached-pins-layer',
+        CircleLayerProperties(
+          circleRadius: 12.0,
+          circleColor: circleColorByStatus,
+          circleStrokeWidth: 2.0,
+          circleStrokeColor: '#FFFFFF',
+          circleOpacity: 0.8,
+        ),
+        filter: ['==', ['get', 'isMine'], false],
+      );
+
+      // Name-label layers parallel the circle layers; same filter so the
+      // labels track visibility 1:1 with the dots they belong to.
+      // enableInteraction: false so taps fall through to the circles.
+      const labelProps = [
+        'get',
+        'name',
+      ];
       await _mapController!.addSymbolLayer(
         'pins-source',
-        'pins-labels-layer',
+        'mine-pins-labels-layer',
         SymbolLayerProperties(
-          textField: ['get', 'name'],
+          textField: labelProps,
           textSize: 13.0,
           textColor: '#000000',
           textHaloColor: '#FFFFFF',
@@ -410,15 +442,40 @@ class _MapScreenState extends State<MapScreen> {
           textHaloBlur: 1.0,
           textOffset: [
             Expressions.literal,
-            [0, 1.5], // Offset below the pin circle
+            [0, 1.5],
           ],
           textAnchor: 'top',
-          textMaxWidth: 10.0, // Wrap text at 10em
+          textMaxWidth: 10.0,
           textAllowOverlap: false,
           textIgnorePlacement: false,
         ),
         enableInteraction: false,
+        filter: ['==', ['get', 'isMine'], true],
       );
+      await _mapController!.addSymbolLayer(
+        'pins-source',
+        'cached-pins-labels-layer',
+        SymbolLayerProperties(
+          textField: labelProps,
+          textSize: 13.0,
+          textColor: '#000000',
+          textHaloColor: '#FFFFFF',
+          textHaloWidth: 2.5,
+          textHaloBlur: 1.0,
+          textOffset: [
+            Expressions.literal,
+            [0, 1.5],
+          ],
+          textAnchor: 'top',
+          textMaxWidth: 10.0,
+          textAllowOverlap: false,
+          textIgnorePlacement: false,
+        ),
+        enableInteraction: false,
+        filter: ['==', ['get', 'isMine'], false],
+      );
+
+      await _applyCachedPinsVisibility();
     } catch (e) {
       debugPrint('MapScreen: Error updating pins layer: $e');
     } finally {
@@ -489,8 +546,11 @@ class _MapScreenState extends State<MapScreen> {
 
       await _mapController!.addGeoJsonSource('clusters-source', geojson);
 
-      // Cluster circle: radius scales with count, color matches dominant
-      // status (same palette as individual pins).
+      // Cluster circle: radius scales with count. Small clusters (cnt 1-4)
+      // render at pin-sized radius (10-12) with no count label — they read
+      // as individual pins, not as fake "cluster of 1" bubbles. From cnt=5
+      // up they grow into proper cluster bubbles (16 → 42). See
+      // docs/dev/CLUSTER_RENDERING.md.
       await _mapController!.addCircleLayer(
         'clusters-source',
         'clusters-circle-layer',
@@ -499,14 +559,12 @@ class _MapScreenState extends State<MapScreen> {
             'interpolate',
             ['linear'],
             ['get', 'count'],
-            1,
-            14,
-            10,
-            20,
-            100,
-            30,
-            1000,
-            40,
+            1, 10,
+            4, 12,
+            5, 16,
+            10, 22,
+            100, 32,
+            1000, 42,
           ],
           circleColor: [
             'match',
@@ -522,8 +580,10 @@ class _MapScreenState extends State<MapScreen> {
         ),
       );
 
-      // Count label on top. enableInteraction: false so the underlying
-      // circle still receives taps (Task 15 routes them).
+      // Count label on top — only rendered on real clusters (cnt >= 5).
+      // Small "cluster of 1" / "cluster of 2" markers stay unlabeled and
+      // read as pins, not as numbered bubbles. enableInteraction: false
+      // so the underlying circle still receives taps (Task 15 routes them).
       await _mapController!.addSymbolLayer(
         'clusters-source',
         'clusters-count-layer',
@@ -537,7 +597,10 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: true,
         ),
         enableInteraction: false,
+        filter: ['>=', ['get', 'count'], 5],
       );
+
+      await _applyCachedPinsVisibility();
     } catch (e) {
       debugPrint('MapScreen: Error updating clusters layer: $e');
     } finally {
@@ -550,8 +613,43 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Build GeoJSON FeatureCollection from pins
+  /// Hide the `cached-pins-layer` (and its label layer) whenever the
+  /// cluster layer is non-empty, so the map doesn't double-render pins
+  /// underneath the clusters that aggregate them. Mine pins live in
+  /// `mine-pins-layer` and stay visible at every zoom — the user must
+  /// always see their own pins regardless of cluster presence.
+  ///
+  /// Reads `viewportClusters.value` at call time (not closure-captured)
+  /// so the latest cluster set drives the decision. Safe to call from
+  /// either updater — whichever ran more recently wins.
+  Future<void> _applyCachedPinsVisibility() async {
+    final controller = _mapController;
+    if (controller == null) return;
+    final hideCached =
+        (_viewModel?.viewportClusters.value ?? const []).isNotEmpty;
+    try {
+      await controller.setLayerVisibility('cached-pins-layer', !hideCached);
+      await controller.setLayerVisibility(
+        'cached-pins-labels-layer',
+        !hideCached,
+      );
+    } catch (e) {
+      debugPrint('MapScreen: setLayerVisibility failed: $e');
+    }
+  }
+
+  /// Build GeoJSON FeatureCollection from pins.
+  ///
+  /// Each feature carries an `isMine` property derived from comparing the
+  /// pin's `createdBy` against the current authenticated user id. The map
+  /// uses this property to filter the GeoJSON into two layers
+  /// (`mine-pins-layer`, `cached-pins-layer`) so visibility can be toggled
+  /// independently — cached non-mine pins are hidden when clusters are
+  /// present at low zoom, but mine pins remain visible at every zoom.
+  /// See [docs/dev/CLUSTER_RENDERING.md] for the rendering strategy.
   Map<String, dynamic> _buildPinsGeoJson() {
+    final auth = Provider.of<AuthViewModel>(context, listen: false);
+    final myUserId = auth.currentUser?.id;
     final features = _pins.map((pin) {
       return {
         'type': 'Feature',
@@ -569,6 +667,7 @@ class _MapScreenState extends State<MapScreen> {
           'hasPostedSignage': pin.hasPostedSignage,
           'createdBy': pin.metadata.createdBy,
           'votes': pin.metadata.votes,
+          'isMine': myUserId != null && pin.metadata.createdBy == myUserId,
         },
       };
     }).toList();
