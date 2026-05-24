@@ -301,35 +301,53 @@ BEGIN
       ELSE                 0.05  -- density-fallback at zoom>=12 over-dense bbox
     END;
 
+    -- IMPORTANT: every reference to bucketed.status / bucketed.restriction_tag
+    -- below must be qualified (b.status, b.restriction_tag). RETURNS TABLE
+    -- declares OUT variables of the same names; unqualified references would
+    -- raise 42702 "ambiguous column reference" at runtime.
     RETURN QUERY
-    -- IMPORTANT: alias the bucketed CTE's columns so they cannot collide
-    -- with the implicit PL/pgSQL OUT variables that RETURNS TABLE creates
-    -- (RETURNS TABLE here declares `status` and `restriction_tag`, which
-    -- would otherwise shadow unqualified references in `mode() WITHIN
-    -- GROUP (ORDER BY ...)` and raise 42702 "ambiguous column reference").
     WITH bucketed AS (
       SELECT
-        ST_SnapToGrid(p.location, grid_size) AS cell,
-        p.status          AS bucket_status,
-        p.restriction_tag AS bucket_tag
+        p.id, p.latitude, p.longitude, p.name,
+        p.status, p.restriction_tag,
+        p.has_security_screening, p.has_posted_signage,
+        p.created_by, p.created_at, p.last_modified,
+        p.source, p.source_external_id, p.confidence,
+        p.legal_citation, p.legal_citation_verified_date,
+        ST_SnapToGrid(p.location, grid_size) AS cell
       FROM pins p
       WHERE ST_Intersects(p.location, bbox)
         AND (auth.uid() IS NULL OR p.created_by IS DISTINCT FROM auth.uid())
     ),
-    aggregated AS (
-      SELECT
-        cell,
-        count(*) AS cnt,
-        mode() WITHIN GROUP (ORDER BY bucket_status) AS dom_status,
-        mode() WITHIN GROUP (ORDER BY bucket_tag)    AS dom_tag
+    cell_counts AS (
+      SELECT cell, count(*) AS cnt
       FROM bucketed
       GROUP BY cell
+    ),
+    -- Dense cells (cnt >= 5) → cluster rows at the *centroid* of the
+    -- constituent pins. AVG(lat,lng) instead of ST_Y/ST_X(cell) keeps
+    -- clusters on top of their data — coastal cells produce coastal
+    -- clusters, not ocean clusters at a grid corner. Also kills the
+    -- visible row/column grid alignment.
+    dense_clusters AS (
+      SELECT
+        cc.cell,
+        cc.cnt,
+        avg(b.latitude)                                  AS centroid_lat,
+        avg(b.longitude)                                 AS centroid_lng,
+        mode() WITHIN GROUP (ORDER BY b.status)          AS dom_status,
+        mode() WITHIN GROUP (ORDER BY b.restriction_tag) AS dom_tag
+      FROM cell_counts cc
+      JOIN bucketed b USING (cell)
+      WHERE cc.cnt >= 5
+      GROUP BY cc.cell, cc.cnt
     )
+    -- Emit clusters for dense cells …
     SELECT
       'cluster'::TEXT,
       NULL::UUID,
-      ST_Y(cell),
-      ST_X(cell),
+      dc.centroid_lat,
+      dc.centroid_lng,
       NULL::TEXT,
       NULL::INTEGER,
       NULL::restriction_tag_type,
@@ -343,10 +361,42 @@ BEGIN
       NULL::TEXT,
       NULL::TEXT,
       NULL::DATE,
-      cnt::INTEGER,
-      dom_status,
-      dom_tag
-    FROM aggregated;
+      dc.cnt::INTEGER,
+      dc.dom_status,
+      dc.dom_tag
+    FROM dense_clusters dc
+    UNION ALL
+    -- … and individual pin rows for sparse cells (cnt < 5). Density
+    -- floor avoids the "cluster of 1" / "cluster of 2" visual noise —
+    -- those render as small individual pins instead. The client's
+    -- GetPinsInViewRow parser already handles mixed pin+cluster
+    -- responses (kind discriminator); ViewportPinsManager upserts the
+    -- pin rows to the local cache and adds the cluster rows to its
+    -- ValueNotifier.
+    SELECT
+      'pin'::TEXT,
+      b.id,
+      b.latitude,
+      b.longitude,
+      b.name,
+      b.status,
+      b.restriction_tag,
+      b.has_security_screening,
+      b.has_posted_signage,
+      b.created_by,
+      b.created_at,
+      b.last_modified,
+      b.source,
+      b.source_external_id,
+      b.confidence,
+      b.legal_citation,
+      b.legal_citation_verified_date,
+      NULL::INTEGER,
+      NULL::INTEGER,
+      NULL::restriction_tag_type
+    FROM bucketed b
+    JOIN cell_counts cc USING (cell)
+    WHERE cc.cnt < 5;
   END IF;
 END;
 $$;
