@@ -407,7 +407,11 @@ class _MapScreenState extends State<MapScreen> {
           circleStrokeColor: '#FFFFFF',
           circleOpacity: 0.8,
         ),
-        filter: ['==', ['get', 'isMine'], true],
+        filter: [
+          '==',
+          ['get', 'isMine'],
+          true,
+        ],
       );
 
       await _mapController!.addCircleLayer(
@@ -420,16 +424,17 @@ class _MapScreenState extends State<MapScreen> {
           circleStrokeColor: '#FFFFFF',
           circleOpacity: 0.8,
         ),
-        filter: ['==', ['get', 'isMine'], false],
+        filter: [
+          '==',
+          ['get', 'isMine'],
+          false,
+        ],
       );
 
       // Name-label layers parallel the circle layers; same filter so the
       // labels track visibility 1:1 with the dots they belong to.
       // enableInteraction: false so taps fall through to the circles.
-      const labelProps = [
-        'get',
-        'name',
-      ];
+      const labelProps = ['get', 'name'];
       await _mapController!.addSymbolLayer(
         'pins-source',
         'mine-pins-labels-layer',
@@ -450,7 +455,11 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: false,
         ),
         enableInteraction: false,
-        filter: ['==', ['get', 'isMine'], true],
+        filter: [
+          '==',
+          ['get', 'isMine'],
+          true,
+        ],
       );
       await _mapController!.addSymbolLayer(
         'pins-source',
@@ -472,7 +481,11 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: false,
         ),
         enableInteraction: false,
-        filter: ['==', ['get', 'isMine'], false],
+        filter: [
+          '==',
+          ['get', 'isMine'],
+          false,
+        ],
       );
 
       await _applyCachedPinsVisibility();
@@ -559,12 +572,18 @@ class _MapScreenState extends State<MapScreen> {
             'interpolate',
             ['linear'],
             ['get', 'count'],
-            1, 10,
-            4, 12,
-            5, 16,
-            10, 22,
-            100, 32,
-            1000, 42,
+            1,
+            10,
+            4,
+            12,
+            5,
+            16,
+            10,
+            22,
+            100,
+            32,
+            1000,
+            42,
           ],
           circleColor: [
             'match',
@@ -597,7 +616,11 @@ class _MapScreenState extends State<MapScreen> {
           textIgnorePlacement: true,
         ),
         enableInteraction: false,
-        filter: ['>=', ['get', 'count'], 5],
+        filter: [
+          '>=',
+          ['get', 'count'],
+          5,
+        ],
       );
 
       await _applyCachedPinsVisibility();
