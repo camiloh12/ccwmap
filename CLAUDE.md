@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Flutter** 3.41.7 stable / **Dart** 3.11.5
 - **Android**: AGP 8.13.0, Gradle 8.14, Kotlin 2.3.20, Java 21 LTS, compileSdk 36, targetSdk 35
 - **iOS**: deployment target 14.0, UIScene lifecycle (AppDelegate implements `FlutterImplicitEngineDelegate`; `Info.plist` has `UIApplicationSceneManifest` pointing at `FlutterSceneDelegate`)
-- **Test count**: 109 (previous CLAUDE.md line said 74/74 — outdated)
+- **Test count**: 233 (bumped 2026-05-24; previously 109)
 
 #### Upgrades deferred (known blockers)
 
