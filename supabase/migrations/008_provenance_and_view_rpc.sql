@@ -314,15 +314,18 @@ BEGIN
     -- Grid anchors land at arbitrary spots (often in oceans for coastal
     -- cells); the mean position tracks where the pins actually are.
     --
-    -- IMPORTANT: qualify b.status and b.restriction_tag below — the
-    -- RETURNS TABLE clause implicitly declares OUT variables of the same
-    -- names, and unqualified references raise 42702 at runtime.
+    -- IMPORTANT: every column projected out of `bucketed` must use an
+    -- alias that does NOT appear in the RETURNS TABLE column list above.
+    -- RETURNS TABLE implicitly declares OUT variables (latitude, longitude,
+    -- status, restriction_tag, …) that shadow any unqualified reference to
+    -- a same-named CTE column, raising 42702 at runtime. That's why every
+    -- column gets a `bucket_*` alias here.
     RETURN QUERY
     WITH bucketed AS (
       SELECT
         ST_SnapToGrid(p.location, grid_size) AS cell,
-        p.latitude,
-        p.longitude,
+        p.latitude        AS bucket_lat,
+        p.longitude       AS bucket_lng,
         p.status          AS bucket_status,
         p.restriction_tag AS bucket_tag
       FROM pins p
@@ -333,8 +336,8 @@ BEGIN
       SELECT
         cell,
         count(*)                                       AS cnt,
-        avg(latitude)                                  AS centroid_lat,
-        avg(longitude)                                 AS centroid_lng,
+        avg(bucket_lat)                                AS centroid_lat,
+        avg(bucket_lng)                                AS centroid_lng,
         mode() WITHIN GROUP (ORDER BY bucket_status)   AS dom_status,
         mode() WITHIN GROUP (ORDER BY bucket_tag)      AS dom_tag
       FROM bucketed
