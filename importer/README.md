@@ -20,7 +20,7 @@ uv run pytest
 
 # Dry-run against staging (no writes)
 $env:IMPORTER_SUPABASE_SERVICE_ROLE_KEY = "<staging service-role key>"
-uv run python -m importer.cli --dry-run --states TX,FL,PA --sources hifld_courts --project-ref staging
+uv run ccwmap-importer --dry-run --states TX,FL,PA --sources hifld_courts --project-ref staging
 ```
 
 Apply mode (`--apply`) writes to the project named by `--project-ref`. It is
