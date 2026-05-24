@@ -14,8 +14,10 @@ import 'package:ccwmap/data/repositories/supabase_agreements_repository.dart';
 import 'package:ccwmap/data/repositories/supabase_moderation_repository.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
-import 'package:ccwmap/data/sync/sync_manager.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/data/sync/last_synced_at_store.dart';
+import 'package:ccwmap/data/sync/my_pins_sync.dart';
+import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
 import 'package:ccwmap/domain/models/user.dart';
 import 'package:ccwmap/domain/repositories/agreements_repository.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
@@ -71,13 +73,27 @@ Future<void> main() async {
   final agreementsRepository = SupabaseAgreementsRepository(remoteDataSource);
   final blocklistService = BlocklistService(moderationRepository);
 
-  // Create sync manager
-  final syncManager = SyncManager(
+  // Create sync components (Phase 1: tiered sync)
+  final watermarks = await LastSyncedAtStore.create();
+
+  final myPinsSync = MyPinsSync(
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
     syncQueueDao: database.syncQueueDao,
     pinDao: database.pinDao,
     tombstoneDao: database.pinTombstoneDao,
-    remoteDataSource: remoteDataSource,
+    serverDeletionDao: database.serverPinDeletionDao,
+    remote: remoteDataSource,
     networkMonitor: networkMonitor,
+    watermarks: watermarks,
+  );
+
+  final viewportPinsManager = ViewportPinsManager(
+    remote: remoteDataSource,
+    pinDao: database.pinDao,
+    tombstoneDao: database.pinTombstoneDao,
+    fetchedBboxDao: database.fetchedBboxDao,
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
+    // Default cacheRowLimit (20000) per spec.
   );
 
   // Create repositories
@@ -85,11 +101,11 @@ Future<void> main() async {
     database.pinDao,
     database.syncQueueDao,
     database.pinTombstoneDao,
-    syncManager: syncManager,
+    myPinsSync: myPinsSync,
   );
   final authRepository = SupabaseAuthRepository(
     supabaseClient,
-    syncManager: syncManager,
+    myPinsSync: myPinsSync,
   );
 
   // Create ViewModels
@@ -97,6 +113,8 @@ Future<void> main() async {
     pinRepository,
     networkMonitor,
     blocklistService,
+    viewportPinsManager: viewportPinsManager,
+    userIdProvider: () => supabaseClient.auth.currentUser?.id,
   );
   final authViewModel = AuthViewModel(authRepository);
 
@@ -107,6 +125,8 @@ Future<void> main() async {
       blocklistService: blocklistService,
       agreementsRepository: agreementsRepository,
       moderationRepository: moderationRepository,
+      viewportPinsManager: viewportPinsManager,
+      lastSyncedAtStore: watermarks,
     ),
   );
 }
@@ -117,6 +137,8 @@ class CCWMapApp extends StatelessWidget {
   final BlocklistService blocklistService;
   final AgreementsRepository agreementsRepository;
   final ModerationRepository moderationRepository;
+  final ViewportPinsManager viewportPinsManager;
+  final LastSyncedAtStore lastSyncedAtStore;
 
   const CCWMapApp({
     super.key,
@@ -125,6 +147,8 @@ class CCWMapApp extends StatelessWidget {
     required this.blocklistService,
     required this.agreementsRepository,
     required this.moderationRepository,
+    required this.viewportPinsManager,
+    required this.lastSyncedAtStore,
   });
 
   @override
@@ -136,6 +160,8 @@ class CCWMapApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: blocklistService),
         Provider<AgreementsRepository>.value(value: agreementsRepository),
         Provider<ModerationRepository>.value(value: moderationRepository),
+        Provider<ViewportPinsManager>.value(value: viewportPinsManager),
+        Provider<LastSyncedAtStore>.value(value: lastSyncedAtStore),
       ],
       child: MaterialApp(
         title: 'CCW Map',
@@ -327,7 +353,14 @@ class _AppRootState extends State<_AppRoot> {
       });
     }
     if (current == null && _lastAuthUser != null) {
-      // User signed out — clear cached blocklist and reset retroactive flag.
+      // User signed out — capture the departing user's id BEFORE nulling
+      // _lastAuthUser, then drop their bbox-cached pins and watermark keys.
+      // Without this, prior-session pins linger as cachedAt=null rows that
+      // LRU eviction can't reach, accumulating across sign-out/sign-in cycles.
+      // Fire-and-forget: errors are non-fatal (worst case is the prior leak).
+      final formerUserId = _lastAuthUser!.id;
+      context.read<ViewportPinsManager>().resetForSignedOutUser(formerUserId);
+      context.read<LastSyncedAtStore>().clearForUser(formerUserId);
       context.read<BlocklistService>().clear();
       _lastAuthUser = null;
       _retroactiveEulaChecked = false;

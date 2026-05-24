@@ -216,4 +216,32 @@ void main() {
       );
     });
   });
+
+  group('PinMapper.toCachedEntity', () {
+    test('writes cachedAt and leaves source at the entity-layer default', () {
+      // (Phase 1 callers — see ViewportPinsManager — overwrite source/etc.
+      // from the RPC row after toCachedEntity returns. This test just locks
+      // the cache-write side: cachedAt is set, defaults are preserved.)
+      final cachedAt = DateTime.utc(2026, 5, 16, 12, 0, 0);
+      final pin = Pin(
+        id: 'pin-1',
+        name: 'Cached Pin',
+        location: Location.fromLatLng(30.0, -95.0),
+        status: PinStatus.UNCERTAIN,
+        restrictionTag: null,
+        hasSecurityScreening: false,
+        hasPostedSignage: false,
+        metadata: PinMetadata(
+          createdBy: 'other-user',
+          createdAt: DateTime.utc(2026, 1, 1),
+          lastModified: DateTime.utc(2026, 1, 1),
+        ),
+      );
+
+      final entity = PinMapper.toCachedEntity(pin, cachedAt: cachedAt);
+
+      expect(entity.cachedAt, cachedAt.millisecondsSinceEpoch);
+      expect(entity.source, 'user');
+    });
+  });
 }

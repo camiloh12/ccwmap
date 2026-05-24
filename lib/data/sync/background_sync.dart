@@ -6,7 +6,8 @@ import 'package:workmanager/workmanager.dart';
 import '../database/database.dart';
 import '../datasources/supabase_remote_data_source.dart';
 import '../services/network_monitor.dart';
-import 'sync_manager.dart';
+import 'last_synced_at_store.dart';
+import 'my_pins_sync.dart';
 
 /// Background sync task name
 const String syncTaskName = 'syncPinsTask';
@@ -48,18 +49,22 @@ void callbackDispatcher() {
       // Create data sources
       final supabaseClient = Supabase.instance.client;
       final remoteDataSource = SupabaseRemoteDataSource(supabaseClient);
+      final watermarks = await LastSyncedAtStore.create();
 
       // Create sync manager
-      final syncManager = SyncManager(
+      final myPinsSync = MyPinsSync(
+        userIdProvider: () => supabaseClient.auth.currentUser?.id,
         syncQueueDao: database.syncQueueDao,
         pinDao: database.pinDao,
         tombstoneDao: database.pinTombstoneDao,
-        remoteDataSource: remoteDataSource,
+        serverDeletionDao: database.serverPinDeletionDao,
+        remote: remoteDataSource,
         networkMonitor: networkMonitor,
+        watermarks: watermarks,
       );
 
       // Perform sync
-      final result = await syncManager.sync();
+      final result = await myPinsSync.sync();
 
       // Cleanup
       networkMonitor.dispose();

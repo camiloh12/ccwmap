@@ -9,6 +9,8 @@ part 'database.g.dart';
 part 'pin_dao.dart';
 part 'sync_queue_dao.dart';
 part 'pin_tombstone_dao.dart';
+part 'fetched_bbox_dao.dart';
+part 'server_pin_deletion_dao.dart';
 
 @DataClassName('PinEntity')
 class Pins extends Table {
@@ -62,6 +64,11 @@ class Pins extends Table {
   /// dataset. Surfaces in dry-run reports; never auto-deletes.
   IntColumn get sourceOrphanedAt => integer().nullable()();
 
+  /// Milliseconds since epoch — when this pin was last fetched via the
+  /// bbox cache. NULL for user-created pins (the "mine" tier never evicts).
+  /// Used by ViewportPinsManager for LRU eviction.
+  IntColumn get cachedAt => integer().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -104,9 +111,50 @@ class PinTombstones extends Table {
   Set<Column> get primaryKey => {pinId};
 }
 
+/// Log of bbox queries the client has performed.
+///
+/// Used for eviction bookkeeping per spec §5. Not load-bearing for
+/// correctness — the LRU eviction operates on `pins.cached_at` directly.
+/// This table exists to make "did I already cache this area" debugging and
+/// future cache-warming heuristics tractable.
+@DataClassName('FetchedBboxEntity')
+class FetchedBboxes extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  RealColumn get swLat => real()();
+  RealColumn get swLng => real()();
+  RealColumn get neLat => real()();
+  RealColumn get neLng => real()();
+  IntColumn get zoom => integer()();
+  IntColumn get fetchedAt => integer()(); // milliseconds since epoch
+  IntColumn get pinCount => integer()();
+}
+
+/// Mirror of the server-side `pin_deletions` table, filtered to deletions of
+/// pins the current user created (server RLS enforces that filter; we just
+/// store what the SELECT returns). Consulted by MyPinsSync to apply remote
+/// "another device deleted my pin" deletes locally.
+///
+/// Distinct from `PinTombstones`, which records *locally-initiated* deletes
+/// for defense-in-depth against the bbox cache re-inserting a pin the user
+/// deleted while anonymous.
+@DataClassName('ServerPinDeletionEntity')
+class ServerPinDeletions extends Table {
+  TextColumn get pinId => text()();
+  IntColumn get deletedAt => integer()(); // milliseconds since epoch
+
+  @override
+  Set<Column> get primaryKey => {pinId};
+}
+
 @DriftDatabase(
-  tables: [Pins, SyncQueue, PinTombstones],
-  daos: [PinDao, SyncQueueDao, PinTombstoneDao],
+  tables: [Pins, SyncQueue, PinTombstones, FetchedBboxes, ServerPinDeletions],
+  daos: [
+    PinDao,
+    SyncQueueDao,
+    PinTombstoneDao,
+    FetchedBboxDao,
+    ServerPinDeletionDao,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
@@ -115,7 +163,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -134,6 +182,11 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(pins, pins.legalCitation);
         await m.addColumn(pins, pins.legalCitationVerifiedDate);
         await m.addColumn(pins, pins.sourceOrphanedAt);
+      }
+      if (from < 4) {
+        await m.addColumn(pins, pins.cachedAt);
+        await m.createTable(fetchedBboxes);
+        await m.createTable(serverPinDeletions);
       }
     },
   );

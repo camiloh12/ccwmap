@@ -262,6 +262,17 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _cachedAtMeta = const VerificationMeta(
+    'cachedAt',
+  );
+  @override
+  late final GeneratedColumn<int> cachedAt = GeneratedColumn<int>(
+    'cached_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -287,6 +298,7 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
     legalCitation,
     legalCitationVerifiedDate,
     sourceOrphanedAt,
+    cachedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -479,6 +491,12 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
         ),
       );
     }
+    if (data.containsKey('cached_at')) {
+      context.handle(
+        _cachedAtMeta,
+        cachedAt.isAcceptableOrUnknown(data['cached_at']!, _cachedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -580,6 +598,10 @@ class $PinsTable extends Pins with TableInfo<$PinsTable, PinEntity> {
         DriftSqlType.int,
         data['${effectivePrefix}source_orphaned_at'],
       ),
+      cachedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}cached_at'],
+      ),
     );
   }
 
@@ -635,6 +657,11 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
   /// Milliseconds since epoch — when the pin disappeared from its source
   /// dataset. Surfaces in dry-run reports; never auto-deletes.
   final int? sourceOrphanedAt;
+
+  /// Milliseconds since epoch — when this pin was last fetched via the
+  /// bbox cache. NULL for user-created pins (the "mine" tier never evicts).
+  /// Used by ViewportPinsManager for LRU eviction.
+  final int? cachedAt;
   const PinEntity({
     required this.id,
     required this.name,
@@ -659,6 +686,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     this.legalCitation,
     this.legalCitationVerifiedDate,
     this.sourceOrphanedAt,
+    this.cachedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -709,6 +737,9 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     }
     if (!nullToAbsent || sourceOrphanedAt != null) {
       map['source_orphaned_at'] = Variable<int>(sourceOrphanedAt);
+    }
+    if (!nullToAbsent || cachedAt != null) {
+      map['cached_at'] = Variable<int>(cachedAt);
     }
     return map;
   }
@@ -761,6 +792,9 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       sourceOrphanedAt: sourceOrphanedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceOrphanedAt),
+      cachedAt: cachedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(cachedAt),
     );
   }
 
@@ -799,6 +833,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
         json['legalCitationVerifiedDate'],
       ),
       sourceOrphanedAt: serializer.fromJson<int?>(json['sourceOrphanedAt']),
+      cachedAt: serializer.fromJson<int?>(json['cachedAt']),
     );
   }
   @override
@@ -830,6 +865,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
         legalCitationVerifiedDate,
       ),
       'sourceOrphanedAt': serializer.toJson<int?>(sourceOrphanedAt),
+      'cachedAt': serializer.toJson<int?>(cachedAt),
     };
   }
 
@@ -857,6 +893,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     Value<String?> legalCitation = const Value.absent(),
     Value<String?> legalCitationVerifiedDate = const Value.absent(),
     Value<int?> sourceOrphanedAt = const Value.absent(),
+    Value<int?> cachedAt = const Value.absent(),
   }) => PinEntity(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -893,6 +930,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     sourceOrphanedAt: sourceOrphanedAt.present
         ? sourceOrphanedAt.value
         : this.sourceOrphanedAt,
+    cachedAt: cachedAt.present ? cachedAt.value : this.cachedAt,
   );
   PinEntity copyWithCompanion(PinsCompanion data) {
     return PinEntity(
@@ -943,6 +981,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
       sourceOrphanedAt: data.sourceOrphanedAt.present
           ? data.sourceOrphanedAt.value
           : this.sourceOrphanedAt,
+      cachedAt: data.cachedAt.present ? data.cachedAt.value : this.cachedAt,
     );
   }
 
@@ -971,7 +1010,8 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
           ..write('confidence: $confidence, ')
           ..write('legalCitation: $legalCitation, ')
           ..write('legalCitationVerifiedDate: $legalCitationVerifiedDate, ')
-          ..write('sourceOrphanedAt: $sourceOrphanedAt')
+          ..write('sourceOrphanedAt: $sourceOrphanedAt, ')
+          ..write('cachedAt: $cachedAt')
           ..write(')'))
         .toString();
   }
@@ -1001,6 +1041,7 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
     legalCitation,
     legalCitationVerifiedDate,
     sourceOrphanedAt,
+    cachedAt,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -1028,7 +1069,8 @@ class PinEntity extends DataClass implements Insertable<PinEntity> {
           other.confidence == this.confidence &&
           other.legalCitation == this.legalCitation &&
           other.legalCitationVerifiedDate == this.legalCitationVerifiedDate &&
-          other.sourceOrphanedAt == this.sourceOrphanedAt);
+          other.sourceOrphanedAt == this.sourceOrphanedAt &&
+          other.cachedAt == this.cachedAt);
 }
 
 class PinsCompanion extends UpdateCompanion<PinEntity> {
@@ -1055,6 +1097,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
   final Value<String?> legalCitation;
   final Value<String?> legalCitationVerifiedDate;
   final Value<int?> sourceOrphanedAt;
+  final Value<int?> cachedAt;
   final Value<int> rowid;
   const PinsCompanion({
     this.id = const Value.absent(),
@@ -1080,6 +1123,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     this.legalCitation = const Value.absent(),
     this.legalCitationVerifiedDate = const Value.absent(),
     this.sourceOrphanedAt = const Value.absent(),
+    this.cachedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   PinsCompanion.insert({
@@ -1106,6 +1150,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     this.legalCitation = const Value.absent(),
     this.legalCitationVerifiedDate = const Value.absent(),
     this.sourceOrphanedAt = const Value.absent(),
+    this.cachedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -1138,6 +1183,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     Expression<String>? legalCitation,
     Expression<String>? legalCitationVerifiedDate,
     Expression<int>? sourceOrphanedAt,
+    Expression<int>? cachedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1167,6 +1213,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
       if (legalCitationVerifiedDate != null)
         'legal_citation_verified_date': legalCitationVerifiedDate,
       if (sourceOrphanedAt != null) 'source_orphaned_at': sourceOrphanedAt,
+      if (cachedAt != null) 'cached_at': cachedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1195,6 +1242,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     Value<String?>? legalCitation,
     Value<String?>? legalCitationVerifiedDate,
     Value<int?>? sourceOrphanedAt,
+    Value<int?>? cachedAt,
     Value<int>? rowid,
   }) {
     return PinsCompanion(
@@ -1222,6 +1270,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
       legalCitationVerifiedDate:
           legalCitationVerifiedDate ?? this.legalCitationVerifiedDate,
       sourceOrphanedAt: sourceOrphanedAt ?? this.sourceOrphanedAt,
+      cachedAt: cachedAt ?? this.cachedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1304,6 +1353,9 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
     if (sourceOrphanedAt.present) {
       map['source_orphaned_at'] = Variable<int>(sourceOrphanedAt.value);
     }
+    if (cachedAt.present) {
+      map['cached_at'] = Variable<int>(cachedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1336,6 +1388,7 @@ class PinsCompanion extends UpdateCompanion<PinEntity> {
           ..write('legalCitation: $legalCitation, ')
           ..write('legalCitationVerifiedDate: $legalCitationVerifiedDate, ')
           ..write('sourceOrphanedAt: $sourceOrphanedAt, ')
+          ..write('cachedAt: $cachedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1973,15 +2026,730 @@ class PinTombstonesCompanion extends UpdateCompanion<PinTombstoneEntity> {
   }
 }
 
+class $FetchedBboxesTable extends FetchedBboxes
+    with TableInfo<$FetchedBboxesTable, FetchedBboxEntity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FetchedBboxesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _swLatMeta = const VerificationMeta('swLat');
+  @override
+  late final GeneratedColumn<double> swLat = GeneratedColumn<double>(
+    'sw_lat',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _swLngMeta = const VerificationMeta('swLng');
+  @override
+  late final GeneratedColumn<double> swLng = GeneratedColumn<double>(
+    'sw_lng',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _neLatMeta = const VerificationMeta('neLat');
+  @override
+  late final GeneratedColumn<double> neLat = GeneratedColumn<double>(
+    'ne_lat',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _neLngMeta = const VerificationMeta('neLng');
+  @override
+  late final GeneratedColumn<double> neLng = GeneratedColumn<double>(
+    'ne_lng',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _zoomMeta = const VerificationMeta('zoom');
+  @override
+  late final GeneratedColumn<int> zoom = GeneratedColumn<int>(
+    'zoom',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _fetchedAtMeta = const VerificationMeta(
+    'fetchedAt',
+  );
+  @override
+  late final GeneratedColumn<int> fetchedAt = GeneratedColumn<int>(
+    'fetched_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _pinCountMeta = const VerificationMeta(
+    'pinCount',
+  );
+  @override
+  late final GeneratedColumn<int> pinCount = GeneratedColumn<int>(
+    'pin_count',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    swLat,
+    swLng,
+    neLat,
+    neLng,
+    zoom,
+    fetchedAt,
+    pinCount,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'fetched_bboxes';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<FetchedBboxEntity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('sw_lat')) {
+      context.handle(
+        _swLatMeta,
+        swLat.isAcceptableOrUnknown(data['sw_lat']!, _swLatMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_swLatMeta);
+    }
+    if (data.containsKey('sw_lng')) {
+      context.handle(
+        _swLngMeta,
+        swLng.isAcceptableOrUnknown(data['sw_lng']!, _swLngMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_swLngMeta);
+    }
+    if (data.containsKey('ne_lat')) {
+      context.handle(
+        _neLatMeta,
+        neLat.isAcceptableOrUnknown(data['ne_lat']!, _neLatMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_neLatMeta);
+    }
+    if (data.containsKey('ne_lng')) {
+      context.handle(
+        _neLngMeta,
+        neLng.isAcceptableOrUnknown(data['ne_lng']!, _neLngMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_neLngMeta);
+    }
+    if (data.containsKey('zoom')) {
+      context.handle(
+        _zoomMeta,
+        zoom.isAcceptableOrUnknown(data['zoom']!, _zoomMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_zoomMeta);
+    }
+    if (data.containsKey('fetched_at')) {
+      context.handle(
+        _fetchedAtMeta,
+        fetchedAt.isAcceptableOrUnknown(data['fetched_at']!, _fetchedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_fetchedAtMeta);
+    }
+    if (data.containsKey('pin_count')) {
+      context.handle(
+        _pinCountMeta,
+        pinCount.isAcceptableOrUnknown(data['pin_count']!, _pinCountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pinCountMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  FetchedBboxEntity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return FetchedBboxEntity(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      swLat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}sw_lat'],
+      )!,
+      swLng: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}sw_lng'],
+      )!,
+      neLat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ne_lat'],
+      )!,
+      neLng: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}ne_lng'],
+      )!,
+      zoom: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}zoom'],
+      )!,
+      fetchedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fetched_at'],
+      )!,
+      pinCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}pin_count'],
+      )!,
+    );
+  }
+
+  @override
+  $FetchedBboxesTable createAlias(String alias) {
+    return $FetchedBboxesTable(attachedDatabase, alias);
+  }
+}
+
+class FetchedBboxEntity extends DataClass
+    implements Insertable<FetchedBboxEntity> {
+  final int id;
+  final double swLat;
+  final double swLng;
+  final double neLat;
+  final double neLng;
+  final int zoom;
+  final int fetchedAt;
+  final int pinCount;
+  const FetchedBboxEntity({
+    required this.id,
+    required this.swLat,
+    required this.swLng,
+    required this.neLat,
+    required this.neLng,
+    required this.zoom,
+    required this.fetchedAt,
+    required this.pinCount,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['sw_lat'] = Variable<double>(swLat);
+    map['sw_lng'] = Variable<double>(swLng);
+    map['ne_lat'] = Variable<double>(neLat);
+    map['ne_lng'] = Variable<double>(neLng);
+    map['zoom'] = Variable<int>(zoom);
+    map['fetched_at'] = Variable<int>(fetchedAt);
+    map['pin_count'] = Variable<int>(pinCount);
+    return map;
+  }
+
+  FetchedBboxesCompanion toCompanion(bool nullToAbsent) {
+    return FetchedBboxesCompanion(
+      id: Value(id),
+      swLat: Value(swLat),
+      swLng: Value(swLng),
+      neLat: Value(neLat),
+      neLng: Value(neLng),
+      zoom: Value(zoom),
+      fetchedAt: Value(fetchedAt),
+      pinCount: Value(pinCount),
+    );
+  }
+
+  factory FetchedBboxEntity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return FetchedBboxEntity(
+      id: serializer.fromJson<int>(json['id']),
+      swLat: serializer.fromJson<double>(json['swLat']),
+      swLng: serializer.fromJson<double>(json['swLng']),
+      neLat: serializer.fromJson<double>(json['neLat']),
+      neLng: serializer.fromJson<double>(json['neLng']),
+      zoom: serializer.fromJson<int>(json['zoom']),
+      fetchedAt: serializer.fromJson<int>(json['fetchedAt']),
+      pinCount: serializer.fromJson<int>(json['pinCount']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'swLat': serializer.toJson<double>(swLat),
+      'swLng': serializer.toJson<double>(swLng),
+      'neLat': serializer.toJson<double>(neLat),
+      'neLng': serializer.toJson<double>(neLng),
+      'zoom': serializer.toJson<int>(zoom),
+      'fetchedAt': serializer.toJson<int>(fetchedAt),
+      'pinCount': serializer.toJson<int>(pinCount),
+    };
+  }
+
+  FetchedBboxEntity copyWith({
+    int? id,
+    double? swLat,
+    double? swLng,
+    double? neLat,
+    double? neLng,
+    int? zoom,
+    int? fetchedAt,
+    int? pinCount,
+  }) => FetchedBboxEntity(
+    id: id ?? this.id,
+    swLat: swLat ?? this.swLat,
+    swLng: swLng ?? this.swLng,
+    neLat: neLat ?? this.neLat,
+    neLng: neLng ?? this.neLng,
+    zoom: zoom ?? this.zoom,
+    fetchedAt: fetchedAt ?? this.fetchedAt,
+    pinCount: pinCount ?? this.pinCount,
+  );
+  FetchedBboxEntity copyWithCompanion(FetchedBboxesCompanion data) {
+    return FetchedBboxEntity(
+      id: data.id.present ? data.id.value : this.id,
+      swLat: data.swLat.present ? data.swLat.value : this.swLat,
+      swLng: data.swLng.present ? data.swLng.value : this.swLng,
+      neLat: data.neLat.present ? data.neLat.value : this.neLat,
+      neLng: data.neLng.present ? data.neLng.value : this.neLng,
+      zoom: data.zoom.present ? data.zoom.value : this.zoom,
+      fetchedAt: data.fetchedAt.present ? data.fetchedAt.value : this.fetchedAt,
+      pinCount: data.pinCount.present ? data.pinCount.value : this.pinCount,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FetchedBboxEntity(')
+          ..write('id: $id, ')
+          ..write('swLat: $swLat, ')
+          ..write('swLng: $swLng, ')
+          ..write('neLat: $neLat, ')
+          ..write('neLng: $neLng, ')
+          ..write('zoom: $zoom, ')
+          ..write('fetchedAt: $fetchedAt, ')
+          ..write('pinCount: $pinCount')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, swLat, swLng, neLat, neLng, zoom, fetchedAt, pinCount);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is FetchedBboxEntity &&
+          other.id == this.id &&
+          other.swLat == this.swLat &&
+          other.swLng == this.swLng &&
+          other.neLat == this.neLat &&
+          other.neLng == this.neLng &&
+          other.zoom == this.zoom &&
+          other.fetchedAt == this.fetchedAt &&
+          other.pinCount == this.pinCount);
+}
+
+class FetchedBboxesCompanion extends UpdateCompanion<FetchedBboxEntity> {
+  final Value<int> id;
+  final Value<double> swLat;
+  final Value<double> swLng;
+  final Value<double> neLat;
+  final Value<double> neLng;
+  final Value<int> zoom;
+  final Value<int> fetchedAt;
+  final Value<int> pinCount;
+  const FetchedBboxesCompanion({
+    this.id = const Value.absent(),
+    this.swLat = const Value.absent(),
+    this.swLng = const Value.absent(),
+    this.neLat = const Value.absent(),
+    this.neLng = const Value.absent(),
+    this.zoom = const Value.absent(),
+    this.fetchedAt = const Value.absent(),
+    this.pinCount = const Value.absent(),
+  });
+  FetchedBboxesCompanion.insert({
+    this.id = const Value.absent(),
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    required int zoom,
+    required int fetchedAt,
+    required int pinCount,
+  }) : swLat = Value(swLat),
+       swLng = Value(swLng),
+       neLat = Value(neLat),
+       neLng = Value(neLng),
+       zoom = Value(zoom),
+       fetchedAt = Value(fetchedAt),
+       pinCount = Value(pinCount);
+  static Insertable<FetchedBboxEntity> custom({
+    Expression<int>? id,
+    Expression<double>? swLat,
+    Expression<double>? swLng,
+    Expression<double>? neLat,
+    Expression<double>? neLng,
+    Expression<int>? zoom,
+    Expression<int>? fetchedAt,
+    Expression<int>? pinCount,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (swLat != null) 'sw_lat': swLat,
+      if (swLng != null) 'sw_lng': swLng,
+      if (neLat != null) 'ne_lat': neLat,
+      if (neLng != null) 'ne_lng': neLng,
+      if (zoom != null) 'zoom': zoom,
+      if (fetchedAt != null) 'fetched_at': fetchedAt,
+      if (pinCount != null) 'pin_count': pinCount,
+    });
+  }
+
+  FetchedBboxesCompanion copyWith({
+    Value<int>? id,
+    Value<double>? swLat,
+    Value<double>? swLng,
+    Value<double>? neLat,
+    Value<double>? neLng,
+    Value<int>? zoom,
+    Value<int>? fetchedAt,
+    Value<int>? pinCount,
+  }) {
+    return FetchedBboxesCompanion(
+      id: id ?? this.id,
+      swLat: swLat ?? this.swLat,
+      swLng: swLng ?? this.swLng,
+      neLat: neLat ?? this.neLat,
+      neLng: neLng ?? this.neLng,
+      zoom: zoom ?? this.zoom,
+      fetchedAt: fetchedAt ?? this.fetchedAt,
+      pinCount: pinCount ?? this.pinCount,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (swLat.present) {
+      map['sw_lat'] = Variable<double>(swLat.value);
+    }
+    if (swLng.present) {
+      map['sw_lng'] = Variable<double>(swLng.value);
+    }
+    if (neLat.present) {
+      map['ne_lat'] = Variable<double>(neLat.value);
+    }
+    if (neLng.present) {
+      map['ne_lng'] = Variable<double>(neLng.value);
+    }
+    if (zoom.present) {
+      map['zoom'] = Variable<int>(zoom.value);
+    }
+    if (fetchedAt.present) {
+      map['fetched_at'] = Variable<int>(fetchedAt.value);
+    }
+    if (pinCount.present) {
+      map['pin_count'] = Variable<int>(pinCount.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FetchedBboxesCompanion(')
+          ..write('id: $id, ')
+          ..write('swLat: $swLat, ')
+          ..write('swLng: $swLng, ')
+          ..write('neLat: $neLat, ')
+          ..write('neLng: $neLng, ')
+          ..write('zoom: $zoom, ')
+          ..write('fetchedAt: $fetchedAt, ')
+          ..write('pinCount: $pinCount')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ServerPinDeletionsTable extends ServerPinDeletions
+    with TableInfo<$ServerPinDeletionsTable, ServerPinDeletionEntity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ServerPinDeletionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _pinIdMeta = const VerificationMeta('pinId');
+  @override
+  late final GeneratedColumn<String> pinId = GeneratedColumn<String>(
+    'pin_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<int> deletedAt = GeneratedColumn<int>(
+    'deleted_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [pinId, deletedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'server_pin_deletions';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<ServerPinDeletionEntity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('pin_id')) {
+      context.handle(
+        _pinIdMeta,
+        pinId.isAcceptableOrUnknown(data['pin_id']!, _pinIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_pinIdMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_deletedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {pinId};
+  @override
+  ServerPinDeletionEntity map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ServerPinDeletionEntity(
+      pinId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}pin_id'],
+      )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}deleted_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ServerPinDeletionsTable createAlias(String alias) {
+    return $ServerPinDeletionsTable(attachedDatabase, alias);
+  }
+}
+
+class ServerPinDeletionEntity extends DataClass
+    implements Insertable<ServerPinDeletionEntity> {
+  final String pinId;
+  final int deletedAt;
+  const ServerPinDeletionEntity({required this.pinId, required this.deletedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['pin_id'] = Variable<String>(pinId);
+    map['deleted_at'] = Variable<int>(deletedAt);
+    return map;
+  }
+
+  ServerPinDeletionsCompanion toCompanion(bool nullToAbsent) {
+    return ServerPinDeletionsCompanion(
+      pinId: Value(pinId),
+      deletedAt: Value(deletedAt),
+    );
+  }
+
+  factory ServerPinDeletionEntity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ServerPinDeletionEntity(
+      pinId: serializer.fromJson<String>(json['pinId']),
+      deletedAt: serializer.fromJson<int>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'pinId': serializer.toJson<String>(pinId),
+      'deletedAt': serializer.toJson<int>(deletedAt),
+    };
+  }
+
+  ServerPinDeletionEntity copyWith({String? pinId, int? deletedAt}) =>
+      ServerPinDeletionEntity(
+        pinId: pinId ?? this.pinId,
+        deletedAt: deletedAt ?? this.deletedAt,
+      );
+  ServerPinDeletionEntity copyWithCompanion(ServerPinDeletionsCompanion data) {
+    return ServerPinDeletionEntity(
+      pinId: data.pinId.present ? data.pinId.value : this.pinId,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerPinDeletionEntity(')
+          ..write('pinId: $pinId, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(pinId, deletedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ServerPinDeletionEntity &&
+          other.pinId == this.pinId &&
+          other.deletedAt == this.deletedAt);
+}
+
+class ServerPinDeletionsCompanion
+    extends UpdateCompanion<ServerPinDeletionEntity> {
+  final Value<String> pinId;
+  final Value<int> deletedAt;
+  final Value<int> rowid;
+  const ServerPinDeletionsCompanion({
+    this.pinId = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ServerPinDeletionsCompanion.insert({
+    required String pinId,
+    required int deletedAt,
+    this.rowid = const Value.absent(),
+  }) : pinId = Value(pinId),
+       deletedAt = Value(deletedAt);
+  static Insertable<ServerPinDeletionEntity> custom({
+    Expression<String>? pinId,
+    Expression<int>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (pinId != null) 'pin_id': pinId,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ServerPinDeletionsCompanion copyWith({
+    Value<String>? pinId,
+    Value<int>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return ServerPinDeletionsCompanion(
+      pinId: pinId ?? this.pinId,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (pinId.present) {
+      map['pin_id'] = Variable<String>(pinId.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<int>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ServerPinDeletionsCompanion(')
+          ..write('pinId: $pinId, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $PinsTable pins = $PinsTable(this);
   late final $SyncQueueTable syncQueue = $SyncQueueTable(this);
   late final $PinTombstonesTable pinTombstones = $PinTombstonesTable(this);
+  late final $FetchedBboxesTable fetchedBboxes = $FetchedBboxesTable(this);
+  late final $ServerPinDeletionsTable serverPinDeletions =
+      $ServerPinDeletionsTable(this);
   late final PinDao pinDao = PinDao(this as AppDatabase);
   late final SyncQueueDao syncQueueDao = SyncQueueDao(this as AppDatabase);
   late final PinTombstoneDao pinTombstoneDao = PinTombstoneDao(
+    this as AppDatabase,
+  );
+  late final FetchedBboxDao fetchedBboxDao = FetchedBboxDao(
+    this as AppDatabase,
+  );
+  late final ServerPinDeletionDao serverPinDeletionDao = ServerPinDeletionDao(
     this as AppDatabase,
   );
   @override
@@ -1992,6 +2760,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     pins,
     syncQueue,
     pinTombstones,
+    fetchedBboxes,
+    serverPinDeletions,
   ];
 }
 
@@ -2020,6 +2790,7 @@ typedef $$PinsTableCreateCompanionBuilder =
       Value<String?> legalCitation,
       Value<String?> legalCitationVerifiedDate,
       Value<int?> sourceOrphanedAt,
+      Value<int?> cachedAt,
       Value<int> rowid,
     });
 typedef $$PinsTableUpdateCompanionBuilder =
@@ -2047,6 +2818,7 @@ typedef $$PinsTableUpdateCompanionBuilder =
       Value<String?> legalCitation,
       Value<String?> legalCitationVerifiedDate,
       Value<int?> sourceOrphanedAt,
+      Value<int?> cachedAt,
       Value<int> rowid,
     });
 
@@ -2170,6 +2942,11 @@ class $$PinsTableFilterComposer extends Composer<_$AppDatabase, $PinsTable> {
 
   ColumnFilters<int> get sourceOrphanedAt => $composableBuilder(
     column: $table.sourceOrphanedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -2296,6 +3073,11 @@ class $$PinsTableOrderingComposer extends Composer<_$AppDatabase, $PinsTable> {
     column: $table.sourceOrphanedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get cachedAt => $composableBuilder(
+    column: $table.cachedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$PinsTableAnnotationComposer
@@ -2399,6 +3181,9 @@ class $$PinsTableAnnotationComposer
     column: $table.sourceOrphanedAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get cachedAt =>
+      $composableBuilder(column: $table.cachedAt, builder: (column) => column);
 }
 
 class $$PinsTableTableManager
@@ -2452,6 +3237,7 @@ class $$PinsTableTableManager
                 Value<String?> legalCitation = const Value.absent(),
                 Value<String?> legalCitationVerifiedDate = const Value.absent(),
                 Value<int?> sourceOrphanedAt = const Value.absent(),
+                Value<int?> cachedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PinsCompanion(
                 id: id,
@@ -2477,6 +3263,7 @@ class $$PinsTableTableManager
                 legalCitation: legalCitation,
                 legalCitationVerifiedDate: legalCitationVerifiedDate,
                 sourceOrphanedAt: sourceOrphanedAt,
+                cachedAt: cachedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2504,6 +3291,7 @@ class $$PinsTableTableManager
                 Value<String?> legalCitation = const Value.absent(),
                 Value<String?> legalCitationVerifiedDate = const Value.absent(),
                 Value<int?> sourceOrphanedAt = const Value.absent(),
+                Value<int?> cachedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => PinsCompanion.insert(
                 id: id,
@@ -2529,6 +3317,7 @@ class $$PinsTableTableManager
                 legalCitation: legalCitation,
                 legalCitationVerifiedDate: legalCitationVerifiedDate,
                 sourceOrphanedAt: sourceOrphanedAt,
+                cachedAt: cachedAt,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
@@ -2923,6 +3712,417 @@ typedef $$PinTombstonesTableProcessedTableManager =
       PinTombstoneEntity,
       PrefetchHooks Function()
     >;
+typedef $$FetchedBboxesTableCreateCompanionBuilder =
+    FetchedBboxesCompanion Function({
+      Value<int> id,
+      required double swLat,
+      required double swLng,
+      required double neLat,
+      required double neLng,
+      required int zoom,
+      required int fetchedAt,
+      required int pinCount,
+    });
+typedef $$FetchedBboxesTableUpdateCompanionBuilder =
+    FetchedBboxesCompanion Function({
+      Value<int> id,
+      Value<double> swLat,
+      Value<double> swLng,
+      Value<double> neLat,
+      Value<double> neLng,
+      Value<int> zoom,
+      Value<int> fetchedAt,
+      Value<int> pinCount,
+    });
+
+class $$FetchedBboxesTableFilterComposer
+    extends Composer<_$AppDatabase, $FetchedBboxesTable> {
+  $$FetchedBboxesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get swLat => $composableBuilder(
+    column: $table.swLat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get swLng => $composableBuilder(
+    column: $table.swLng,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get neLat => $composableBuilder(
+    column: $table.neLat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get neLng => $composableBuilder(
+    column: $table.neLng,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get zoom => $composableBuilder(
+    column: $table.zoom,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get pinCount => $composableBuilder(
+    column: $table.pinCount,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FetchedBboxesTableOrderingComposer
+    extends Composer<_$AppDatabase, $FetchedBboxesTable> {
+  $$FetchedBboxesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get swLat => $composableBuilder(
+    column: $table.swLat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get swLng => $composableBuilder(
+    column: $table.swLng,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get neLat => $composableBuilder(
+    column: $table.neLat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get neLng => $composableBuilder(
+    column: $table.neLng,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get zoom => $composableBuilder(
+    column: $table.zoom,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fetchedAt => $composableBuilder(
+    column: $table.fetchedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get pinCount => $composableBuilder(
+    column: $table.pinCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FetchedBboxesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FetchedBboxesTable> {
+  $$FetchedBboxesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<double> get swLat =>
+      $composableBuilder(column: $table.swLat, builder: (column) => column);
+
+  GeneratedColumn<double> get swLng =>
+      $composableBuilder(column: $table.swLng, builder: (column) => column);
+
+  GeneratedColumn<double> get neLat =>
+      $composableBuilder(column: $table.neLat, builder: (column) => column);
+
+  GeneratedColumn<double> get neLng =>
+      $composableBuilder(column: $table.neLng, builder: (column) => column);
+
+  GeneratedColumn<int> get zoom =>
+      $composableBuilder(column: $table.zoom, builder: (column) => column);
+
+  GeneratedColumn<int> get fetchedAt =>
+      $composableBuilder(column: $table.fetchedAt, builder: (column) => column);
+
+  GeneratedColumn<int> get pinCount =>
+      $composableBuilder(column: $table.pinCount, builder: (column) => column);
+}
+
+class $$FetchedBboxesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FetchedBboxesTable,
+          FetchedBboxEntity,
+          $$FetchedBboxesTableFilterComposer,
+          $$FetchedBboxesTableOrderingComposer,
+          $$FetchedBboxesTableAnnotationComposer,
+          $$FetchedBboxesTableCreateCompanionBuilder,
+          $$FetchedBboxesTableUpdateCompanionBuilder,
+          (
+            FetchedBboxEntity,
+            BaseReferences<
+              _$AppDatabase,
+              $FetchedBboxesTable,
+              FetchedBboxEntity
+            >,
+          ),
+          FetchedBboxEntity,
+          PrefetchHooks Function()
+        > {
+  $$FetchedBboxesTableTableManager(_$AppDatabase db, $FetchedBboxesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FetchedBboxesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FetchedBboxesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FetchedBboxesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<double> swLat = const Value.absent(),
+                Value<double> swLng = const Value.absent(),
+                Value<double> neLat = const Value.absent(),
+                Value<double> neLng = const Value.absent(),
+                Value<int> zoom = const Value.absent(),
+                Value<int> fetchedAt = const Value.absent(),
+                Value<int> pinCount = const Value.absent(),
+              }) => FetchedBboxesCompanion(
+                id: id,
+                swLat: swLat,
+                swLng: swLng,
+                neLat: neLat,
+                neLng: neLng,
+                zoom: zoom,
+                fetchedAt: fetchedAt,
+                pinCount: pinCount,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required double swLat,
+                required double swLng,
+                required double neLat,
+                required double neLng,
+                required int zoom,
+                required int fetchedAt,
+                required int pinCount,
+              }) => FetchedBboxesCompanion.insert(
+                id: id,
+                swLat: swLat,
+                swLng: swLng,
+                neLat: neLat,
+                neLng: neLng,
+                zoom: zoom,
+                fetchedAt: fetchedAt,
+                pinCount: pinCount,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FetchedBboxesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FetchedBboxesTable,
+      FetchedBboxEntity,
+      $$FetchedBboxesTableFilterComposer,
+      $$FetchedBboxesTableOrderingComposer,
+      $$FetchedBboxesTableAnnotationComposer,
+      $$FetchedBboxesTableCreateCompanionBuilder,
+      $$FetchedBboxesTableUpdateCompanionBuilder,
+      (
+        FetchedBboxEntity,
+        BaseReferences<_$AppDatabase, $FetchedBboxesTable, FetchedBboxEntity>,
+      ),
+      FetchedBboxEntity,
+      PrefetchHooks Function()
+    >;
+typedef $$ServerPinDeletionsTableCreateCompanionBuilder =
+    ServerPinDeletionsCompanion Function({
+      required String pinId,
+      required int deletedAt,
+      Value<int> rowid,
+    });
+typedef $$ServerPinDeletionsTableUpdateCompanionBuilder =
+    ServerPinDeletionsCompanion Function({
+      Value<String> pinId,
+      Value<int> deletedAt,
+      Value<int> rowid,
+    });
+
+class $$ServerPinDeletionsTableFilterComposer
+    extends Composer<_$AppDatabase, $ServerPinDeletionsTable> {
+  $$ServerPinDeletionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get pinId => $composableBuilder(
+    column: $table.pinId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ServerPinDeletionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ServerPinDeletionsTable> {
+  $$ServerPinDeletionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get pinId => $composableBuilder(
+    column: $table.pinId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ServerPinDeletionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ServerPinDeletionsTable> {
+  $$ServerPinDeletionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get pinId =>
+      $composableBuilder(column: $table.pinId, builder: (column) => column);
+
+  GeneratedColumn<int> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+}
+
+class $$ServerPinDeletionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ServerPinDeletionsTable,
+          ServerPinDeletionEntity,
+          $$ServerPinDeletionsTableFilterComposer,
+          $$ServerPinDeletionsTableOrderingComposer,
+          $$ServerPinDeletionsTableAnnotationComposer,
+          $$ServerPinDeletionsTableCreateCompanionBuilder,
+          $$ServerPinDeletionsTableUpdateCompanionBuilder,
+          (
+            ServerPinDeletionEntity,
+            BaseReferences<
+              _$AppDatabase,
+              $ServerPinDeletionsTable,
+              ServerPinDeletionEntity
+            >,
+          ),
+          ServerPinDeletionEntity,
+          PrefetchHooks Function()
+        > {
+  $$ServerPinDeletionsTableTableManager(
+    _$AppDatabase db,
+    $ServerPinDeletionsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ServerPinDeletionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ServerPinDeletionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ServerPinDeletionsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> pinId = const Value.absent(),
+                Value<int> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => ServerPinDeletionsCompanion(
+                pinId: pinId,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String pinId,
+                required int deletedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => ServerPinDeletionsCompanion.insert(
+                pinId: pinId,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ServerPinDeletionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ServerPinDeletionsTable,
+      ServerPinDeletionEntity,
+      $$ServerPinDeletionsTableFilterComposer,
+      $$ServerPinDeletionsTableOrderingComposer,
+      $$ServerPinDeletionsTableAnnotationComposer,
+      $$ServerPinDeletionsTableCreateCompanionBuilder,
+      $$ServerPinDeletionsTableUpdateCompanionBuilder,
+      (
+        ServerPinDeletionEntity,
+        BaseReferences<
+          _$AppDatabase,
+          $ServerPinDeletionsTable,
+          ServerPinDeletionEntity
+        >,
+      ),
+      ServerPinDeletionEntity,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2932,6 +4132,10 @@ class $AppDatabaseManager {
       $$SyncQueueTableTableManager(_db, _db.syncQueue);
   $$PinTombstonesTableTableManager get pinTombstones =>
       $$PinTombstonesTableTableManager(_db, _db.pinTombstones);
+  $$FetchedBboxesTableTableManager get fetchedBboxes =>
+      $$FetchedBboxesTableTableManager(_db, _db.fetchedBboxes);
+  $$ServerPinDeletionsTableTableManager get serverPinDeletions =>
+      $$ServerPinDeletionsTableTableManager(_db, _db.serverPinDeletions);
 }
 
 mixin _$PinDaoMixin on DatabaseAccessor<AppDatabase> {
@@ -2968,4 +4172,32 @@ class PinTombstoneDaoManager {
   PinTombstoneDaoManager(this._db);
   $$PinTombstonesTableTableManager get pinTombstones =>
       $$PinTombstonesTableTableManager(_db.attachedDatabase, _db.pinTombstones);
+}
+
+mixin _$FetchedBboxDaoMixin on DatabaseAccessor<AppDatabase> {
+  $FetchedBboxesTable get fetchedBboxes => attachedDatabase.fetchedBboxes;
+  FetchedBboxDaoManager get managers => FetchedBboxDaoManager(this);
+}
+
+class FetchedBboxDaoManager {
+  final _$FetchedBboxDaoMixin _db;
+  FetchedBboxDaoManager(this._db);
+  $$FetchedBboxesTableTableManager get fetchedBboxes =>
+      $$FetchedBboxesTableTableManager(_db.attachedDatabase, _db.fetchedBboxes);
+}
+
+mixin _$ServerPinDeletionDaoMixin on DatabaseAccessor<AppDatabase> {
+  $ServerPinDeletionsTable get serverPinDeletions =>
+      attachedDatabase.serverPinDeletions;
+  ServerPinDeletionDaoManager get managers => ServerPinDeletionDaoManager(this);
+}
+
+class ServerPinDeletionDaoManager {
+  final _$ServerPinDeletionDaoMixin _db;
+  ServerPinDeletionDaoManager(this._db);
+  $$ServerPinDeletionsTableTableManager get serverPinDeletions =>
+      $$ServerPinDeletionsTableTableManager(
+        _db.attachedDatabase,
+        _db.serverPinDeletions,
+      );
 }

@@ -1,5 +1,7 @@
-import 'package:ccwmap/data/models/supabase_pin_dto.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
+import 'package:ccwmap/data/models/server_pin_deletion_dto.dart';
+import 'package:ccwmap/data/models/supabase_pin_dto.dart';
+import 'package:ccwmap/domain/models/map_item.dart';
 
 /// Fake implementation of remote data source for testing
 ///
@@ -11,11 +13,49 @@ class FakeSupabaseRemoteDataSource implements RemoteDataSourceInterface {
   FakeSupabaseRemoteDataSource();
 
   @override
-  Future<List<SupabasePinDto>> getAllPins() async {
+  Future<List<SupabasePinDto>> getMyPinsModifiedSince({
+    required String userId,
+    required DateTime since,
+  }) async {
     if (shouldThrowError) {
       throw Exception('Simulated network error');
     }
-    return _pins.values.toList();
+    return _pins.values
+        .where(
+          (p) =>
+              p.createdBy == userId &&
+              DateTime.parse(p.lastModified).isAfter(since),
+        )
+        .toList()
+      ..sort((a, b) => a.lastModified.compareTo(b.lastModified));
+  }
+
+  @override
+  Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince({
+    required String userId,
+    required DateTime since,
+  }) async {
+    throw UnimplementedError(
+      'FakeSupabaseRemoteDataSource does not model server deletions. '
+      'Use a per-test fake (see test/data/sync/my_pins_sync_test.dart, '
+      'Phase 1 Task 8) if you need deletion behavior.',
+    );
+  }
+
+  @override
+  Future<List<MapItem>> getPinsInView({
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    required int zoom,
+    required String? currentUserId,
+  }) async {
+    throw UnimplementedError(
+      'FakeSupabaseRemoteDataSource does not model bbox queries. '
+      'Use a per-test fake (see test/data/sync/viewport_pins_manager_test.dart, '
+      'Phase 1 Task 10) if you need viewport behavior.',
+    );
   }
 
   @override

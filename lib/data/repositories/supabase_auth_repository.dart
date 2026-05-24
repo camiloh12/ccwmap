@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:ccwmap/data/sync/sync_manager.dart';
+import 'package:ccwmap/data/sync/my_pins_sync.dart';
 import 'package:ccwmap/domain/models/user.dart' as domain;
 import 'package:ccwmap/domain/repositories/auth_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -10,16 +10,16 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 /// Supabase implementation of AuthRepository
 class SupabaseAuthRepository implements AuthRepository {
   final supabase.SupabaseClient _supabase;
-  final SyncManager? _syncManager;
+  final MyPinsSync? _myPinsSync;
   final FlutterSecureStorage _secureStorage;
   final StreamController<void> _passwordRecoveryController =
       StreamController<void>.broadcast();
 
   SupabaseAuthRepository(
     this._supabase, {
-    SyncManager? syncManager,
+    MyPinsSync? myPinsSync,
     FlutterSecureStorage? secureStorage,
-  }) : _syncManager = syncManager,
+  }) : _myPinsSync = myPinsSync,
        _secureStorage = secureStorage ?? const FlutterSecureStorage() {
     // Surface password-recovery events from the underlying Supabase auth
     // stream as a separate stream consumers can listen to. This is the
@@ -171,7 +171,7 @@ class SupabaseAuthRepository implements AuthRepository {
     // Drain pending local writes first so we don't attempt uploads under
     // the soon-to-be-revoked JWT.
     try {
-      await _syncManager?.sync();
+      await _myPinsSync?.sync();
     } catch (e) {
       debugPrint('SupabaseAuthRepository: pre-delete sync drain failed: $e');
       // Non-fatal: deleting an account with undelivered local writes is

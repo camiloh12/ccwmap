@@ -301,12 +301,33 @@ BEGIN
       ELSE                 0.05  -- density-fallback at zoom>=12 over-dense bbox
     END;
 
+    -- Every cell in the viewport returns as a cluster row, regardless of
+    -- count. The client (map_screen) renders cnt<5 clusters as small
+    -- pin-sized dots without count labels, and cnt>=5 clusters as scaled
+    -- bubbles with count labels — see docs/dev/CLUSTER_RENDERING.md
+    -- (Option B). This keeps the response shape homogeneous (no mixed
+    -- pin+cluster rows) and lets the client cleanly hide its
+    -- cached-pins-layer whenever clusters are present, eliminating the
+    -- double-render of pins underneath clusters on zoom-out.
+    --
+    -- Centroid: AVG of constituent pin coordinates, NOT the grid anchor.
+    -- Grid anchors land at arbitrary spots (often in oceans for coastal
+    -- cells); the mean position tracks where the pins actually are.
+    --
+    -- IMPORTANT: every column projected out of `bucketed` must use an
+    -- alias that does NOT appear in the RETURNS TABLE column list above.
+    -- RETURNS TABLE implicitly declares OUT variables (latitude, longitude,
+    -- status, restriction_tag, …) that shadow any unqualified reference to
+    -- a same-named CTE column, raising 42702 at runtime. That's why every
+    -- column gets a `bucket_*` alias here.
     RETURN QUERY
     WITH bucketed AS (
       SELECT
         ST_SnapToGrid(p.location, grid_size) AS cell,
-        p.status,
-        p.restriction_tag
+        p.latitude        AS bucket_lat,
+        p.longitude       AS bucket_lng,
+        p.status          AS bucket_status,
+        p.restriction_tag AS bucket_tag
       FROM pins p
       WHERE ST_Intersects(p.location, bbox)
         AND (auth.uid() IS NULL OR p.created_by IS DISTINCT FROM auth.uid())
@@ -314,17 +335,19 @@ BEGIN
     aggregated AS (
       SELECT
         cell,
-        count(*) AS cnt,
-        mode() WITHIN GROUP (ORDER BY status)          AS dom_status,
-        mode() WITHIN GROUP (ORDER BY restriction_tag) AS dom_tag
+        count(*)                                       AS cnt,
+        avg(bucket_lat)                                AS centroid_lat,
+        avg(bucket_lng)                                AS centroid_lng,
+        mode() WITHIN GROUP (ORDER BY bucket_status)   AS dom_status,
+        mode() WITHIN GROUP (ORDER BY bucket_tag)      AS dom_tag
       FROM bucketed
       GROUP BY cell
     )
     SELECT
       'cluster'::TEXT,
       NULL::UUID,
-      ST_Y(cell),
-      ST_X(cell),
+      centroid_lat,
+      centroid_lng,
       NULL::TEXT,
       NULL::INTEGER,
       NULL::restriction_tag_type,

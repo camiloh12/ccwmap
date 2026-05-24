@@ -15,6 +15,8 @@ import 'package:ccwmap/main.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
+import 'package:ccwmap/data/sync/last_synced_at_store.dart';
+import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/domain/models/user.dart';
@@ -22,6 +24,7 @@ import 'fakes/fake_agreements_repository.dart';
 import 'fakes/fake_auth_repository.dart';
 import 'fakes/fake_moderation_repository.dart';
 import 'fakes/fake_network_monitor.dart';
+import 'fakes/fake_supabase_remote_data_source.dart';
 
 void main() {
   setUpAll(() async {
@@ -66,6 +69,15 @@ MAPTILER_API_KEY=test_key
 
     // No setCurrentUser — user is unauthenticated.
 
+    final viewportPinsManager = ViewportPinsManager(
+      remote: FakeSupabaseRemoteDataSource(),
+      pinDao: testDatabase.pinDao,
+      tombstoneDao: testDatabase.pinTombstoneDao,
+      fetchedBboxDao: testDatabase.fetchedBboxDao,
+      userIdProvider: () => null,
+    );
+    final lastSyncedAtStore = await LastSyncedAtStore.create();
+
     await tester.pumpWidget(
       CCWMapApp(
         mapViewModel: mapViewModel,
@@ -73,6 +85,8 @@ MAPTILER_API_KEY=test_key
         blocklistService: blocklist,
         agreementsRepository: agreementsRepo,
         moderationRepository: moderationRepo,
+        viewportPinsManager: viewportPinsManager,
+        lastSyncedAtStore: lastSyncedAtStore,
       ),
     );
     await tester.pumpAndSettle();
@@ -122,6 +136,15 @@ MAPTILER_API_KEY=test_key
         User(id: 'test-user-id', email: 'test@example.com'),
       );
 
+      final viewportPinsManager = ViewportPinsManager(
+        remote: FakeSupabaseRemoteDataSource(),
+        pinDao: testDatabase.pinDao,
+        tombstoneDao: testDatabase.pinTombstoneDao,
+        fetchedBboxDao: testDatabase.fetchedBboxDao,
+        userIdProvider: () => 'test-user-id',
+      );
+      final lastSyncedAtStore = await LastSyncedAtStore.create();
+
       await tester.pumpWidget(
         CCWMapApp(
           mapViewModel: mapViewModel,
@@ -129,6 +152,8 @@ MAPTILER_API_KEY=test_key
           blocklistService: blocklist,
           agreementsRepository: agreementsRepo,
           moderationRepository: moderationRepo,
+          viewportPinsManager: viewportPinsManager,
+          lastSyncedAtStore: lastSyncedAtStore,
         ),
       );
       await tester.pumpAndSettle();

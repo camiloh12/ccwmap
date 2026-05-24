@@ -1,4 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../domain/models/map_item.dart';
+import '../models/get_pins_in_view_row.dart';
+import '../models/server_pin_deletion_dto.dart';
 import '../models/supabase_pin_dto.dart';
 import 'remote_data_source_interface.dart';
 
@@ -11,26 +14,72 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
 
   SupabaseRemoteDataSource(this._supabase);
 
-  /// Fetch all pins from Supabase
-  ///
-  /// Returns empty list if no pins exist.
-  /// Throws exception on API error.
   @override
-  Future<List<SupabasePinDto>> getAllPins() async {
-    try {
-      final response = await _supabase
-          .from('pins')
-          .select()
-          .order('created_at', ascending: false);
+  Future<List<SupabasePinDto>> getMyPinsModifiedSince({
+    required String userId,
+    required DateTime since,
+  }) async {
+    final response = await _supabase
+        .from('pins')
+        .select()
+        .eq('created_by', userId)
+        .gt('last_modified', since.toIso8601String())
+        .order('last_modified', ascending: true);
 
-      final List<SupabasePinDto> pins = (response as List)
-          .map((json) => SupabasePinDto.fromJson(json as Map<String, dynamic>))
-          .toList();
+    return (response as List)
+        .map((j) => SupabasePinDto.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
 
-      return pins;
-    } catch (e) {
-      rethrow;
-    }
+  @override
+  Future<List<ServerPinDeletionDto>> getMyPinDeletionsSince({
+    required String userId,
+    required DateTime since,
+  }) async {
+    // RLS already filters this to `original_created_by = auth.uid()`,
+    // so the explicit .eq() is belt-and-suspenders. Cheap; keeps the
+    // query intent legible at the call site.
+    final response = await _supabase
+        .from('pin_deletions')
+        .select('pin_id, deleted_at, original_created_by')
+        .eq('original_created_by', userId)
+        .gt('deleted_at', since.toIso8601String())
+        .order('deleted_at', ascending: true);
+
+    return (response as List)
+        .map((j) => ServerPinDeletionDto.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<MapItem>> getPinsInView({
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    required int zoom,
+    required String? currentUserId,
+  }) async {
+    // NOTE: currentUserId is intentionally NOT forwarded to the RPC. The
+    // server-side function `get_pins_in_view` (migration 008 §7) reads
+    // `auth.uid()` directly to filter out the caller's own pins (those
+    // come down via MyPinsSync). The Dart parameter exists for call-site
+    // clarity and to give callers a chance to make decisions that don't
+    // round-trip — e.g. ViewportPinsManager skipping non-essential bbox
+    // fetches when unauthenticated.
+    final response = await _supabase.rpc(
+      'get_pins_in_view',
+      params: {
+        'sw_lat': swLat,
+        'sw_lng': swLng,
+        'ne_lat': neLat,
+        'ne_lng': neLng,
+        'zoom': zoom,
+      },
+    );
+
+    final rows = (response as List).cast<Map<String, dynamic>>();
+    return rows.map(GetPinsInViewRow.parse).toList();
   }
 
   /// Insert a new pin to Supabase
