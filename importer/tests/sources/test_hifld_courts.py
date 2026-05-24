@@ -58,6 +58,9 @@ def test_iter_candidates_skipped_count_is_recorded(
     source: HifldCourthousesSource,
 ) -> None:
     list(source.iter_candidates(state_filter={"TX"}))
-    assert source.last_skip_counts.get("filtered_out", 0) >= 0
-    assert source.last_skip_counts.get("state_pip_miss", 0) >= 0
-    assert source.last_skip_counts.get("missing_geometry", 0) >= 0
+    # FL (2) + PA (2) = 4 rows pass PIP but fail the TX filter.
+    assert source.last_skip_counts["filtered_out"] >= 4
+    # The fixture's CA courthouse falls outside TX/FL/PA polygons.
+    assert source.last_skip_counts["state_pip_miss"] >= 1
+    # The fixture has one row with geometry: null.
+    assert source.last_skip_counts["missing_geometry"] >= 1

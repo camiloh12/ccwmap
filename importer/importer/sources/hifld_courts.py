@@ -57,7 +57,15 @@ class HifldCourthousesSource(Source):
             self._cache_path.write_bytes(r.content)
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
+        """Yield one Candidate per upstream record; respect state_filter when set.
+
+        Side effect: resets and populates `self.last_skip_counts`. Callers must
+        fully exhaust the iterator (e.g. via `list(...)`) before reading the
+        counts — partial iteration leaves a half-populated Counter.
+        """
         self.last_skip_counts = Counter()
+        # HIFLD courthouses is ~3 MB; loaded whole intentionally. If this pattern is
+        # copy-pasted for larger sources (NCES schools ~20 MB), consider streaming.
         raw = json.loads(self._cache_path.read_text(encoding="utf-8"))
         for feature in raw.get("features", []):
             geom = feature.get("geometry") or {}
@@ -78,6 +86,9 @@ class HifldCourthousesSource(Source):
                 continue
 
             external_id = self._external_id(props)
+            if external_id is None:
+                self.last_skip_counts["missing_external_id"] += 1
+                continue
             name = (props.get("NAME") or props.get("name") or "").strip()
             if not name:
                 self.last_skip_counts["missing_name"] += 1
@@ -94,16 +105,16 @@ class HifldCourthousesSource(Source):
                 category=RestrictionTag.STATE_LOCAL_GOVT,
                 state=state,
                 extra={
-                    "loemins": props.get("LOEMINS"),
+                    "loemins": props.get("LOEMINS"),  # HIFLD: Level of Government (minimum)
                     "address": props.get("ADDRESS"),
                     "city": props.get("CITY"),
                 },
             )
 
     @staticmethod
-    def _external_id(props: dict) -> str:
+    def _external_id(props: dict) -> str | None:
         for key in ("GFID", "GLOBALID", "OBJECTID", "FID"):
             v = props.get(key)
             if v not in (None, ""):
                 return str(v)
-        raise ValueError(f"HIFLD courthouse row has no stable ID: {props!r}")
+        return None
