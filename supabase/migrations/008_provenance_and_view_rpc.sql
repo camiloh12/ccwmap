@@ -302,11 +302,16 @@ BEGIN
     END;
 
     RETURN QUERY
+    -- IMPORTANT: alias the bucketed CTE's columns so they cannot collide
+    -- with the implicit PL/pgSQL OUT variables that RETURNS TABLE creates
+    -- (RETURNS TABLE here declares `status` and `restriction_tag`, which
+    -- would otherwise shadow unqualified references in `mode() WITHIN
+    -- GROUP (ORDER BY ...)` and raise 42702 "ambiguous column reference").
     WITH bucketed AS (
       SELECT
         ST_SnapToGrid(p.location, grid_size) AS cell,
-        p.status,
-        p.restriction_tag
+        p.status          AS bucket_status,
+        p.restriction_tag AS bucket_tag
       FROM pins p
       WHERE ST_Intersects(p.location, bbox)
         AND (auth.uid() IS NULL OR p.created_by IS DISTINCT FROM auth.uid())
@@ -315,8 +320,8 @@ BEGIN
       SELECT
         cell,
         count(*) AS cnt,
-        mode() WITHIN GROUP (ORDER BY status)          AS dom_status,
-        mode() WITHIN GROUP (ORDER BY restriction_tag) AS dom_tag
+        mode() WITHIN GROUP (ORDER BY bucket_status) AS dom_status,
+        mode() WITHIN GROUP (ORDER BY bucket_tag)    AS dom_tag
       FROM bucketed
       GROUP BY cell
     )
