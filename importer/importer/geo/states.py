@@ -13,7 +13,11 @@ class StateLocator:
     """In-memory STRtree over US state polygons keyed by USPS code."""
 
     def __init__(self, geometries: list, codes: list[str]) -> None:
-        assert len(geometries) == len(codes)
+        if len(geometries) != len(codes):
+            raise ValueError(
+                f"geometries and codes must be the same length "
+                f"({len(geometries)} vs {len(codes)})"
+            )
         self._tree = STRtree(geometries)
         self._geometries = geometries
         self._codes = codes
