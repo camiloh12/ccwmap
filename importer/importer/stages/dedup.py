@@ -8,6 +8,7 @@ only one source runs, so there is nothing to dedup against.
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
+from typing import Any
 
 from importer.candidate import Candidate
 
@@ -15,6 +16,8 @@ from importer.candidate import Candidate
 def dedup(
     candidates: Iterable[Candidate],
     *,
-    existing_user_pins: list,
+    # TODO(Phase 5): narrow to list[Candidate] or list[UserPin] once the
+    # user-pin type stabilizes.
+    existing_user_pins: list[Any],
 ) -> Iterator[Candidate]:
     yield from candidates

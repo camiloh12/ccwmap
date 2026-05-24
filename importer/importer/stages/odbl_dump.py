@@ -21,4 +21,6 @@ def dump_osm_pins(
     if osm_count == 0:
         logger.info("odbl_dump: no OSM rows applied; nothing to dump.")
         return None
+    # Phase 6 will replace this body entirely; the raise is a safety net so a
+    # partially-wired OSM source fails loudly rather than silently no-op'ing.
     raise NotImplementedError("ODbL dump generator is added in Phase 6.")
