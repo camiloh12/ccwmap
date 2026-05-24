@@ -5,7 +5,7 @@ This directory holds the maintained legal classification table consulted by the
 inherits its status, citation, confidence, and verified date from a row here.
 
 Schema and confidence definitions: see
-[the design spec](../../docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md#§1)
+[the design spec](../../docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md#1--sources-classification-and-the-state-law-lookup-table)
 §1 — *Sources, classification, and the state-law lookup table*.
 
 ## Editing
