@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -57,6 +56,7 @@ def test_candidate_with_us_fallback_is_classified(table: StateLawTable) -> None:
     cc = out[0]
     assert isinstance(cc, ClassifiedCandidate)
     assert cc.cell.citation == "18 USC 930(a)"
+    assert stats.classified == 1
     assert stats.dropped_no_cell == 0
 
 
@@ -100,3 +100,4 @@ def test_source_filter_in_cell_is_respected(table: StateLawTable) -> None:
     )
     assert out == []
     assert stats.dropped_no_cell == 1
+    assert ("TX", RestrictionTag.STATE_LOCAL_GOVT.name) in stats.missing_cells
