@@ -1,0 +1,71 @@
+name: Importer Apply (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which Supabase project to write to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      confirm:
+        description: 'Type exactly: I-KNOW-THIS-WRITES-TO-STAGING or I-KNOW-THIS-WRITES-TO-PROD'
+        required: true
+        type: string
+
+concurrency:
+  group: importer-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply to ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    env:
+      IMPORTER_SUPABASE_SERVICE_ROLE_KEY: ${{ inputs.target == 'prod' && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+    defaults:
+      run:
+        working-directory: importer
+    steps:
+      - name: Validate confirmation phrase
+        run: |
+          expected="I-KNOW-THIS-WRITES-TO-$(echo '${{ inputs.target }}' | tr a-z A-Z)"
+          if [ "${{ inputs.confirm }}" != "$expected" ]; then
+            echo "::error::Confirmation phrase must be: $expected"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+
+      - name: Pin Python
+        run: uv python install 3.12
+
+      - name: Install project
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Apply to ${{ inputs.target }}
+        run: |
+          uv run python -m importer.cli \
+            --apply \
+            --states TX,FL,PA \
+            --sources hifld_courts \
+            --project-ref ${{ inputs.target }} \
+            --i-know-this-writes-to-${{ inputs.target }} \
+            --report-out "$GITHUB_WORKSPACE/importer-report.md"
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: importer-apply-${{ inputs.target }}-${{ github.run_id }}
+          path: |
+            importer-report.md
+            importer-report.json
+          retention-days: 90
