@@ -150,3 +150,17 @@ class SupabaseClient:
             json=payload,
         )
         r.raise_for_status()
+
+    def mark_orphans(self, source: str, external_ids: list[str]) -> None:
+        if not external_ids:
+            return
+        in_list = ",".join(f'"{eid}"' for eid in external_ids)
+        headers = dict(self._headers)
+        headers["Prefer"] = "return=minimal"
+        r = self._client.patch(
+            f"{self._base}/pins?source=eq.{source}"
+            f"&source_external_id=in.({in_list})",
+            headers=headers,
+            json={"source_orphaned_at": "now()"},
+        )
+        r.raise_for_status()
