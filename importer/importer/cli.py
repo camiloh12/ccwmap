@@ -31,6 +31,12 @@ SUPPORTED_REFS = ("staging", "prod")
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # importer/../ == repo root
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 STATES_YAML = REPO_ROOT / "data" / "state_laws" / "states.yaml"
+# PHASE 2 SCOPE: this points at the TX+FL+PA test fixture, which is the only
+# state coverage Phase 2 demonstrates. Running --states with any code outside
+# {TX,FL,PA} will silently yield zero candidates (every courthouse outside those
+# polygons fails state point-in-polygon and is skipped). Phase 3 MUST replace
+# this with a committed full-50-state boundary file under data/ before widening
+# state coverage. See docs/superpowers/plans/2026-05-24-pre-populate-pins-phase-2.md.
 STATES_BOUNDARY_FIXTURE = (
     Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "states_sample.geojson"
 )
