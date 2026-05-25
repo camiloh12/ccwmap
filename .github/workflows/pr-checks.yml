@@ -3,6 +3,10 @@ name: PR Checks
 on:
   pull_request:
     branches: [master]
+    paths-ignore:
+      - 'importer/**'
+      - 'data/**'
+      - 'docs/importer/**'
 
 concurrency:
   group: pr-${{ github.ref }}

@@ -61,3 +61,17 @@ app.*.map.json
 android/key.properties
 /android/key.properties
 .local/
+
+# Importer (Python project under importer/)
+importer/.venv/
+importer/.pytest_cache/
+importer/**/__pycache__/
+importer/dist/
+importer/*.egg-info/
+importer/htmlcov/
+
+# Cached source datasets (we commit fixtures under importer/tests/fixtures/
+# but NOT the full multi-MB downloads). Per spec §1.
+data/sources/*
+!data/sources/.gitkeep
+!data/sources/.hifld_courts_url.txt
