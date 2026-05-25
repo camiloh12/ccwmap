@@ -1,0 +1,70 @@
+name: Importer PR Validate (staging dry-run)
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'importer/**'
+      - 'data/state_laws/**'
+
+concurrency:
+  # Serialize importer dry-runs against staging — only one PR at a time may
+  # talk to the shared staging Supabase project. Per spec §7 limitations.
+  group: importer-staging
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Tests + dry-run against staging
+    runs-on: ubuntu-latest
+    env:
+      IMPORTER_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+    defaults:
+      run:
+        working-directory: importer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+
+      - name: Pin Python
+        run: uv python install 3.12
+
+      - name: Install project + dev deps
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Run unit tests
+        run: uv run pytest
+
+      - name: Dry-run against staging
+        run: |
+          uv run python -m importer.cli \
+            --dry-run \
+            --states TX,FL,PA \
+            --sources hifld_courts \
+            --project-ref staging \
+            --report-out "$GITHUB_WORKSPACE/importer-report.md"
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: importer-dry-run-report-${{ github.event.pull_request.number }}
+          path: |
+            importer-report.md
+            importer-report.json
+          retention-days: 14
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
