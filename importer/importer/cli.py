@@ -209,3 +209,11 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
     return 0
+
+
+if __name__ == "__main__":
+    # Support `python -m importer.cli ...` (used by every CI workflow, the
+    # operator README, and the Task 19 smoke). Without this guard the module
+    # would import and exit 0 without ever calling main() — a silent no-op.
+    # `python -m importer` also works via importer/__main__.py.
+    raise SystemExit(main())
