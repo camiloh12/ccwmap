@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.stages.diff import DiffResult
 from importer.supabase_client import SupabaseClient, SupabaseUpsertRow
@@ -31,7 +29,6 @@ def _to_upsert_row(
         "has_posted_signage": False,
     }
     return SupabaseUpsertRow(
-        id=str(uuid4()),  # stable per-row identity at insert; updates upsert by (source, source_external_id)
         source=cc.candidate.source,
         source_external_id=cc.candidate.source_external_id,
         source_dataset_version=cc.candidate.source_dataset_version,

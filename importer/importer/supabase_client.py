@@ -26,7 +26,8 @@ class ExistingPinRow(BaseModel):
 class SupabaseUpsertRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    id: str
+    # NOTE: id intentionally omitted — pins.id has a gen_random_uuid() default;
+    # sending a fresh id would rewrite the PK of existing rows on merge-duplicates upsert.
     source: str
     source_external_id: str
     source_dataset_version: str

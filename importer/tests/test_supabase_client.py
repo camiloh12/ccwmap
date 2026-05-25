@@ -50,7 +50,6 @@ def test_upsert_pins_batches_at_500(
 ) -> None:
     rows = [
         SupabaseUpsertRow(
-            id=f"00000000-0000-0000-0000-{i:012d}",
             source="hifld_courts",
             source_external_id=f"E{i}",
             source_dataset_version="HIFLD-2026-05",
