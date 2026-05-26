@@ -1,8 +1,16 @@
 """HIFLD Courthouses -> Candidate stream.
 
-Source: https://hifld-geoplatform.opendata.arcgis.com/datasets/courthouses
-Format: GeoJSON, ~3 MB nationally, ~5k features.
-License: Public domain (DHS / HIFLD Open).
+Source: Courthouses dataset on the HIFLD/GeoPlatform ArcGIS Hub — layer 3 of the
+USGS NGDA "Structures_Landmarks_v1" feature service.
+  https://hub.arcgis.com/datasets/462b08b0811c4a77aa09afc36c4f4b73_3
+Format: GeoJSON, ~2.8 MB nationally, a few thousand Point features.
+License: Public domain (US Gov / USGS NGDA).
+
+Field note (verified 2026-05-25): this NGDA-sourced dataset exposes GLOBALID,
+OBJECTID, NAME, ADDRESS, CITY, STATE, PERMANENT_IDENTIFIER. It does NOT carry the
+classic HIFLD GFID or LOEMINS fields — `_external_id` falls back to GLOBALID
+(a stable GUID), and `extra["loemins"]` is therefore None. Phase 3's federal-vs-
+state/local split cannot rely on LOEMINS for this dataset version.
 """
 
 from __future__ import annotations
@@ -21,12 +29,18 @@ from importer.restriction_tag import RestrictionTag
 from importer.sources.base import Source
 
 
-# The URL is captured at pre-flight and pinned here. If HIFLD republishes under
-# a new UUID, update this constant in the same PR that refreshes the fixture.
+# ArcGIS Hub download API for the Courthouses layer (item 462b08b0...4b73,
+# layer 3). redirect=true is REQUIRED: the endpoint 302-redirects to a freshly
+# generated, time-limited (SAS-signed) blob, which our follow_redirects client
+# then streams. With redirect=false the endpoint returns a tiny JSON status
+# object instead of the GeoJSON, so fetch() would cache garbage. The signed blob
+# URLs expire (~1h) and must never be hard-pinned — only this stable hub URL is.
+# If HIFLD republishes under a new item/layer, update this constant in the same
+# PR that refreshes the fixture. Also recorded in data/sources/.hifld_courts_url.txt.
 HIFLD_COURTHOUSES_URL = (
-    "https://opendata.arcgis.com/api/v3/datasets/"
-    "REPLACE-WITH-HIFLD-DATASET-UUID_0/downloads/data"
-    "?format=geojson&spatialRefId=4326"
+    "https://hub.arcgis.com/api/download/v1/items/"
+    "462b08b0811c4a77aa09afc36c4f4b73/geojson"
+    "?redirect=true&layers=3&spatialRefId=4326"
 )
 
 
