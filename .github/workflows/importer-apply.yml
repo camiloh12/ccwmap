@@ -48,11 +48,11 @@ jobs:
         run: uv python install 3.12
 
       - name: Install project
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen
 
       - name: Apply to ${{ inputs.target }}
         run: |
-          uv run python -m importer.cli \
+          uv run --no-sync python -m importer.cli \
             --apply \
             --states TX,FL,PA \
             --sources hifld_courts \

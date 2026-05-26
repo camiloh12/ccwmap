@@ -34,14 +34,14 @@ jobs:
         run: uv python install 3.12
 
       - name: Install project + dev deps
-        run: uv pip install --system -e ".[dev]"
+        run: uv sync --frozen --extra dev
 
       - name: Run unit tests
-        run: uv run pytest
+        run: uv run --no-sync pytest
 
       - name: Dry-run against staging
         run: |
-          uv run python -m importer.cli \
+          uv run --no-sync python -m importer.cli \
             --dry-run \
             --states TX,FL,PA \
             --sources hifld_courts \
