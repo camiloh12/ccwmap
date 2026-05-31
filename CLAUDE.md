@@ -92,11 +92,11 @@ _No open bugs._
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.
 
-**Current Status:** Iteration 7 Complete - Local CRUD operations fully functional
+**Current Status:** v0.6.0 in production — pre-populate-pins Phases 0–2 complete (schema foundation, viewport sync rewrite, importer skeleton). Next phase: Phase 3 state-law table seeding (TX/FL/PA cells in `data/state_laws/states.yaml`). See `docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md` §8 for the phasing roadmap.
 **Target Platforms:** Android and iOS (production), Web (development/testing)
 **Backend:** Supabase (PostgreSQL + Auth + Realtime)
 
-### What's Implemented (Iterations 1-7 + v0.4.0 SP-1, SP-2, SP-3)
+### What's Implemented (Iterations 1-7 + v0.4.0 SP-1/2/3 + v0.6.0 pre-populate Phases 0–2)
 - ✅ Clean Architecture setup (Domain, Data, Presentation layers)
 - ✅ Local SQLite database with Drift ORM (native) + in-memory (web)
 - ✅ MapLibre integration with circle-based pin markers
@@ -113,6 +113,9 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ Pin name constraints (60-char cap + minimal profanity filter)
 - ✅ Account deletion (Settings → Delete Account → type-DELETE confirmation → delete-account Edge Function)
 - ✅ Banned-user sign-in error surfaces suspension copy with appeals email
+- ✅ Provenance schema (migration 008): `pins` source columns, `pin_deletions` tombstones, `import_runs` audit, delete-rate-limit triggers, `get_pins_in_view` clustering RPC, system-user deny-write RLS
+- ✅ Viewport-based sync rewrite: `MyPinsSync` + `ViewportPinsManager` with bbox fetch + server-side clustering (replaces whole-table SyncManager)
+- ✅ Pre-populate importer skeleton (`importer/`): HIFLD courthouses end-to-end, dry-run/apply modes, staging-accepted (Phase 2)
 - ✅ Tests passing (run `flutter test` for current tally)
 
 ## Architecture
