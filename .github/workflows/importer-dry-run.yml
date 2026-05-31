@@ -1,0 +1,53 @@
+name: Importer Weekly Dry-Run (staging)
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'   # Mondays 12:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: importer-staging
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    name: Weekly staging dry-run
+    runs-on: ubuntu-latest
+    env:
+      IMPORTER_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+    defaults:
+      run:
+        working-directory: importer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+
+      - name: Pin Python
+        run: uv python install 3.12
+
+      - name: Install project
+        run: uv sync --frozen
+
+      - name: Dry-run against staging
+        run: |
+          uv run --no-sync python -m importer.cli \
+            --dry-run \
+            --states TX,FL,PA \
+            --sources hifld_courts \
+            --project-ref staging \
+            --refetch \
+            --report-out "$GITHUB_WORKSPACE/importer-report.md"
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: importer-weekly-dry-run-${{ github.run_id }}
+          path: |
+            importer-report.md
+            importer-report.json
+          retention-days: 30

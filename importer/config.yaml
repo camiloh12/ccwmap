@@ -1,0 +1,18 @@
+# Non-secret runtime configuration for the importer.
+# Secrets (service-role keys) come from environment variables.
+
+system_user_id: "81775f8b-1a6a-47d6-b793-e9ab7e38634e"
+
+projects:
+  staging:
+    project_ref: "miihmfhnsfmwgrvgayns"
+    url: "https://miihmfhnsfmwgrvgayns.supabase.co"
+  prod:
+    project_ref: "REPLACE-WITH-PROD-PROJECT-REF"
+    url: "https://REPLACE-WITH-PROD-PROJECT-REF.supabase.co"
+
+sources:
+  hifld_courts:
+    # URL captured at pre-flight; pin per-source so dataset versions are reproducible.
+    cache_dir: "data/sources/hifld_courts"
+    dataset_version: "HIFLD-2026-05"

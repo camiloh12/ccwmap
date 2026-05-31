@@ -1,0 +1,1 @@
+https://hub.arcgis.com/api/download/v1/items/462b08b0811c4a77aa09afc36c4f4b73/geojson?redirect=true&layers=3&spatialRefId=4326

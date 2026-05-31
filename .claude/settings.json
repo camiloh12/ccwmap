@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh pr create*)",
+            "shell": "bash",
+            "command": "bash .claude/hooks/pr-preflight-gate.sh",
+            "timeout": 600,
+            "statusMessage": "PR preflight (format/analyze/test)…"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git push -u*)",
+            "shell": "bash",
+            "command": "bash .claude/hooks/pr-preflight-gate.sh",
+            "timeout": 600,
+            "statusMessage": "PR preflight (format/analyze/test)…"
+          }
+        ]
+      }
+    ]
+  }
+}

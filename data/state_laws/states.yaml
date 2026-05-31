@@ -1,0 +1,20 @@
+# Maintained state-law lookup table for the CCW Map pre-populate-pins importer.
+# Schema: see ../../docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md §1.
+# License: CC0 — see LICENSE next to this file.
+# Maintenance: quarterly review; bump last_verified_date even if unchanged.
+
+- state: US
+  category: STATE_LOCAL_GOVT
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Federal courthouses: carry by non-officers prohibited."
+    - "State/local courthouses: state law typically prohibits — Phase 3 cells refine per state."
+  citation: "18 USC 930(a)"
+  last_verified_date: 2026-05-24
+  source_filter:
+    - hifld_courts
+  notes: |
+    Phase 2 federal-uniform fallback. Applies to all HIFLD courthouses regardless
+    of LOEMINS (federal/state/local) until Phase 3 fills in (TX, FL, PA,
+    STATE_LOCAL_GOVT) state-specific rows that will then take precedence.
