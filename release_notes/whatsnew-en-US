@@ -1,3 +1,3 @@
-Reset your password by email if you forget it.
-New Sign Up screen, separate from Sign In.
-Cleaner login screen with quick links to Sign Up and password reset.
+Pins now cluster at low zoom for a cleaner overview.
+Tap any cluster to zoom in and reveal individual pins.
+The map loads only the pins in your current view.
