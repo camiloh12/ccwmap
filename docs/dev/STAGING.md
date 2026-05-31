@@ -66,11 +66,18 @@ SELECT
   (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pins','user_agreements','pin_reports','blocked_users','pin_deletions','import_runs','recent_deletes')) AS expected_tables_present,
   (SELECT count(*) FROM pg_trigger WHERE tgrelid='public.pins'::regclass AND NOT tgisinternal) AS pin_trigger_count,
   (SELECT count(*) FROM pg_proc WHERE proname='get_pins_in_view') AS rpc_exists,
-  (SELECT count(*) FROM pg_policy WHERE polrelid='public.pins'::regclass AND polname='deny_system_user_writes') AS deny_policy_exists;
+  (SELECT count(*) FROM pg_policy WHERE polrelid='public.pins'::regclass AND polname LIKE 'deny_system_user%') AS deny_policy_count;
 ```
 
 Expected (post-008): postgis=1, enum=1, pins_column_count=25, tables=7,
-trigger_count=4, rpc=1, deny_policy=1.
+trigger_count=4, rpc=1, deny_policy_count=3.
+
+Note: §9 of migration 008 was split from a single `deny_system_user_writes`
+policy into three RESTRICTIVE policies (`deny_system_user_insert` /
+`_update` / `_delete`) so the deny rule applies only to writes and never
+ANDs into SELECT (which would hide system-owned pins from viewers). A query
+that still greps for the old single `deny_system_user_writes` name returns
+0 — that's the stale-check, not a missing policy.
 
 If the SQL Editor truncates a long paste (it has hiccupped on `import_runs`
 once before — symptom: `expected_tables_present = 6`), re-run just the
@@ -136,4 +143,4 @@ runtime.
 | 005_pin_reports                  | 2026-05-16 | (per Supabase migrations table) | |
 | 006_blocked_users                | 2026-05-16 | (per Supabase migrations table) | |
 | 007_pin_name_length              | 2026-05-16 | (per Supabase migrations table) | |
-| 008_provenance_and_view_rpc      | 2026-05-16 | _deferred until post-release_   | Phase 0 of pre-populate-pins. The column-level UPDATE grant in §8 requires the `SupabasePinDto.toJsonForUpdate()` change (commit 3d45680) to be live in users' app builds — applying earlier would break pin editing for every existing user. Apply via MCP `apply_migration` only after a tagged release (≥ v0.5.1) reaches the stores. |
+| 008_provenance_and_view_rpc      | 2026-05-16 | 2026-05-30   | Phase 0 of pre-populate-pins. The column-level UPDATE grant in §8 requires the `SupabasePinDto.toJsonForUpdate()` change (commit 3d45680) to be live in users' app builds — applying earlier would break pin editing for every existing user. Applied to prod after v0.5.1 reached the stores, ahead of the v0.6.0 push. Verified: 25 pins cols, 7 tables, 4 triggers, RPC live, 3 deny-write policies, 202/202 pins backfilled. |
