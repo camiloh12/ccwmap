@@ -45,7 +45,8 @@
       "Bash(ls:*)",
       "Bash(identify:*)",
       "Bash(flutter:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(git log *)"
     ],
     "deny": [],
     "ask": []
