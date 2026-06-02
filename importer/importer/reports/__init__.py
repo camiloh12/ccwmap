@@ -14,12 +14,19 @@ class SourceResult:
 
     source: str
     candidates_fetched: int
+    # Equal to candidates_fetched by construction: each source applies the
+    # state filter inside iter_candidates(), so there is no separate post-fetch
+    # filter stage. Kept as a distinct field for report symmetry / future use.
     candidates_after_state_filter: int
     classified: int
     dropped_no_cell: int
     missing_cells: list[tuple[str, str]]
     name_truncations: int
     diff: DiffResult
+    # GSA-only. geocode_matched counts post-dedup survivors with an address
+    # centroid; geocode_missed is the pre-dedup count of rows that failed to
+    # geocode (from the source's skip counter). The two are scoped differently
+    # on purpose — misses never reach dedup.
     geocode_matched: int | None = None
     geocode_missed: int | None = None
 
