@@ -59,6 +59,12 @@ def _matches(
 
 @dataclass
 class DedupResult:
+    """Result of cross-source dedup.
+
+    dropped_total counts cross-source drops (user-pin + cross-candidate) only.
+    Total records removed = dropped_total + within_source_dups.
+    """
+
     survivors: list[ClassifiedCandidate]
     dropped_total: int = 0
     within_source_dups: int = 0
@@ -98,7 +104,7 @@ def dedup(
     if existing_user_pins:
         user_geoms = [Point(p.longitude, p.latitude) for p in existing_user_pins]
         user_tree = STRtree(user_geoms)
-        radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 1.5  # generous bbox pre-filter
+        radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 2.0  # generous bbox pre-filter (safe past 49 N in lng)
         for cc in unique:
             cand = cc.candidate
             cg = Point(cand.longitude, cand.latitude)
@@ -121,7 +127,7 @@ def dedup(
     # 3. Cross-candidate resolution via one STRtree over all remaining points.
     geoms = [Point(cc.candidate.longitude, cc.candidate.latitude) for cc in survivors_stage2]
     tree = STRtree(geoms)
-    radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 1.5
+    radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 2.0  # generous bbox pre-filter (safe past 49 N in lng)
     dropped = [False] * len(survivors_stage2)
 
     for i, cc in enumerate(survivors_stage2):
