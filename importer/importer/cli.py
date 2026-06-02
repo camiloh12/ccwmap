@@ -16,16 +16,19 @@ from pathlib import Path
 
 import yaml
 
+from importer.geo.census_geocode import CensusGeocoder
 from importer.geo.states import load_state_locator
 from importer.pipeline import run_pipeline
 from importer.reports.json_report import render_json
 from importer.reports.markdown import render_markdown
+from importer.sources.gsa import GsaSource
 from importer.sources.hifld_courts import HifldCourthousesSource
+from importer.sources.hifld_military import HifldMilitarySource
 from importer.state_laws import load_state_laws
 from importer.supabase_client import SupabaseClient
 
 
-SUPPORTED_SOURCES = ("hifld_courts",)
+SUPPORTED_SOURCES = ("hifld_courts", "gsa", "hifld_military")
 SUPPORTED_REFS = ("staging", "prod")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # importer/../ == repo root
@@ -62,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         type=lambda v: [s.strip() for s in v.split(",") if s.strip()],
         choices=None,  # validated manually below for friendlier error
-        help=f"Comma-separated source names. Phase 2 supports: {','.join(SUPPORTED_SOURCES)}.",
+        help=f"Comma-separated source names. Supported: {','.join(SUPPORTED_SOURCES)}.",
     )
     p.add_argument(
         "--project-ref",
@@ -117,6 +120,31 @@ def _load_config() -> dict:
     return yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
+def _build_source(name, *, config, locator, repo_root):
+    cfg = config["sources"][name]
+    cache_dir = Path(repo_root) / cfg["cache_dir"]
+    version = cfg["dataset_version"]
+    url = cfg.get("url", "")
+    if name == "hifld_courts":
+        return HifldCourthousesSource(
+            cache_path=cache_dir / "courthouses.geojson",
+            state_locator=locator, dataset_version=version,
+            **({"url": url} if url else {}),
+        )
+    if name == "hifld_military":
+        return HifldMilitarySource(
+            cache_path=cache_dir / "military.geojson",
+            state_locator=locator, dataset_version=version, url=url,
+        )
+    if name == "gsa":
+        return GsaSource(
+            cache_path=cache_dir / "frpp.csv",
+            dataset_version=version, url=url,
+            geocoder=CensusGeocoder(cache_path=cache_dir / "geocoded.json"),
+        )
+    raise NotImplementedError(name)
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -153,43 +181,38 @@ def main(argv: list[str] | None = None) -> int:
                 mode=mode, source_filter=",".join(args.sources)
             )
 
-            # Phase 2: only one source supported. Loop is here so adding sources later is mechanical.
-            for source_name in args.sources:
-                if source_name != "hifld_courts":
-                    raise NotImplementedError(source_name)
-                source = HifldCourthousesSource(
-                    cache_path=Path(REPO_ROOT / config["sources"]["hifld_courts"]["cache_dir"] / "courthouses.geojson"),
-                    state_locator=locator,
-                    dataset_version=config["sources"]["hifld_courts"]["dataset_version"],
-                )
-                result = run_pipeline(
-                    source=source,
-                    state_laws=state_laws,
-                    client=client,
-                    states=args.states,
-                    mode=mode,
-                    system_user_id=system_user_id,
-                    refetch=args.refetch,
-                )
+            sources = [
+                _build_source(name, config=config, locator=locator, repo_root=REPO_ROOT)
+                for name in args.sources
+            ]
+            result = run_pipeline(
+                sources=sources,
+                state_laws=state_laws,
+                client=client,
+                states=args.states,
+                mode=mode,
+                system_user_id=system_user_id,
+                refetch=args.refetch,
+            )
 
-                report_md = render_markdown(result)
-                report_json = render_json(result)
-                report_path = args.report_out or Path.cwd() / f"report-{run_id}.md"
-                json_path = report_path.with_suffix(".json")
-                report_path.write_text(report_md, encoding="utf-8")
-                json_path.write_text(report_json, encoding="utf-8")
-                sys.stdout.write(report_md)
+            report_md = render_markdown(result)
+            report_json = render_json(result)
+            report_path = args.report_out or Path.cwd() / f"report-{run_id}.md"
+            json_path = report_path.with_suffix(".json")
+            report_path.write_text(report_md, encoding="utf-8")
+            json_path.write_text(report_json, encoding="utf-8")
+            sys.stdout.write(report_md)
 
-                client.update_import_run(
-                    run_id=run_id,
-                    candidates_processed=result.candidates_fetched,
-                    inserts=len(result.diff.inserts),
-                    updates=len(result.diff.updates),
-                    skips=len(result.diff.skips),
-                    orphans_marked=len(result.diff.orphans),
-                    errors_json=None,
-                    report_artifact_url=None,
-                )
+            client.update_import_run(
+                run_id=run_id,
+                candidates_processed=sum(s.candidates_fetched for s in result.sources),
+                inserts=sum(len(s.diff.inserts) for s in result.sources),
+                updates=sum(len(s.diff.updates) for s in result.sources),
+                skips=sum(len(s.diff.skips) for s in result.sources),
+                orphans_marked=sum(len(s.diff.orphans) for s in result.sources),
+                errors_json=None,
+                report_artifact_url=None,
+            )
         except Exception as exc:  # noqa: BLE001  — top-level catchall by design
             logging.exception("importer failed")
             if run_id is not None:

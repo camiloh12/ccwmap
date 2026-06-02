@@ -16,3 +16,11 @@ sources:
     # URL captured at pre-flight; pin per-source so dataset versions are reproducible.
     cache_dir: "data/sources/hifld_courts"
     dataset_version: "HIFLD-2026-05"
+  gsa:
+    cache_dir: "data/sources/gsa"
+    dataset_version: "FRPP-2026"
+    url: "PIN-AT-PREFLIGHT-gsa-frpp-public-csv-url"
+  hifld_military:
+    cache_dir: "data/sources/hifld_military"
+    dataset_version: "HIFLD-MIL-2026-05"
+    url: "PIN-AT-PREFLIGHT-hifld-military-arcgis-hub-geojson-url"
