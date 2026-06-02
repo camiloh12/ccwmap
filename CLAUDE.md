@@ -92,11 +92,11 @@ _No open bugs._
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.
 
-**Current Status:** v0.6.0 in production — pre-populate-pins Phases 0–2 complete (schema foundation, viewport sync rewrite, importer skeleton). Next phase: Phase 3 state-law table seeding (TX/FL/PA cells in `data/state_laws/states.yaml`). See `docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md` §8 for the phasing roadmap.
+**Current Status:** v0.6.0 in production — pre-populate-pins Phases 0–3 complete (schema foundation, viewport sync rewrite, importer skeleton, state-law table seeded for TX/FL/PA + federal-uniform US in `data/state_laws/states.yaml`). Next phase: Phase 4 pilot wave 1 (federal floor — HIFLD courthouses + GSA federal property + HIFLD military for TX/FL/PA). See `docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md` §8 for the phasing roadmap.
 **Target Platforms:** Android and iOS (production), Web (development/testing)
 **Backend:** Supabase (PostgreSQL + Auth + Realtime)
 
-### What's Implemented (Iterations 1-7 + v0.4.0 SP-1/2/3 + v0.6.0 pre-populate Phases 0–2)
+### What's Implemented (Iterations 1-7 + v0.4.0 SP-1/2/3 + v0.6.0 pre-populate Phases 0–3)
 - ✅ Clean Architecture setup (Domain, Data, Presentation layers)
 - ✅ Local SQLite database with Drift ORM (native) + in-memory (web)
 - ✅ MapLibre integration with circle-based pin markers
@@ -116,6 +116,7 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ Provenance schema (migration 008): `pins` source columns, `pin_deletions` tombstones, `import_runs` audit, delete-rate-limit triggers, `get_pins_in_view` clustering RPC, system-user deny-write RLS
 - ✅ Viewport-based sync rewrite: `MyPinsSync` + `ViewportPinsManager` with bbox fetch + server-side clustering (replaces whole-table SyncManager)
 - ✅ Pre-populate importer skeleton (`importer/`): HIFLD courthouses end-to-end, dry-run/apply modes, staging-accepted (Phase 2)
+- ✅ State-law table seeded (Phase 3): 12 web-verified `NO_GUN` cells in `data/state_laws/states.yaml` (3 US federal-uniform + TX/FL/PA), 12 intentional omissions in `docs/importer/OMISSIONS.md`, structural tests in `importer/tests/test_state_laws.py`
 - ✅ Tests passing (run `flutter test` for current tally)
 
 ## Architecture
