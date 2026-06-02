@@ -47,8 +47,8 @@ def run_pipeline(
     asl_stats = ApplyStateLawStats()
     classified = list(apply_state_law(refined, table=state_laws, stats=asl_stats))
 
-    # 5. Dedup (Phase 2 pass-through)
-    deduped = list(dedup(classified, existing_user_pins=[]))
+    # 5. Dedup
+    deduped = dedup(classified, existing_user_pins=[]).survivors
 
     # 6. Diff against Supabase
     diff_stats = DiffStats()

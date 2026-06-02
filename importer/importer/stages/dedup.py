@@ -72,17 +72,87 @@ def _record_drop(result: DedupResult, winner: str, loser: str) -> None:
     result.drops_by_pair[key] = result.drops_by_pair.get(key, 0) + 1
 
 
-# ---------------------------------------------------------------------------
-# Pass-through stub — replaced by Task 2 with the real spatial+name dedup.
-# ---------------------------------------------------------------------------
-from collections.abc import Iterable, Iterator
-from typing import Any
-
-
 def dedup(
-    candidates: Iterable[Any],
+    classified: list[ClassifiedCandidate],
     *,
-    existing_user_pins: list[Any],
-) -> Iterator[Any]:
-    """Phase 3 pass-through.  Task 2 replaces this with the real dedup."""
-    yield from candidates
+    existing_user_pins: list[ExistingPinRow],
+) -> DedupResult:
+    result = DedupResult(survivors=[])
+
+    # 1. Within-source dedup on (source, external_id). First occurrence wins.
+    seen_keys: set[tuple[str, str]] = set()
+    unique: list[ClassifiedCandidate] = []
+    for cc in classified:
+        key = (cc.candidate.source, cc.candidate.source_external_id)
+        if key in seen_keys:
+            result.within_source_dups += 1
+            continue
+        seen_keys.add(key)
+        unique.append(cc)
+
+    if not unique:
+        return result
+
+    # 2. Suppress candidates that collide with an existing user pin.
+    survivors_stage2: list[ClassifiedCandidate] = []
+    if existing_user_pins:
+        user_geoms = [Point(p.longitude, p.latitude) for p in existing_user_pins]
+        user_tree = STRtree(user_geoms)
+        radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 1.5  # generous bbox pre-filter
+        for cc in unique:
+            cand = cc.candidate
+            cg = Point(cand.longitude, cand.latitude)
+            hit = False
+            for j in user_tree.query(cg.buffer(radius_deg)):
+                up = existing_user_pins[int(j)]
+                if _matches(cand.name, cand.latitude, cand.longitude,
+                            up.name, up.latitude, up.longitude):
+                    _record_drop(result, "user", cand.source)
+                    hit = True
+                    break
+            if not hit:
+                survivors_stage2.append(cc)
+    else:
+        survivors_stage2 = unique
+
+    if not survivors_stage2:
+        return result
+
+    # 3. Cross-candidate resolution via one STRtree over all remaining points.
+    geoms = [Point(cc.candidate.longitude, cc.candidate.latitude) for cc in survivors_stage2]
+    tree = STRtree(geoms)
+    radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 1.5
+    dropped = [False] * len(survivors_stage2)
+
+    for i, cc in enumerate(survivors_stage2):
+        if dropped[i]:
+            continue
+        a = cc.candidate
+        for j_raw in tree.query(geoms[i].buffer(radius_deg)):
+            j = int(j_raw)
+            if j == i or dropped[j]:
+                continue
+            b = survivors_stage2[j].candidate
+            if not _matches(a.name, a.latitude, a.longitude, b.name, b.latitude, b.longitude):
+                continue
+            pi, pj = _priority(a.source), _priority(b.source)
+            if pi < pj:        # a wins
+                dropped[j] = True
+                _record_drop(result, a.source, b.source)
+            elif pj < pi:      # b wins
+                dropped[i] = True
+                _record_drop(result, b.source, a.source)
+                break
+            else:              # same tier — deterministic tiebreak on (source, eid)
+                key_a = (a.source, a.source_external_id)
+                key_b = (b.source, b.source_external_id)
+                if key_a <= key_b:
+                    dropped[j] = True
+                    _record_drop(result, a.source, b.source)
+                else:
+                    dropped[i] = True
+                    _record_drop(result, b.source, a.source)
+                    break
+
+    result.survivors = [cc for k, cc in enumerate(survivors_stage2) if not dropped[k]]
+    return result
