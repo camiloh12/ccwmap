@@ -1,7 +1,42 @@
 # Maintained state-law lookup table for the CCW Map pre-populate-pins importer.
 # Schema: see ../../docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md §1.
+# Phase 3 seeding: see ../../docs/superpowers/specs/2026-05-31-phase3-state-law-seeding-design.md
 # License: CC0 — see LICENSE next to this file.
 # Maintenance: quarterly review; bump last_verified_date even if unchanged.
+# Intentional omissions (combos with no categorical prohibition) are documented
+# in ../../docs/importer/OMISSIONS.md — do NOT add UNCERTAIN rows for them.
+
+# ── Federal-uniform cells (state: US) ────────────────────────────────
+- state: US
+  category: FEDERAL_PROPERTY
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Federal facilities: possession of a firearm by a non-exempt person is prohibited."
+  citation: "18 USC §930(a)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - gsa
+    - hifld_military
+  notes: |
+    Federal-uniform. Applies to GSA-owned/leased federal property and HIFLD
+    military installations nationwide. 18 USC §930 exempts law enforcement and
+    certain official purposes; pre-populated pins assert the default prohibition.
+
+- state: US
+  category: AIRPORT_SECURE
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Applies to the TSA sterile/secured area past the screening checkpoint."
+    - "Unloaded, cased firearms in checked baggage are permitted under TSA rules and are not what this pin asserts."
+  citation: "49 USC §46505; 49 CFR §1540"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - faa
+  notes: |
+    Federal-uniform. The FAA NPIAS reference point marks the airport; the
+    prohibition legally attaches to the sterile/secured area past screening.
 
 - state: US
   category: STATE_LOCAL_GOVT
@@ -9,12 +44,127 @@
   confidence: high
   conditions:
     - "Federal courthouses: carry by non-officers prohibited."
-    - "State/local courthouses: state law typically prohibits — Phase 3 cells refine per state."
-  citation: "18 USC 930(a)"
-  last_verified_date: 2026-05-24
+  citation: "18 USC §930(a)"
+  last_verified_date: 2026-05-31
   source_filter:
     - hifld_courts
   notes: |
-    Phase 2 federal-uniform fallback. Applies to all HIFLD courthouses regardless
-    of LOEMINS (federal/state/local) until Phase 3 fills in (TX, FL, PA,
-    STATE_LOCAL_GOVT) state-specific rows that will then take precedence.
+    Federal-uniform fallback for courthouses not matched by a state-specific
+    STATE_LOCAL_GOVT row (e.g. outside the pilot states). State rows (TX/FL/PA)
+    take precedence via lookup ordering.
+
+# ── Texas ────────────────────────────────────────────────────────────
+- state: TX
+  category: STATE_LOCAL_GOVT
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "On the premises of a government court or offices used by the court."
+  citation: "TX Penal Code §46.03(a)(3)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - hifld_courts
+  notes: |
+    Pre-populated TX pins default has_posted_signage=false: TX 30.06/30.07
+    signage is format-binding and unverifiable from external data.
+
+- state: TX
+  category: SCHOOL_K12
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "On the physical premises of a K-12 school or educational institution."
+  citation: "TX Penal Code §46.03(a)(1)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - nces
+
+- state: TX
+  category: BAR_ALCOHOL
+  default_status: NO_GUN
+  confidence: medium
+  conditions:
+    - "Premises deriving 51%+ of revenue from on-premises alcohol sales."
+    - "Must display the TABC 51% (red) sign."
+  citation: "TX Penal Code §46.03(a)(7); §46.035(b)(1)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - osm
+  notes: |
+    Generic OSM bar/pub tagging cannot confirm the 51% TABC designation, so
+    confidence is medium. Users verify with photos of the red sign.
+
+# ── Florida ──────────────────────────────────────────────────────────
+- state: FL
+  category: STATE_LOCAL_GOVT
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Any courthouse."
+  citation: "Fla. Stat. §790.06(12)(a)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - hifld_courts
+
+- state: FL
+  category: SCHOOL_K12
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "On the property of any K-12 school, school bus, or school bus stop."
+  citation: "Fla. Stat. §790.115(2)(a)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - nces
+
+- state: FL
+  category: COLLEGE_UNIVERSITY
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Any college or university facility. Florida does not authorize campus carry."
+  citation: "Fla. Stat. §790.06(12)(a)(13)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - ipeds
+
+- state: FL
+  category: BAR_ALCOHOL
+  default_status: NO_GUN
+  confidence: medium
+  conditions:
+    - "Any portion of an alcohol-licensed establishment primarily devoted to on-premises consumption."
+  citation: "Fla. Stat. §790.06(12)(a)(12)"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - osm
+  notes: |
+    OSM venue tags cannot confirm the "primarily devoted" portion test, so
+    confidence is medium.
+
+# ── Pennsylvania ─────────────────────────────────────────────────────
+- state: PA
+  category: STATE_LOCAL_GOVT
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "Court facility (and adjacent areas posted as such)."
+  citation: "18 Pa.C.S. §913"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - hifld_courts
+
+- state: PA
+  category: SCHOOL_K12
+  default_status: NO_GUN
+  confidence: high
+  conditions:
+    - "In the buildings or on the grounds of an elementary or secondary school."
+  citation: "18 Pa.C.S. §912"
+  last_verified_date: 2026-05-31
+  source_filter:
+    - nces
+  notes: |
+    §912 provides a defense for possession for a lawful purpose. Confidence
+    reviewed at high for the categorical premises prohibition; revisit if the
+    lawful-purpose defense materially weakens the assertion.
