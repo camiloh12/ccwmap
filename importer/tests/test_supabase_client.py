@@ -110,3 +110,22 @@ def test_insert_and_update_import_run_returns_uuid(
         errors_json=None,
         report_artifact_url=None,
     )
+
+
+def test_select_user_pins_filters_source_user(
+    client: SupabaseClient, httpx_mock: HTTPXMock
+) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        json=[{
+            "id": "00000000-0000-0000-0000-0000000000aa",
+            "source": "user", "source_external_id": None,
+            "name": "My Pin", "latitude": 30.0, "longitude": -97.0,
+            "status": 2, "restriction_tag": "FEDERAL_PROPERTY",
+            "user_modified": True, "source_dataset_version": None,
+        }],
+    )
+    rows = client.select_user_pins()
+    assert len(rows) == 1
+    assert rows[0].source == "user"
+    assert "source=eq.user" in str(httpx_mock.get_requests()[0].url)

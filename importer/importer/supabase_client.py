@@ -98,6 +98,13 @@ class SupabaseClient:
         r.raise_for_status()
         return [ExistingPinRow.model_validate(row) for row in r.json()]
 
+    def select_user_pins(self) -> list[ExistingPinRow]:
+        """All user-created pins — dedup must never clobber these."""
+        params = {"select": self.SELECT_COLUMNS, "source": "eq.user"}
+        r = self._client.get(f"{self._base}/pins", headers=self._headers, params=params)
+        r.raise_for_status()
+        return [ExistingPinRow.model_validate(row) for row in r.json()]
+
     def upsert_pins(
         self, rows: list[SupabaseUpsertRow], *, batch_size: int = 500
     ) -> None:
