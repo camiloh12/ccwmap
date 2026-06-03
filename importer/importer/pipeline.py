@@ -1,10 +1,10 @@
-"""End-to-end orchestration of all pipeline stages."""
+"""End-to-end orchestration of all pipeline stages, across multiple sources."""
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from importer.reports import PipelineResult
+from importer.reports import DedupReport, PipelineResult, SourceResult
 from importer.sources.base import Source
 from importer.stages.apply import apply_to_supabase
 from importer.stages.apply_state_law import ApplyStateLawStats, apply_state_law
@@ -18,7 +18,7 @@ from importer.supabase_client import SupabaseClient
 
 def run_pipeline(
     *,
-    source: Source,
+    sources: list[Source],
     state_laws: StateLawTable,
     client: SupabaseClient,
     states: list[str],
@@ -29,54 +29,74 @@ def run_pipeline(
     started_at = datetime.now(timezone.utc)
     state_set = set(states) if states else None
 
-    source.fetch(refetch=refetch)
+    # Phase A: per-source fetch -> normalize -> refine -> classify.
+    per_source: list[dict] = []
+    all_classified = []
+    for source in sources:
+        source.fetch(refetch=refetch)
+        raw = list(source.iter_candidates(state_filter=state_set))
+        norm_stats = NormalizeStats()
+        normalized = list(normalize(raw, stats=norm_stats))
+        refined = list(refine_coords(normalized))
+        asl_stats = ApplyStateLawStats()
+        classified = list(apply_state_law(refined, table=state_laws, stats=asl_stats))
+        all_classified.extend(classified)
+        skip = getattr(source, "last_skip_counts", {})
+        per_source.append({
+            "source": source.SOURCE_NAME,
+            "fetched": len(raw),
+            "asl": asl_stats,
+            "norm": norm_stats,
+            "geocode_miss": int(skip.get("geocode_miss", 0)) if source.SOURCE_NAME == "gsa" else None,
+        })
 
-    # 1. Source → Candidates
-    raw_candidates = list(source.iter_candidates(state_filter=state_set))
-    fetched = len(raw_candidates)
-    after_filter = fetched  # state_filter already applied inside the source
+    # Phase B: one cross-source dedup pass against all user pins.
+    existing_user_pins = client.select_user_pins()
+    dedup_out = dedup(all_classified, existing_user_pins=existing_user_pins)
+    survivors_by_source: dict[str, list] = {}
+    for cc in dedup_out.survivors:
+        survivors_by_source.setdefault(cc.candidate.source, []).append(cc)
 
-    # 2. Normalize names
-    norm_stats = NormalizeStats()
-    normalized = list(normalize(raw_candidates, stats=norm_stats))
+    # Phase C: per-source diff + apply on the survivors.
+    source_results: list[SourceResult] = []
+    for ps in per_source:
+        name = ps["source"]
+        survivors = survivors_by_source.get(name, [])
+        diff_stats = DiffStats()
+        eids = [cc.candidate.source_external_id for cc in survivors]
+        existing = client.select_pins_by_keys(name, eids)
+        diff_result = diff_candidates(survivors, existing=existing, stats=diff_stats)
+        if mode == "apply":
+            apply_to_supabase(diff_result, client=client, system_user_id=system_user_id, source=name)
+        asl: ApplyStateLawStats = ps["asl"]
+        geocode_matched = None
+        if name == "gsa":
+            geocode_matched = sum(
+                1 for cc in survivors
+                if cc.candidate.coord_quality.value == "address_centroid"
+            )
+        source_results.append(SourceResult(
+            source=name,
+            candidates_fetched=ps["fetched"],
+            candidates_after_state_filter=ps["fetched"],
+            classified=asl.classified,
+            dropped_no_cell=asl.dropped_no_cell,
+            missing_cells=sorted(asl.missing_cells),
+            name_truncations=ps["norm"].truncations,
+            diff=diff_result,
+            geocode_matched=geocode_matched,
+            geocode_missed=ps["geocode_miss"],
+        ))
 
-    # 3. Refine coordinates (Phase 2 pass-through)
-    refined = list(refine_coords(normalized))
-
-    # 4. Apply state law (drop unclassifiable)
-    asl_stats = ApplyStateLawStats()
-    classified = list(apply_state_law(refined, table=state_laws, stats=asl_stats))
-
-    # 5. Dedup (Phase 2 pass-through)
-    deduped = list(dedup(classified, existing_user_pins=[]))
-
-    # 6. Diff against Supabase
-    diff_stats = DiffStats()
-    external_ids = [cc.candidate.source_external_id for cc in deduped]
-    existing = client.select_pins_by_keys(source.SOURCE_NAME, external_ids)
-    diff_result = diff_candidates(deduped, existing=existing, stats=diff_stats)
-
-    # 7. Apply (no-op in dry-run)
-    if mode == "apply":
-        apply_to_supabase(
-            diff_result,
-            client=client,
-            system_user_id=system_user_id,
-            source=source.SOURCE_NAME,
-        )
-
-    completed_at = datetime.now(timezone.utc)
     return PipelineResult(
         mode=mode,
         started_at=started_at,
-        completed_at=completed_at,
-        source=source.SOURCE_NAME,
+        completed_at=datetime.now(timezone.utc),
         states=sorted(state_set) if state_set else [],
-        candidates_fetched=fetched,
-        candidates_after_state_filter=after_filter,
-        classified=asl_stats.classified,
-        dropped_no_cell=asl_stats.dropped_no_cell,
-        missing_cells=sorted(asl_stats.missing_cells),
-        name_truncations=norm_stats.truncations,
-        diff=diff_result,
+        sources=source_results,
+        dedup=DedupReport(
+            dropped_total=dedup_out.dropped_total,
+            within_source_dups=dedup_out.within_source_dups,
+            drops_by_pair=dedup_out.drops_by_pair,
+        ),
     )

@@ -1,0 +1,2 @@
+"1","100 Main St, Austin, TX, 78701","Match","Exact","100 MAIN ST, AUSTIN, TX, 78701","-97.7431,30.2672","12345","L"
+"2","999 Nowhere Rd, Austin, TX, 78701","No_Match"

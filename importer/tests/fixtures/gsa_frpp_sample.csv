@@ -1,0 +1,6 @@
+Real Property Unique Identifier,Real Property Type,Real Property Use,Street Address,City,State,Zip Code,Latitude,Longitude,Real Property Asset Name
+RPUID-TX-1,Building,Office,100 Main St,Austin,TX,78701,30.2672,-97.7431,Federal Office Building
+RPUID-TX-2,Building,Courthouse,200 Geocode Ave,Houston,TX,77002,,,US Courthouse Houston
+RPUID-CA-1,Building,Office,1 Bay St,San Francisco,CA,94105,37.79,-122.40,SF Federal Building
+RPUID-TX-3,Land,Vacant,Rural Rd,Marfa,TX,79843,,,Vacant Federal Land
+RPUID-TX-4,Building,Office,,Dallas,TX,75201,,,No Address Building

@@ -10,25 +10,39 @@ from importer.reports import PipelineResult
 def render_json(r: PipelineResult) -> str:
     payload = {
         "mode": r.mode,
-        "source": r.source,
         "states": r.states,
         "started_at": r.started_at.isoformat(),
         "completed_at": r.completed_at.isoformat() if r.completed_at else None,
-        "counts": {
-            "candidates_fetched": r.candidates_fetched,
-            "candidates_after_state_filter": r.candidates_after_state_filter,
-            "classified": r.classified,
-            "dropped_no_cell": r.dropped_no_cell,
-            "name_truncations": r.name_truncations,
-            "inserts": len(r.diff.inserts),
-            "updates": len(r.diff.updates),
-            "skips": len(r.diff.skips),
-            "orphans": len(r.diff.orphans),
+        "dedup": {
+            "dropped_total": r.dedup.dropped_total,
+            "within_source_dups": r.dedup.within_source_dups,
+            "drops_by_pair": [
+                {"winner": w, "loser": l, "count": n}
+                for (w, l), n in sorted(r.dedup.drops_by_pair.items())
+            ],
         },
-        "missing_cells": [list(p) for p in r.missing_cells],
-        "orphans": [
-            {"source_external_id": row.source_external_id, "name": row.name}
-            for row in r.diff.orphans
+        "sources": [
+            {
+                "source": s.source,
+                "counts": {
+                    "candidates_fetched": s.candidates_fetched,
+                    "classified": s.classified,
+                    "dropped_no_cell": s.dropped_no_cell,
+                    "name_truncations": s.name_truncations,
+                    "geocode_matched": s.geocode_matched,
+                    "geocode_missed": s.geocode_missed,
+                    "inserts": len(s.diff.inserts),
+                    "updates": len(s.diff.updates),
+                    "skips": len(s.diff.skips),
+                    "orphans": len(s.diff.orphans),
+                },
+                "missing_cells": [list(p) for p in s.missing_cells],
+                "orphans": [
+                    {"source_external_id": row.source_external_id, "name": row.name}
+                    for row in s.diff.orphans
+                ],
+            }
+            for s in r.sources
         ],
         "errors": r.errors,
     }
