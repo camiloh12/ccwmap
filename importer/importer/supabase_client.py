@@ -55,6 +55,12 @@ class SupabaseClient:
         "status,restriction_tag,user_modified,source_dataset_version"
     )
 
+    # Max external-ids per `in.(...)` request. A single request inlines every id
+    # into the URL query, so large sources (GSA emits ~10k) would otherwise blow
+    # past httpx's URL-component cap and the Supabase gateway's URL limit. 200
+    # ids keeps each URL well under 8 KB.
+    ID_CHUNK_SIZE = 200
+
     def __init__(
         self,
         *,
@@ -87,16 +93,22 @@ class SupabaseClient:
     ) -> list[ExistingPinRow]:
         if not external_ids:
             return []
-        # Postgrest `in.(...)` requires quoted strings for text columns.
-        in_list = ",".join(f'"{eid}"' for eid in external_ids)
-        params = {
-            "select": self.SELECT_COLUMNS,
-            "source": f"eq.{source}",
-            "source_external_id": f"in.({in_list})",
-        }
-        r = self._client.get(f"{self._base}/pins", headers=self._headers, params=params)
-        r.raise_for_status()
-        return [ExistingPinRow.model_validate(row) for row in r.json()]
+        out: list[ExistingPinRow] = []
+        for i in range(0, len(external_ids), self.ID_CHUNK_SIZE):
+            chunk = external_ids[i : i + self.ID_CHUNK_SIZE]
+            # Postgrest `in.(...)` requires quoted strings for text columns.
+            in_list = ",".join(f'"{eid}"' for eid in chunk)
+            params = {
+                "select": self.SELECT_COLUMNS,
+                "source": f"eq.{source}",
+                "source_external_id": f"in.({in_list})",
+            }
+            r = self._client.get(
+                f"{self._base}/pins", headers=self._headers, params=params
+            )
+            r.raise_for_status()
+            out.extend(ExistingPinRow.model_validate(row) for row in r.json())
+        return out
 
     def select_user_pins(self) -> list[ExistingPinRow]:
         """All user-created pins — dedup must never clobber these.
@@ -167,13 +179,15 @@ class SupabaseClient:
     def mark_orphans(self, source: str, external_ids: list[str]) -> None:
         if not external_ids:
             return
-        in_list = ",".join(f'"{eid}"' for eid in external_ids)
         headers = dict(self._headers)
         headers["Prefer"] = "return=minimal"
-        r = self._client.patch(
-            f"{self._base}/pins?source=eq.{source}"
-            f"&source_external_id=in.({in_list})",
-            headers=headers,
-            json={"source_orphaned_at": "now()"},
-        )
-        r.raise_for_status()
+        for i in range(0, len(external_ids), self.ID_CHUNK_SIZE):
+            chunk = external_ids[i : i + self.ID_CHUNK_SIZE]
+            in_list = ",".join(f'"{eid}"' for eid in chunk)
+            r = self._client.patch(
+                f"{self._base}/pins?source=eq.{source}"
+                f"&source_external_id=in.({in_list})",
+                headers=headers,
+                json={"source_orphaned_at": "now()"},
+            )
+            r.raise_for_status()
