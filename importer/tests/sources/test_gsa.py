@@ -22,7 +22,7 @@ class _FakeGeocoder:
 @pytest.fixture
 def source(tmp_path):
     return GsaSource(
-        cache_path=FIXTURE_DIR / "gsa_frpp_sample.csv",
+        cache_path=FIXTURE_DIR / "gsa_frpp_sample.xlsx",
         dataset_version="FRPP-FIXTURE",
         geocoder=_FakeGeocoder(),
     )
