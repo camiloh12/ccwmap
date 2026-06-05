@@ -54,7 +54,13 @@ def _matches(
 ) -> bool:
     if _meters_between(lat_a, lng_a, lat_b, lng_b) > MATCH_RADIUS_M:
         return False
-    return fuzz.token_set_ratio(name_a, name_b) >= NAME_RATIO_THRESHOLD
+    # Normalize case before fuzzy comparison: GSA emits UPPERCASE names while
+    # HIFLD sources are mixed-case, so without this cross-source matches (e.g.
+    # "UNITED STATES COURTHOUSE" vs "United States Courthouse") score ~20 and
+    # silently miss, defeating the GSA-wins-courthouse dedup.
+    return fuzz.token_set_ratio(
+        name_a, name_b, processor=str.lower
+    ) >= NAME_RATIO_THRESHOLD
 
 
 @dataclass
