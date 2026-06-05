@@ -5,3 +5,7 @@ __pycache__/
 .pytest_cache/
 dist/
 build/
+
+# Importer run artifacts (dry-run / apply reports)
+report-*.md
+report-*.json
