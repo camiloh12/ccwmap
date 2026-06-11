@@ -21,6 +21,7 @@ NOT a CSV. Column headers and a few semantic facts that drove this module:
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,6 +32,7 @@ import openpyxl
 
 from importer.candidate import Candidate, CoordQuality
 from importer.geo.census_geocode import AddressRecord
+from importer.geo.states import StateLocator
 from importer.restriction_tag import RestrictionTag
 from importer.sources.base import Source
 
@@ -43,15 +45,33 @@ _COL_ZIP = "Zip Code"
 _COL_LAT = "Latitude"
 _COL_LNG = "Longitude"
 _COL_NAME = "Installation Name"
+_COL_USE = "Real Property Use"
 
 # Only the columns this module reads — keeps the per-row dict small over ~308k rows.
 _NEEDED_COLS = (
     _COL_ID, _COL_TYPE, _COL_STREET, _COL_CITY, _COL_STATE, _COL_ZIP,
-    _COL_LAT, _COL_LNG, _COL_NAME,
+    _COL_LAT, _COL_LNG, _COL_NAME, _COL_USE,
 )
 
 # 18 USC 930 attaches to federal *facilities* (buildings), not Structures or Land.
 _INCLUDED_TYPES = {"building"}
+
+# FRPP's only name column, Installation Name, is occasionally just a city
+# ("TAMPA, FL") or a street address ("9450 Koger Boulevard"). Detect those and
+# compose a clearer label from Real Property Use + City instead.
+_CITY_LIKE = re.compile(r"^[A-Za-z][A-Za-z .'\-]+,\s*[A-Za-z]{2}$")
+
+
+def _display_name(installation_name: str, use: str, city: str, usps: str) -> str:
+    nm = installation_name.strip()
+    is_degenerate = bool(_CITY_LIKE.match(nm)) or nm[:1].isdigit()
+    if not is_degenerate:
+        return nm
+    use_label = use.strip()
+    if not use_label or use_label.lower() == "all other":
+        use_label = "Federal property"
+    city_label = city.strip().title()
+    return f"{use_label} — {city_label}, {usps}" if city_label else f"{use_label}, {usps}"
 
 # FRPP's State Name is the UPPERCASE full name; we filter on USPS codes.
 _USPS_TO_STATE_NAME: dict[str, str] = {
@@ -85,11 +105,13 @@ class GsaSource(Source):
         cache_path: Path,
         dataset_version: str,
         geocoder: _Geocoder,
+        state_locator: StateLocator,
         url: str = "",
     ) -> None:
         self._cache_path = cache_path
         self._version = dataset_version
         self._geocoder = geocoder
+        self._locator = state_locator
         self._url = url
         self.last_skip_counts: Counter[str] = Counter()
 
@@ -188,11 +210,20 @@ class GsaSource(Source):
                     continue
                 lat, lng = hit
                 quality = CoordQuality.ADDRESS_CENTROID
+            # Defense-in-depth: the FRPP State Name field and the Latitude/
+            # Longitude columns can disagree (corrupt coord, (0,0) null-island).
+            # Trust the geometry — if the coordinate doesn't fall inside the
+            # claimed state, drop the row rather than plot a pin in the wrong place.
+            if self._locator.state_for(lat, lng) != row["_usps"]:
+                self.last_skip_counts["coord_state_mismatch"] += 1
+                continue
             yield Candidate(
                 source=self.SOURCE_NAME,
                 source_external_id=row["_eid"],
                 source_dataset_version=self._version,
-                name=row["_name"],
+                name=_display_name(
+                    row["_name"], row.get(_COL_USE, ""), row.get(_COL_CITY, ""), row["_usps"]
+                ),
                 latitude=lat,
                 longitude=lng,
                 coord_quality=quality,
