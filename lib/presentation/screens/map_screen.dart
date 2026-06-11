@@ -67,6 +67,12 @@ class _MapScreenState extends State<MapScreen> {
   DateTime? _lastDialogCloseTime;
   bool _isUpdatingLayers = false;
   bool _pendingLayerUpdate = false;
+  // True once the pins / clusters source + layers exist on the map. While true,
+  // updates swap source data in place (setGeoJsonSource) instead of removing +
+  // re-adding, which made markers blink (render -> gone for a frame -> render)
+  // on every pan/zoom.
+  bool _pinLayersCreated = false;
+  bool _clusterLayersCreated = false;
   bool _isUpdatingClusters = false;
   bool _pendingClusterUpdate = false;
 
@@ -317,6 +323,10 @@ class _MapScreenState extends State<MapScreen> {
 
   void _onStyleLoadedCallback() {
     _styleLoaded = true;
+    // A (re)loaded style drops every source/layer natively, so they must be
+    // recreated (not data-swapped) on the next update.
+    _pinLayersCreated = false;
+    _clusterLayersCreated = false;
 
     // Now that the style is loaded, camera animations will stick on iOS.
     _tryEnableLocationComponent(from: 'style-loaded');
@@ -345,6 +355,15 @@ class _MapScreenState extends State<MapScreen> {
     try {
       // Build GeoJSON from pins
       final geojson = _buildPinsGeoJson();
+
+      // Fast path: source + layers already exist — swap only the data so the
+      // pins don't blink. Removing and re-adding the source on every pan/zoom is
+      // what caused the render -> gone-for-a-frame -> render flash.
+      if (_pinLayersCreated) {
+        await _mapController!.setGeoJsonSource('pins-source', geojson);
+        await _applyCachedPinsVisibility();
+        return;
+      }
 
       // Remove existing source/layers if present (in correct order)
       // Must remove layers before source, and in reverse order of creation.
@@ -489,7 +508,10 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       await _applyCachedPinsVisibility();
+      _pinLayersCreated = true;
     } catch (e) {
+      // Rebuild from scratch next time rather than data-swap a half-built state.
+      _pinLayersCreated = false;
       debugPrint('MapScreen: Error updating pins layer: $e');
     } finally {
       _isUpdatingLayers = false;
@@ -539,6 +561,14 @@ class _MapScreenState extends State<MapScreen> {
           .toList();
 
       final geojson = {'type': 'FeatureCollection', 'features': features};
+
+      // Fast path: layers already exist — swap data in place (no blink on
+      // pan/zoom). An empty feature list just clears the rendered clusters.
+      if (_clusterLayersCreated) {
+        await _mapController!.setGeoJsonSource('clusters-source', geojson);
+        await _applyCachedPinsVisibility();
+        return;
+      }
 
       // Tear down in reverse order of creation (layers before source).
       try {
@@ -624,7 +654,10 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       await _applyCachedPinsVisibility();
+      _clusterLayersCreated = true;
     } catch (e) {
+      // Rebuild from scratch next time rather than data-swap a half-built state.
+      _clusterLayersCreated = false;
       debugPrint('MapScreen: Error updating clusters layer: $e');
     } finally {
       _isUpdatingClusters = false;
