@@ -31,3 +31,22 @@ sources:
     cache_dir: "data/sources/hifld_military"
     dataset_version: "MIRTA-2026-06"
     url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/mirta/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
+  nces:
+    # NCES public K-12. Two files joined on NCESSCH: EDGE geocode (coords) +
+    # CCD directory (SY_STATUS operational filter). URLs pinned in Task 6.
+    cache_dir: "data/sources/nces"
+    dataset_version: "NCES-PREFLIGHT"
+    url: ""            # EDGE public-school geocode CSV
+    directory_url: ""  # CCD directory CSV (status)
+  ipeds:
+    # IPEDS HD directory CSV (UNITID, INSTNM, STABBR, LATITUDE, LONGITUD, CYACTIVE).
+    cache_dir: "data/sources/ipeds"
+    dataset_version: "IPEDS-PREFLIGHT"
+    url: ""
+  faa:
+    # FAA commercial-service airports. Two files joined on LOCID/ARPT_ID:
+    # commercial-service list (service level) + NASR APT (coords). URLs pinned in Task 6.
+    cache_dir: "data/sources/faa"
+    dataset_version: "FAA-PREFLIGHT"
+    url: ""       # commercial-service list CSV
+    nasr_url: ""  # NASR APT CSV

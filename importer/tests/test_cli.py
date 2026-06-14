@@ -55,10 +55,10 @@ def test_main_returns_nonzero_on_missing_service_role_key(monkeypatch) -> None:
     assert rc != 0
 
 
-def test_supported_sources_includes_gsa_and_military():
+def test_supported_sources_includes_all_phase4_and_phase5():
     from importer.cli import SUPPORTED_SOURCES
-    assert "gsa" in SUPPORTED_SOURCES
-    assert "hifld_military" in SUPPORTED_SOURCES
+    for name in ("hifld_courts", "gsa", "hifld_military", "nces", "ipeds", "faa"):
+        assert name in SUPPORTED_SOURCES
 
 
 def test_build_source_factory_constructs_each(tmp_path):
@@ -72,9 +72,12 @@ def test_build_source_factory_constructs_each(tmp_path):
             "hifld_courts": {"cache_dir": "data/sources/hifld_courts", "dataset_version": "v", "url": "u"},
             "gsa": {"cache_dir": "data/sources/gsa", "dataset_version": "v", "url": "u"},
             "hifld_military": {"cache_dir": "data/sources/hifld_military", "dataset_version": "v", "url": "u"},
+            "nces": {"cache_dir": "data/sources/nces", "dataset_version": "v", "url": "u", "directory_url": "d"},
+            "ipeds": {"cache_dir": "data/sources/ipeds", "dataset_version": "v", "url": "u"},
+            "faa": {"cache_dir": "data/sources/faa", "dataset_version": "v", "url": "u", "nasr_url": "n"},
         }
     }
-    for name in ("hifld_courts", "gsa", "hifld_military"):
+    for name in ("hifld_courts", "gsa", "hifld_military", "nces", "ipeds", "faa"):
         src = _build_source(name, config=config, locator=locator, repo_root=tmp_path)
         assert src.SOURCE_NAME == name
 
