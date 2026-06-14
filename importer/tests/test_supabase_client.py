@@ -45,6 +45,58 @@ def test_select_pins_by_keys_returns_parsed_rows(
     assert rows[0].source_external_id == "A"
 
 
+def test_select_pins_by_keys_chunks_large_id_lists(
+    client: SupabaseClient, httpx_mock: HTTPXMock
+) -> None:
+    # One reusable response per chunk; each returns a single row so we can also
+    # prove the chunks are concatenated rather than overwritten.
+    httpx_mock.add_response(
+        method="GET",
+        json=[
+            {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "source": "gsa",
+                "source_external_id": "RPUID-0",
+                "name": "Federal Building",
+                "latitude": 30.0,
+                "longitude": -97.0,
+                "status": 2,
+                "restriction_tag": "FEDERAL_PROPERTY",
+                "user_modified": False,
+                "source_dataset_version": "FRPP-FY24",
+            }
+        ],
+    )
+    ids = [f"RPUID-{i}" for i in range(450)]
+    rows = client.select_pins_by_keys("gsa", ids)
+
+    requests = httpx_mock.get_requests()
+    # 450 ids / 200 per chunk -> 3 requests; rows concatenated across them.
+    assert len(requests) == 3
+    assert len(rows) == 3
+    # Every id is covered exactly once, and no single URL approaches the limit.
+    all_urls = "".join(str(r.url) for r in requests)
+    for r in requests:
+        assert len(str(r.url)) < 8000
+    # ids are not percent-encoded (the surrounding quotes/commas are), so each
+    # appears verbatim in exactly one chunk's URL.
+    for eid in ids:
+        assert eid in all_urls
+
+
+def test_mark_orphans_chunks_large_id_lists(
+    client: SupabaseClient, httpx_mock: HTTPXMock
+) -> None:
+    httpx_mock.add_response(method="PATCH", json=[], status_code=204)
+    ids = [f"RPUID-{i}" for i in range(450)]
+    client.mark_orphans("gsa", ids)
+
+    requests = httpx_mock.get_requests()
+    assert len(requests) == 3
+    for r in requests:
+        assert len(str(r.url)) < 8000
+
+
 def test_upsert_pins_batches_at_500(
     client: SupabaseClient, httpx_mock: HTTPXMock
 ) -> None:

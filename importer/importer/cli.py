@@ -138,9 +138,10 @@ def _build_source(name, *, config, locator, repo_root):
         )
     if name == "gsa":
         return GsaSource(
-            cache_path=cache_dir / "frpp.csv",
+            cache_path=cache_dir / "frpp.xlsx",
             dataset_version=version, url=url,
             geocoder=CensusGeocoder(cache_path=cache_dir / "geocoded.json"),
+            state_locator=locator,
         )
     raise NotImplementedError(name)
 

@@ -33,6 +33,14 @@ def test_matches_false_when_names_differ():
                     "City Animal Shelter", 30.2673, -97.7432) is False
 
 
+def test_matches_is_case_insensitive():
+    # Real cross-source collision: GSA emits UPPERCASE names, HIFLD mixed-case.
+    # token_set_ratio is case-sensitive without normalization, so these must be
+    # lowercased before comparison or cross-source dedup silently misses.
+    assert _matches("UNITED STATES COURTHOUSE", 30.2672, -97.7431,
+                    "United States Courthouse", 30.2673, -97.7432) is True
+
+
 def _cell(category: RestrictionTag) -> StateLawCell:
     return StateLawCell(
         state="TX", category=category, default_status="NO_GUN",

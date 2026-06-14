@@ -1,17 +1,21 @@
-"""HIFLD Military Installations -> Candidate stream.
+"""HIFLD Military Installations (MIRTA) -> Candidate stream.
 
-Source: Military Installations boundary dataset on the HIFLD/GeoPlatform ArcGIS
-Hub. Format: GeoJSON, Polygon/MultiPolygon features (installation boundaries).
-License: Public domain (DHS HIFLD Open).
+Source: Military Installations, Ranges, and Training Areas (MIRTA) DoD Sites —
+"Boundaries" layer. The legacy HIFLD Open hub was deactivated 2025-08-26; the
+authoritative survivor is the USACE-owned MIRTA feature service (item owner
+`usace_crrel_als`), layer 1 (polygon boundaries). Format: GeoJSON, Polygon/
+MultiPolygon features. License: public domain (US Gov / DoD DISDI).
 
 Unlike hifld_courts (Point features), installations are areas: we emit the
 shapely centroid with coord_quality=BUILDING_POLYGON. Category is
 FEDERAL_PROPERTY (18 USC 930 via the US FEDERAL_PROPERTY state-law cell, whose
 source_filter includes hifld_military).
 
-Pre-flight: confirm the live Hub item/layer + GUID field and refresh the fixture
-in the same PR. The signed blob URL expires (~1h) and must never be hard-pinned —
-only the stable hub URL belongs in config.yaml.
+Field schema (verified 2026-06 against the live MIRTA FeatureServer): UPPERCASE
+properties `SITENAME` (name), `SDSID` (stable GUID), `SITEREPORTINGCOMPONENT`
+(service branch), `OBJECTID` (unstable). The pinned config URL is the layer-1
+`/query?...&f=geojson` endpoint (maxRecordCount 1000 > 825 features, so a single
+GET returns the whole set — no pagination needed).
 """
 
 from __future__ import annotations
@@ -95,11 +99,18 @@ class HifldMilitarySource(Source):
                 self.last_skip_counts["missing_external_id"] += 1
                 continue
 
-            name = (props.get("siteName") or props.get("NAME") or props.get("name") or "").strip()
+            name = (
+                props.get("SITENAME")
+                or props.get("siteName")
+                or props.get("NAME")
+                or props.get("name")
+                or ""
+            ).strip()
             if not name:
                 self.last_skip_counts["missing_name"] += 1
                 continue
 
+            component = props.get("SITEREPORTINGCOMPONENT") or props.get("component")
             yield Candidate(
                 source=self.SOURCE_NAME,
                 source_external_id=external_id,
@@ -110,12 +121,14 @@ class HifldMilitarySource(Source):
                 coord_quality=CoordQuality.BUILDING_POLYGON,
                 category=RestrictionTag.FEDERAL_PROPERTY,
                 state=state,
-                extra={"component": props.get("component")},
+                extra={"component": component},
             )
 
     @staticmethod
     def _external_id(props: dict) -> str | None:
-        for key in ("GLOBALID", "OBJECTID", "FID"):
+        # Prefer the stable GUID (SDSID) over the volatile OBJECTID/FID, which
+        # the service re-assigns on every reload.
+        for key in ("SDSID", "MIRTALOCATIONSIDPK", "GLOBALID", "OBJECTID", "FID"):
             v = props.get(key)
             if v not in (None, ""):
                 return str(v)

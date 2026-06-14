@@ -17,10 +17,17 @@ sources:
     cache_dir: "data/sources/hifld_courts"
     dataset_version: "HIFLD-2026-05"
   gsa:
+    # FY2024 FRPP public dataset (data.gov). NOTE: this is a ~145 MB .xlsx, not a
+    # CSV — GsaSource streams it with openpyxl. Bump the URL + dataset_version
+    # together when GSA publishes a new fiscal year.
     cache_dir: "data/sources/gsa"
-    dataset_version: "FRPP-2026"
-    url: "PIN-AT-PREFLIGHT-gsa-frpp-public-csv-url"
+    dataset_version: "FRPP-FY24"
+    url: "https://inventory.data.gov/dataset/5752ee7f-9e8b-467a-aa5a-274b4bd1bc29/resource/1a94a302-b3c9-433d-ac97-43db73fa6d04/download/frpp_public_dataset_fy24_07022025.xlsx"
   hifld_military:
+    # MIRTA DoD Sites — Boundaries (layer 1), USACE-owned feature service
+    # (owner usace_crrel_als); the legacy HIFLD Open hub was deactivated
+    # 2025-08-26. The /query endpoint returns GeoJSON; maxRecordCount (1000)
+    # exceeds the feature count (825) so a single GET pulls the whole layer.
     cache_dir: "data/sources/hifld_military"
-    dataset_version: "HIFLD-MIL-2026-05"
-    url: "PIN-AT-PREFLIGHT-hifld-military-arcgis-hub-geojson-url"
+    dataset_version: "MIRTA-2026-06"
+    url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/mirta/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
