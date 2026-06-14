@@ -119,3 +119,45 @@ def test_pipeline_dedups_across_sources() -> None:
     assert result.dedup.drops_by_pair.get(("gsa", "hifld_military")) == 1
     total_inserts = sum(len(s.diff.inserts) for s in result.sources)
     assert total_inserts == 1
+
+
+def test_pipeline_surfaces_ipeds_missing_cells() -> None:
+    from datetime import date as _date
+    from importer.state_laws import StateLawCell
+
+    def _college(eid, state, lat, lng):
+        return Candidate(
+            source="ipeds", source_external_id=eid, source_dataset_version="v",
+            name=f"College {eid}", latitude=lat, longitude=lng,
+            coord_quality=CoordQuality.PRECISE,
+            category=RestrictionTag.COLLEGE_UNIVERSITY, state=state,
+        )
+
+    ipeds = _FakeSource("ipeds", [
+        _college("u-fl", "FL", 29.6436, -82.3549),
+        _college("u-tx", "TX", 30.2849, -97.7341),
+        _college("u-pa", "PA", 40.7982, -77.8599),
+    ])
+    table = StateLawTable(rows=[
+        StateLawCell(
+            state="FL", category=RestrictionTag.COLLEGE_UNIVERSITY,
+            default_status="NO_GUN", confidence="high", conditions=[],
+            citation="Fla. Stat. 790.06(12)(a)(13)",
+            last_verified_date=_date(2026, 5, 31), source_filter=["ipeds"],
+        ),
+    ])
+    client = _mock_client()
+    result = run_pipeline(
+        sources=[ipeds],
+        state_laws=table,
+        client=client,
+        states=["TX", "FL", "PA"],
+        mode="dry-run",
+        system_user_id="81775f8b-1a6a-47d6-b793-e9ab7e38634e",
+    )
+    src = next(s for s in result.sources if s.source == "ipeds")
+    assert src.classified == 1            # only FL
+    assert src.dropped_no_cell == 2       # TX + PA
+    assert ("TX", "COLLEGE_UNIVERSITY") in src.missing_cells
+    assert ("PA", "COLLEGE_UNIVERSITY") in src.missing_cells
+    assert len(src.diff.inserts) == 1     # only the FL college is written
