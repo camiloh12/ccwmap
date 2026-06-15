@@ -27,22 +27,36 @@ def download(url: str, *, timeout: float = 300.0) -> bytes:
         return r.content
 
 
+def _find_member(zf: zipfile.ZipFile, match: Callable[[str], bool]) -> str:
+    """Return the first member whose *basename* satisfies `match`.
+
+    `match` receives the basename only (any directory prefix is stripped), so a
+    caller can use a plain equality/suffix test. Raises a descriptive error
+    rather than a bare StopIteration when nothing matches, so an operator sees
+    which archive surprised us when a future upstream release renames a file.
+    """
+    member = next((n for n in zf.namelist() if match(n.rsplit("/", 1)[-1])), None)
+    if member is None:
+        raise RuntimeError(
+            f"no archive member matched; members were: {zf.namelist()!r}"
+        )
+    return member
+
+
 def extract_member(
     zip_bytes: bytes, dest: Path, *, match: Callable[[str], bool]
 ) -> None:
     """Write the first zip member whose basename satisfies `match` to dest verbatim."""
-    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
-    member = next(n for n in zf.namelist() if match(n.rsplit("/", 1)[-1]))
-    dest.write_bytes(zf.read(member))
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        dest.write_bytes(zf.read(_find_member(zf, match)))
 
 
 def extract_member_as_utf8(
     zip_bytes: bytes, dest: Path, *, match: Callable[[str], bool]
 ) -> None:
     """Extract the matching member and rewrite it as UTF-8 (cp1252 fallback)."""
-    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
-    member = next(n for n in zf.namelist() if match(n.rsplit("/", 1)[-1]))
-    raw = zf.read(member)
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        raw = zf.read(_find_member(zf, match))
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
@@ -65,6 +79,6 @@ def xlsx_bytes_to_csv(xlsx_bytes: bytes, dest: Path) -> None:
 
 def xlsx_in_zip_to_csv(zip_bytes: bytes, dest: Path) -> None:
     """Find the single .xlsx inside a zip and flatten it to a CSV at dest."""
-    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
-    member = next(n for n in zf.namelist() if n.lower().endswith(".xlsx"))
-    xlsx_bytes_to_csv(zf.read(member), dest)
+    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        xlsx_bytes = zf.read(_find_member(zf, lambda n: n.lower().endswith(".xlsx")))
+    xlsx_bytes_to_csv(xlsx_bytes, dest)

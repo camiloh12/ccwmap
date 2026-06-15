@@ -36,7 +36,7 @@ def test_emits_active_colleges_in_all_pilot_states(source):
 
 def test_drops_closed_and_out_of_region(source):
     list(source.iter_candidates(state_filter={"TX", "FL", "PA"}))
-    assert source.last_skip_counts["not_operating"] >= 1  # closed FL
+    assert source.last_skip_counts["not_operating"] >= 1  # inactive FL (CYACTIVE != 1)
     assert source.last_skip_counts["filtered_out"] >= 1   # CA
 
 
