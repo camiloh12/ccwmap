@@ -28,7 +28,7 @@ def test_source_name_is_stable(source):
 
 def test_emits_active_colleges_in_all_pilot_states(source):
     cands = {c.source_external_id: c for c in source.iter_candidates(state_filter={"TX", "FL", "PA"})}
-    assert set(cands) == {"130001", "130002", "130003"}
+    assert set(cands) == {"132408", "228778", "214777"}
     assert {c.state for c in cands.values()} == {"FL", "TX", "PA"}
     assert all(c.category is RestrictionTag.COLLEGE_UNIVERSITY for c in cands.values())
     assert all(c.coord_quality is CoordQuality.PRECISE for c in cands.values())

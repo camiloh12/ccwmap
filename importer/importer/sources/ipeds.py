@@ -1,8 +1,11 @@
 """IPEDS colleges/universities -> Candidate stream.
 
-Source: IPEDS HD ("Directory information") CSV — one per survey year with UNITID
+Source: IPEDS HD ("Directory information") — one survey year with UNITID
 (stable id), INSTNM, STABBR (state), LATITUDE/LONGITUD, CYACTIVE (1 = active).
-https://nces.ed.gov/ipeds/ — License: public domain (US Gov / NCES).
+https://nces.ed.gov/ipeds/datacenter/ — License: public domain (US Gov / NCES).
+Ships from the IPEDS data center as HD<year>.zip wrapping a single HD<year>.csv;
+`fetch()` extracts that member to `cache_path` and normalizes to UTF-8 (HD2024 is
+UTF-8; older survey years are cp1252). Verified against survey year 2024.
 Category: COLLEGE_UNIVERSITY. Native coordinates, so every Candidate is PRECISE.
 
 Only FL has a COLLEGE_UNIVERSITY state-law cell; TX and PA college candidates are
@@ -19,11 +22,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 
-import httpx
-
 from importer.candidate import Candidate, CoordQuality
 from importer.geo.states import StateLocator
 from importer.restriction_tag import RestrictionTag
+from importer.sources import _archive
 from importer.sources.base import Source
 
 
@@ -57,10 +59,14 @@ class IpedsSource(Source):
         if not self._url:
             raise RuntimeError("ipeds url not configured; set sources.ipeds.url in config.yaml")
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-            r = client.get(self._url)
-            r.raise_for_status()
-            self._cache_path.write_bytes(r.content)
+        # IPEDS HD ships as HD<year>.zip wrapping a single HD<year>.csv. Extract
+        # it and normalize to UTF-8 so iter_candidates() reads it uniformly
+        # (HD2024 is UTF-8; older survey years are cp1252).
+        _archive.extract_member_as_utf8(
+            _archive.download(self._url),
+            self._cache_path,
+            match=lambda n: n.lower().endswith(".csv"),
+        )
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         self.last_skip_counts = Counter()

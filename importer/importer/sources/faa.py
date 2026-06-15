@@ -2,14 +2,20 @@
 
 The AIRPORT_SECURE prohibition attaches to the TSA sterile/secured area past a
 screening checkpoint, which exists only at airports with passenger screening. This
-source emits the COMMERCIAL-SERVICE subset only, not all NPIAS.
+source emits the COMMERCIAL-SERVICE subset only, not all NPIAS / public-use
+airports.
 
-Two companion CSVs (both public domain, US Gov), joined on the airport location id:
-  - Commercial-service list: LOCID, STATE, AIRPORT_NAME, SERVICE_LEVEL — the
-    authoritative set of commercial-service airports.
-    https://www.faa.gov/airports/planning_capacity/npias/
-  - FAA NASR APT data: ARPT_ID, LAT_DECIMAL, LONG_DECIMAL — coordinate source
-    (airport reference point).
+Two companion files (both public domain, US Gov), joined on the airport location id
+(verified against the CY2023 / 28-day NASR releases):
+  - Commercial-service list: the FAA "CY Enplanements at All Commercial Service
+    Airports" workbook — a bare .xlsx with columns Rank, RO, ST, Locid, City,
+    "Airport Name", "S/L" (service level: P=primary, CS=nonprimary commercial
+    service), Hub, enplanements. Every row is a commercial-service airport by
+    definition (>=2,500 annual enplanements). `fetch()` flattens it to CSV.
+    https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger
+  - FAA NASR APT data: APT_BASE.csv (inside the 28-day "<date>_APT_CSV.zip"),
+    columns ARPT_ID, LAT_DECIMAL, LONG_DECIMAL (signed decimal degrees) — the
+    coordinate source (airport reference point). `fetch()` extracts that member.
     https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/
 
 Category: AIRPORT_SECURE (federal-uniform US cell). The pin name uses the
@@ -24,30 +30,25 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 
-import httpx
-
 from importer.candidate import Candidate, CoordQuality
 from importer.geo.states import StateLocator
 from importer.restriction_tag import RestrictionTag
+from importer.sources import _archive
 from importer.sources.base import Source
 
 
 class FaaSource(Source):
     SOURCE_NAME: ClassVar[str] = "faa"
 
-    # Commercial-service list columns.
-    _CS_COL_ID = "LOCID"
-    _CS_COL_STATE = "STATE"
-    _CS_COL_NAME = "AIRPORT_NAME"
-    _CS_COL_SERVICE = "SERVICE_LEVEL"
-    # Service levels with scheduled passenger service (hence TSA screening).
-    # Compared case-insensitively.
-    _COMMERCIAL_SERVICE: ClassVar[frozenset[str]] = frozenset({
-        "primary",
-        "nonprimary commercial service",
-        "commercial service",
-    })
-    # NASR APT columns.
+    # Commercial-service list columns (FAA CY enplanements workbook).
+    _CS_COL_ID = "Locid"
+    _CS_COL_STATE = "ST"
+    _CS_COL_NAME = "Airport Name"
+    _CS_COL_SERVICE = "S/L"
+    # S/L codes with scheduled passenger service (hence TSA screening): P=primary,
+    # CS=nonprimary commercial service. Compared case-insensitively.
+    _COMMERCIAL_SERVICE: ClassVar[frozenset[str]] = frozenset({"p", "cs"})
+    # NASR APT_BASE columns.
     _APT_COL_ID = "ARPT_ID"
     _APT_COL_LAT = "LAT_DECIMAL"
     _APT_COL_LON = "LONG_DECIMAL"
@@ -71,22 +72,26 @@ class FaaSource(Source):
         self.last_skip_counts: Counter[str] = Counter()
 
     def fetch(self, *, refetch: bool = False) -> None:
-        for path, src_url in (
-            (self._cache_path, self._url),
-            (self._nasr_path, self._nasr_url),
-        ):
-            if path.exists() and not refetch:
-                continue
-            if not src_url:
+        # Commercial-service list: a bare .xlsx — flatten to CSV at cache_path.
+        if refetch or not self._cache_path.exists():
+            if not self._url:
                 raise RuntimeError(
-                    "faa url(s) not configured; set sources.faa.url and "
-                    "sources.faa.nasr_url in config.yaml"
+                    "faa url not configured; set sources.faa.url in config.yaml"
                 )
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-                r = client.get(src_url)
-                r.raise_for_status()
-                path.write_bytes(r.content)
+            self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _archive.xlsx_bytes_to_csv(_archive.download(self._url), self._cache_path)
+        # NASR coordinates: APT_BASE.csv inside the 28-day APT_CSV.zip bundle.
+        if refetch or not self._nasr_path.exists():
+            if not self._nasr_url:
+                raise RuntimeError(
+                    "faa nasr_url not configured; set sources.faa.nasr_url in config.yaml"
+                )
+            self._nasr_path.parent.mkdir(parents=True, exist_ok=True)
+            _archive.extract_member(
+                _archive.download(self._nasr_url),
+                self._nasr_path,
+                match=lambda n: n.upper() == "APT_BASE.CSV",
+            )
 
     def _load_nasr_coords(self) -> dict[str, tuple[float, float]]:
         out: dict[str, tuple[float, float]] = {}

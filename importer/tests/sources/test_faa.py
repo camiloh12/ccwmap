@@ -29,8 +29,8 @@ def test_emits_only_commercial_service_in_pilot_states(source):
     assert set(cands) == {"DFW", "MIA", "PHL"}
     assert all(c.category is RestrictionTag.AIRPORT_SECURE for c in cands.values())
     assert all(c.coord_quality is CoordQuality.PRECISE for c in cands.values())
-    assert cands["DFW"].latitude == pytest.approx(32.8998)
-    assert cands["DFW"].name == "Dallas Fort Worth International"  # mixed-case from CS list
+    assert cands["DFW"].latitude == pytest.approx(32.89723305)
+    assert cands["DFW"].name == "Dallas-Fort Worth International"  # mixed-case from CS list
 
 
 def test_excludes_general_aviation_and_out_of_state(source):

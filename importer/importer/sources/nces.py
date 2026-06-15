@@ -1,15 +1,22 @@
 """NCES public K-12 schools -> Candidate stream.
 
-Two companion CSVs joined on NCESSCH:
+Two companion files joined on NCESSCH (verified against the SY 2024-25 release):
   - EDGE public-school geocode file (NCESSCH, NAME, STATE, LAT, LON, address) —
     the coordinate-bearing driver. https://nces.ed.gov/programs/edge/
+    Ships as a .zip containing an .xlsx; `fetch()` extracts the sheet and writes
+    it to `cache_path` as a plain CSV that `iter_candidates` reads.
   - CCD directory file (NCESSCH, SY_STATUS) — operational-status lookup so closed
     campuses are not pinned. https://nces.ed.gov/ccd/
+    Ships inside the CCD nonfiscal "preliminary directory" bundle .zip as
+    ccd_sch_029_<years>_w_*.csv (utf-8-sig); `fetch()` extracts that member to
+    `directory_path`.
 License: public domain (US Gov / NCES). Category: SCHOOL_K12 (cells exist for
 TX/FL/PA). Native coordinates, so every Candidate is PRECISE.
 
-Column names below were verified at pre-flight against the live release (Task 6);
-if NCES renames a column, update the constant AND the frozen fixture together.
+Live SY 2024-25 confirms the constants below: EDGE header carries NCESSCH/NAME/
+STATE/LAT/LON; CCD uses SY_STATUS with numeric codes (1=Open, 2=Closed, 3=New,
+8=Reopened, plus 4-7 inactive). If NCES renames a column, update the constant AND
+the frozen fixture together.
 """
 
 from __future__ import annotations
@@ -20,11 +27,10 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import ClassVar
 
-import httpx
-
 from importer.candidate import Candidate, CoordQuality
 from importer.geo.states import StateLocator
 from importer.restriction_tag import RestrictionTag
+from importer.sources import _archive
 from importer.sources.base import Source
 
 
@@ -62,22 +68,30 @@ class NcesSource(Source):
         self.last_skip_counts: Counter[str] = Counter()
 
     def fetch(self, *, refetch: bool = False) -> None:
-        for path, src_url in (
-            (self._cache_path, self._url),
-            (self._directory_path, self._directory_url),
-        ):
-            if path.exists() and not refetch:
-                continue
-            if not src_url:
+        # EDGE geocode: a .zip wrapping an .xlsx — flatten the sheet to a plain
+        # CSV at cache_path so iter_candidates() can read it unchanged.
+        if refetch or not self._cache_path.exists():
+            if not self._url:
                 raise RuntimeError(
-                    "nces url(s) not configured; set sources.nces.url and "
+                    "nces url not configured; set sources.nces.url in config.yaml"
+                )
+            self._cache_path.parent.mkdir(parents=True, exist_ok=True)
+            _archive.xlsx_in_zip_to_csv(_archive.download(self._url), self._cache_path)
+        # CCD directory: the school directory CSV (ccd_sch_029_*.csv) lives inside
+        # the nonfiscal "preliminary directory" bundle .zip — extract that member.
+        if refetch or not self._directory_path.exists():
+            if not self._directory_url:
+                raise RuntimeError(
+                    "nces directory_url not configured; set "
                     "sources.nces.directory_url in config.yaml"
                 )
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-                r = client.get(src_url)
-                r.raise_for_status()
-                path.write_bytes(r.content)
+            self._directory_path.parent.mkdir(parents=True, exist_ok=True)
+            _archive.extract_member(
+                _archive.download(self._directory_url),
+                self._directory_path,
+                match=lambda n: n.lower().startswith("ccd_sch_029")
+                and n.lower().endswith(".csv"),
+            )
 
     def _load_status_map(self) -> dict[str, str]:
         out: dict[str, str] = {}

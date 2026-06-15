@@ -1,8 +1,8 @@
-LOCID,STATE,AIRPORT_NAME,SERVICE_LEVEL
-DFW,TX,Dallas Fort Worth International,Primary
-MIA,FL,Miami International,Primary
-PHL,PA,Philadelphia International,Primary
-T74,TX,Taylor Municipal,General Aviation
-LAX,CA,Los Angeles International,Primary
-AUS,TX,Austin Bergstrom International,Primary
-ABC,TX,Phantom Field,Primary
+Rank,RO,ST,Locid,City,Airport Name,S/L,Hub,CY 23 Enplanements
+3,SW,TX,DFW,Fort Worth,Dallas-Fort Worth International,P,L,39246212
+40,SO,FL,MIA,Miami,Miami International,P,L,11574180
+21,EA,PA,PHL,Philadelphia,Philadelphia International,P,L,15205908
+2,WP,CA,LAX,Los Angeles,Los Angeles International,P,L,40956673
+0,SW,TX,T74,Taylor,Taylor Municipal,GA,,0
+31,SW,TX,AUS,Austin,Austin-Bergstrom International,P,M,11603227
+0,SW,TX,ABC,Nowhere,Phantom Field,P,,0
