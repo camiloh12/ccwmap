@@ -31,6 +31,13 @@ from importer.state_laws import StateLawTable
 class OsmSource(Source):
     SOURCE_NAME: ClassVar[str] = "osm"
 
+    # Overpass's front-end rejects default library User-Agents (e.g.
+    # "python-httpx/x.y.z") with HTTP 406 Not Acceptable. Send a descriptive UA
+    # naming the app and a contact, per Overpass API etiquette.
+    _USER_AGENT: ClassVar[str] = (
+        "ccwmap-importer/1.0 (+https://camiloh12.github.io/ccwmap; camilo@kyberneticlabs.com)"
+    )
+
     def __init__(
         self,
         *,
@@ -113,7 +120,11 @@ class OsmSource(Source):
                 "osm overpass_url not configured; set sources.osm.overpass_url in config.yaml"
             )
         self._cache_dir.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(timeout=self._timeout, follow_redirects=True) as client:
+        with httpx.Client(
+            timeout=self._timeout,
+            follow_redirects=True,
+            headers={"User-Agent": self._USER_AGENT},
+        ) as client:
             for state, tags in plan.items():
                 dest = self._cache_dir / f"{state}.json"
                 if dest.exists() and not refetch:
