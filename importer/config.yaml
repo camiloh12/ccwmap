@@ -31,3 +31,31 @@ sources:
     cache_dir: "data/sources/hifld_military"
     dataset_version: "MIRTA-2026-06"
     url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/mirta/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
+  nces:
+    # NCES public K-12, SY 2024-25. Two files joined on NCESSCH: EDGE geocode
+    # (.zip of .xlsx -> coords) + CCD nonfiscal preliminary directory bundle
+    # (.zip -> ccd_sch_029_*.csv, SY_STATUS operational filter). fetch() downloads
+    # both zips and extracts/flattens to edge_geocode.csv + ccd_directory.csv.
+    cache_dir: "data/sources/nces"
+    dataset_version: "NCES-2024-25"
+    url: "https://nces.ed.gov/programs/edge/data/EDGE_GEOCODE_PUBLICSCH_2425.zip"
+    directory_url: "https://nces.ed.gov/sites/default/files/data-asset/ccd-common-core-data/2025/08/2024-25-common-core-data-ccd-preliminary-directory-files/2025046%20Preliminary%20Data%20Release%20CCD%20Nonfiscal_0.zip"
+  ipeds:
+    # IPEDS HD ("Directory information"), survey year 2024 — HD2024.zip wrapping
+    # HD2024.csv (UNITID, INSTNM, STABBR, LATITUDE, LONGITUD, CYACTIVE). fetch()
+    # extracts the CSV and normalizes to UTF-8.
+    cache_dir: "data/sources/ipeds"
+    dataset_version: "IPEDS-HD2024"
+    url: "https://nces.ed.gov/ipeds/datacenter/data/HD2024.zip"
+  faa:
+    # FAA commercial-service airports. Joined on Locid/ARPT_ID:
+    #   url      = CY2023 "Enplanements at All Commercial Service Airports" .xlsx
+    #              (S/L: P=primary, CS=nonprimary commercial service). fetch()
+    #              flattens it to commercial_service.csv.
+    #   nasr_url = 28-day NASR APT CSV bundle .zip; fetch() extracts APT_BASE.csv
+    #              (ARPT_ID, LAT_DECIMAL, LONG_DECIMAL) to nasr_apt.csv.
+    # Bump nasr_url to the current 28-day cycle when re-importing.
+    cache_dir: "data/sources/faa"
+    dataset_version: "FAA-CY23"
+    url: "https://www.faa.gov/sites/faa.gov/files/2024-10/cy23-commercial-service-enplanements.xlsx"
+    nasr_url: "https://nfdc.faa.gov/webContent/28DaySub/extra/14_May_2026_APT_CSV.zip"

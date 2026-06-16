@@ -24,11 +24,14 @@ from importer.reports.markdown import render_markdown
 from importer.sources.gsa import GsaSource
 from importer.sources.hifld_courts import HifldCourthousesSource
 from importer.sources.hifld_military import HifldMilitarySource
+from importer.sources.faa import FaaSource
+from importer.sources.ipeds import IpedsSource
+from importer.sources.nces import NcesSource
 from importer.state_laws import load_state_laws
 from importer.supabase_client import SupabaseClient
 
 
-SUPPORTED_SOURCES = ("hifld_courts", "gsa", "hifld_military")
+SUPPORTED_SOURCES = ("hifld_courts", "gsa", "hifld_military", "nces", "ipeds", "faa")
 SUPPORTED_REFS = ("staging", "prod")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # importer/../ == repo root
@@ -142,6 +145,25 @@ def _build_source(name, *, config, locator, repo_root):
             dataset_version=version, url=url,
             geocoder=CensusGeocoder(cache_path=cache_dir / "geocoded.json"),
             state_locator=locator,
+        )
+    if name == "nces":
+        return NcesSource(
+            cache_path=cache_dir / "edge_geocode.csv",
+            directory_path=cache_dir / "ccd_directory.csv",
+            state_locator=locator, dataset_version=version,
+            url=url, directory_url=cfg.get("directory_url", ""),
+        )
+    if name == "ipeds":
+        return IpedsSource(
+            cache_path=cache_dir / "hd.csv",
+            state_locator=locator, dataset_version=version, url=url,
+        )
+    if name == "faa":
+        return FaaSource(
+            cache_path=cache_dir / "commercial_service.csv",
+            nasr_path=cache_dir / "nasr_apt.csv",
+            state_locator=locator, dataset_version=version,
+            url=url, nasr_url=cfg.get("nasr_url", ""),
         )
     raise NotImplementedError(name)
 
