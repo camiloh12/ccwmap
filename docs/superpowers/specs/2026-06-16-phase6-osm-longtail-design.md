@@ -247,9 +247,14 @@ source's** candidates.
 ### Idempotency consequence
 
 Title-casing changes `name` on existing all-caps staging rows, so the **first**
-re-apply after this lands produces `UPDATE`s for those rows (expected, desired —
-labels get fixed). The **second** apply is INSERT-0/UPDATE-0. This is called out in
-the operator task (§8) so the UPDATE count is not mistaken for a bug.
+re-apply after this lands actually rewrites those names (expected, desired —
+labels get fixed). Note the diff stage buckets every existing non-user-modified
+row as `UPDATE` without comparing field values, so **every** re-apply reports
+`INSERT 0` with `UPDATE` = the existing row count — it never drops to 0. The
+idempotency signal is `INSERT 0` with unchanged per-source counts; what settles
+after the first title-case wave is the stored data (later runs report the same
+`UPDATE` count but change no names). This is called out in the operator task (§8)
+so the non-zero UPDATE count is not mistaken for a bug.
 
 ---
 
@@ -319,7 +324,8 @@ Run by the operator on the Windows machine (holds the staging service-role key):
 3. Full re-apply of **all** sources (`--sources hifld_courts,gsa,hifld_military,nces,ipeds,faa,osm`)
    to land title-casing — expect `UPDATE`s on previously all-caps rows (first time
    only).
-4. Re-run step 3 — expect INSERT-0/UPDATE-0 (idempotent).
+4. Re-run step 3 — expect `INSERT 0` with unchanged per-source counts (UPDATE stays
+   non-zero — the diff re-buckets all existing rows as UPDATE; names no longer change).
 5. Eyeball clustering around a dense TX/FL metro (Houston/Miami) for the new bars.
 
 Exit criteria (parent §8 Phase 6): dedup against waves 1–2 correct; dump file

@@ -1464,7 +1464,7 @@ map under `sources.osm.categories` in `config.yaml`.
 
 - [ ] **Step 3: STAGING_REAPPLY.md — public bucket + title-case re-apply note**
 
-In `docs/importer/STAGING_REAPPLY.md`, add notes that: (a) the `odbl-dumps` public bucket is created idempotently by the importer on first OSM apply (no manual step), and (b) the first full re-apply after Phase 6 produces a one-time wave of `UPDATE`s across **all** sources as all-caps labels are title-cased — expected, not a regression; the second apply is INSERT-0/UPDATE-0.
+In `docs/importer/STAGING_REAPPLY.md`, add notes that: (a) the `odbl-dumps` public bucket is created idempotently by the importer on first OSM apply (no manual step), and (b) the first full re-apply after Phase 6 produces a one-time wave of `UPDATE`s across **all** sources as all-caps labels are title-cased — expected, not a regression. NOTE: the diff stage buckets every existing non-user-modified row as UPDATE without comparing values, so every re-apply reports `INSERT 0` with `UPDATE` = existing row count (never 0); the idempotency signal is `INSERT 0` with unchanged counts, and after the first title-case wave the stored names stop changing.
 
 - [ ] **Step 4: importer/README.md — Data Sources & Licenses**
 
@@ -1539,7 +1539,7 @@ Expected: a one-time wave of UPDATEs as previously all-caps labels are title-cas
 
 - [ ] **Step 6: Idempotency re-run**
 
-Re-run Step 5 verbatim. Expected: INSERT-0 / UPDATE-0 across every source (title-casing is now stable).
+Re-run Step 5 verbatim. Expected: `INSERT 0` across every source with unchanged per-source counts. `UPDATE` stays non-zero (the diff re-buckets all existing rows as UPDATE — it does not compare field values); the title-cased names no longer change. `INSERT 0` + stable counts is the idempotency signal, not `UPDATE 0`.
 
 - [ ] **Step 7: Advisors + clustering eyeball**
 
