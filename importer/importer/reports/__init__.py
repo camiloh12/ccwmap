@@ -47,3 +47,4 @@ class PipelineResult:
     sources: list[SourceResult]
     dedup: DedupReport
     errors: list[str] = field(default_factory=list)
+    odbl_dump_url: str | None = None
