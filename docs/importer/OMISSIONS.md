@@ -33,3 +33,13 @@ federal-uniform and covered by `state: US` cells in `states.yaml`.
 **Maintenance:** when a state's law changes (e.g., a new campus-carry repeal) or
 a new source is added that emits one of these categories, revisit the relevant
 row here and in `states.yaml` together.
+
+**OSM auto-scope behavior (Phase 6):** the `osm` source queries Overpass only for
+categories with an `osm`-filtered cell **for each requested state** (per-state
+auto-scope). Consequently worship/sports/healthcare are **never queried** in the
+pilot states and will **not** appear in the dry-run "needs research / missing cells"
+list (unlike IPEDS TX/PA colleges, which are emitted-then-dropped). PA bars are
+likewise never generated, because PA has no `BAR_ALCOHOL` cell. When a future state
+with a categorical worship/sports/healthcare prohibition is added to `states.yaml`,
+that category is auto-queried with no importer code change — add its Overpass tag
+map under `sources.osm.categories` in `config.yaml`.
