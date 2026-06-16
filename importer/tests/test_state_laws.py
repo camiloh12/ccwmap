@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -172,3 +173,32 @@ def test_source_filter_drop_edge_holds():
     )
     assert dropped == []
     assert stats_drop.dropped_no_cell == 1
+
+
+def test_osm_categories_for_state_resolves_per_state():
+    table = StateLawTable(rows=[
+        StateLawCell(state="TX", category=RestrictionTag.BAR_ALCOHOL,
+                     default_status="NO_GUN", confidence="medium", conditions=[],
+                     citation="x", last_verified_date=date(2026, 5, 31),
+                     source_filter=["osm"]),
+        StateLawCell(state="TX", category=RestrictionTag.STATE_LOCAL_GOVT,
+                     default_status="NO_GUN", confidence="high", conditions=[],
+                     citation="y", last_verified_date=date(2026, 5, 31),
+                     source_filter=["hifld_courts"]),
+    ])
+    assert table.osm_categories_for_state("TX") == {RestrictionTag.BAR_ALCOHOL}
+    # PA has no bar cell and no US fallback -> empty (documented in OMISSIONS.md).
+    assert table.osm_categories_for_state("PA") == set()
+    # A non-osm source_filter (hifld_courts) must never appear here.
+    assert RestrictionTag.STATE_LOCAL_GOVT not in table.osm_categories_for_state("TX")
+
+
+def test_osm_categories_for_state_uses_us_fallback():
+    table = StateLawTable(rows=[
+        StateLawCell(state="US", category=RestrictionTag.BAR_ALCOHOL,
+                     default_status="NO_GUN", confidence="medium", conditions=[],
+                     citation="x", last_verified_date=date(2026, 5, 31),
+                     source_filter=["osm"]),
+    ])
+    # No state-specific cell -> US fallback applies (matches lookup() semantics).
+    assert table.osm_categories_for_state("TX") == {RestrictionTag.BAR_ALCOHOL}
