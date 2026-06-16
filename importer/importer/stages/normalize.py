@@ -6,6 +6,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from importer.candidate import Candidate
+from importer.stages._titlecase import smart_title_case
 
 # Mirrors the `CHECK char_length(name) <= 60` constraint on public.pins.name.
 PIN_NAME_MAX_LENGTH = 60
@@ -26,6 +27,10 @@ def normalize(
 ) -> Iterator[Candidate]:
     for c in candidates:
         new_name = c.name.strip()
+        # Re-case only all-caps source labels (no lowercase letter present);
+        # already-mixed-case names (OSM, HIFLD, recomposed GSA) are left as-is.
+        if new_name and not any(ch.islower() for ch in new_name):
+            new_name = smart_title_case(new_name)
         if len(new_name) > PIN_NAME_MAX_LENGTH:
             truncated = new_name[:PIN_NAME_MAX_LENGTH]
             stats.truncations += 1
