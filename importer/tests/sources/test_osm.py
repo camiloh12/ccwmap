@@ -67,8 +67,8 @@ def test_iter_candidates_parses_nodes_and_way_centers(tmp_path):
     assert cands["way/2002"].coord_quality is CoordQuality.BUILDING_POLYGON
     assert all(c.category is RestrictionTag.BAR_ALCOHOL for c in cands.values())
     assert all(c.state == "TX" for c in cands.values())
-    assert src.last_skip_counts["missing_name"] >= 1          # node/1003
-    assert src.last_skip_counts["coord_state_mismatch"] >= 1  # node/1004
+    assert src.last_skip_counts["missing_name"] == 1          # node/1003
+    assert src.last_skip_counts["coord_state_mismatch"] == 1  # node/1004
 
 
 def test_iter_candidates_skips_states_with_no_plan(tmp_path):

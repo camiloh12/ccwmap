@@ -88,8 +88,15 @@ class OsmSource(Source):
         clauses = []
         for tag in tags:
             key, _, value = tag.partition("=")
-            clauses.append(f'  nwr["{key}"="{value}"](area.a);')
+            if value:
+                clauses.append(f'  nwr["{key}"="{value}"](area.a);')
+            else:
+                # Bare key (no "=value") -> Overpass key-existence filter.
+                clauses.append(f'  nwr["{key}"](area.a);')
         body = "\n".join(clauses)
+        # 180s is the Overpass *server-side* timeout; the httpx client timeout
+        # (self._timeout, default 240s) is deliberately higher so a server-side
+        # timeout surfaces as an Overpass error before the HTTP client aborts.
         return (
             "[out:json][timeout:180];\n"
             f"area{area}->.a;\n"
