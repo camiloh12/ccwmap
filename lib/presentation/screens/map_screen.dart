@@ -374,7 +374,6 @@ class _MapScreenState extends State<MapScreen> {
       // what caused the render -> gone-for-a-frame -> render flash.
       if (_pinLayersCreated) {
         await _mapController!.setGeoJsonSource('pins-source', geojson);
-        await _applyCachedPinsVisibility();
         return;
       }
 
@@ -424,11 +423,11 @@ class _MapScreenState extends State<MapScreen> {
       ];
 
       // Split the pin features into two layers via filter expressions.
-      // - mine-pins-layer: features where isMine == true.    Always visible.
-      // - cached-pins-layer: features where isMine == false. Hidden by
-      //   _applyCachedPinsVisibility when clusters are present at low zoom,
-      //   so the user never sees cached pins double-rendered underneath
-      //   their containing cluster bubble. See docs/dev/CLUSTER_RENDERING.md.
+      // - mine-pins-layer: features where isMine == true.  Fades in above zoom 10.
+      // - cached-pins-layer: features where isMine == false. Fades in above zoom 10.
+      // Both layers use a zoom-opacity ramp so the country/region view shows only
+      // the density heatmap; individual pins appear at metro zoom. See
+      // docs/dev/CLUSTER_RENDERING.md.
       await _mapController!.addCircleLayer(
         'pins-source',
         'mine-pins-layer',
@@ -437,7 +436,18 @@ class _MapScreenState extends State<MapScreen> {
           circleColor: circleColorByStatus,
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
-          circleOpacity: 0.8,
+          // Fade pins out at low zoom so the country/region view is pure
+          // density glow; fade them in by metro zoom where users drop/find
+          // them. Replaces the old cluster-presence visibility toggle.
+          circleOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            0.0,
+            12,
+            0.8,
+          ],
         ),
         filter: [
           '==',
@@ -454,7 +464,18 @@ class _MapScreenState extends State<MapScreen> {
           circleColor: circleColorByStatus,
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
-          circleOpacity: 0.8,
+          // Fade pins out at low zoom so the country/region view is pure
+          // density glow; fade them in by metro zoom where users drop/find
+          // them. Replaces the old cluster-presence visibility toggle.
+          circleOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            0.0,
+            12,
+            0.8,
+          ],
         ),
         filter: [
           '==',
@@ -485,6 +506,15 @@ class _MapScreenState extends State<MapScreen> {
           textMaxWidth: 10.0,
           textAllowOverlap: false,
           textIgnorePlacement: false,
+          textOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.0,
+            12.5,
+            1.0,
+          ],
         ),
         enableInteraction: false,
         filter: [
@@ -511,6 +541,15 @@ class _MapScreenState extends State<MapScreen> {
           textMaxWidth: 10.0,
           textAllowOverlap: false,
           textIgnorePlacement: false,
+          textOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.0,
+            12.5,
+            1.0,
+          ],
         ),
         enableInteraction: false,
         filter: [
@@ -520,7 +559,6 @@ class _MapScreenState extends State<MapScreen> {
         ],
       );
 
-      await _applyCachedPinsVisibility();
       _pinLayersCreated = true;
     } catch (e) {
       // Rebuild from scratch next time rather than data-swap a half-built state.
@@ -733,40 +771,15 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Hide the `cached-pins-layer` (and its label layer) whenever the
-  /// cluster layer is non-empty, so the map doesn't double-render pins
-  /// underneath the clusters that aggregate them. Mine pins live in
-  /// `mine-pins-layer` and stay visible at every zoom — the user must
-  /// always see their own pins regardless of cluster presence.
-  ///
-  /// Reads `viewportClusters.value` at call time (not closure-captured)
-  /// so the latest cluster set drives the decision. Safe to call from
-  /// either updater — whichever ran more recently wins.
-  Future<void> _applyCachedPinsVisibility() async {
-    final controller = _mapController;
-    if (controller == null) return;
-    final hideCached =
-        (_viewModel?.viewportClusters.value ?? const []).isNotEmpty;
-    try {
-      await controller.setLayerVisibility('cached-pins-layer', !hideCached);
-      await controller.setLayerVisibility(
-        'cached-pins-labels-layer',
-        !hideCached,
-      );
-    } catch (e) {
-      debugPrint('MapScreen: setLayerVisibility failed: $e');
-    }
-  }
-
   /// Build GeoJSON FeatureCollection from pins.
   ///
   /// Each feature carries an `isMine` property derived from comparing the
   /// pin's `createdBy` against the current authenticated user id. The map
   /// uses this property to filter the GeoJSON into two layers
-  /// (`mine-pins-layer`, `cached-pins-layer`) so visibility can be toggled
-  /// independently — cached non-mine pins are hidden when clusters are
-  /// present at low zoom, but mine pins remain visible at every zoom.
-  /// See [docs/dev/CLUSTER_RENDERING.md] for the rendering strategy.
+  /// (`mine-pins-layer`, `cached-pins-layer`). Both layers fade out at low
+  /// zoom via a circle/text-opacity zoom ramp so individual pins are hidden
+  /// at country/region zoom where the heatmap provides density context, then
+  /// fade in at metro zoom. See [docs/dev/CLUSTER_RENDERING.md].
   Map<String, dynamic> _buildPinsGeoJson() {
     final auth = Provider.of<AuthViewModel>(context, listen: false);
     final myUserId = auth.currentUser?.id;
