@@ -6,6 +6,7 @@ __pycache__/
 dist/
 build/
 
-# Importer run artifacts (dry-run / apply reports)
+# Importer run artifacts (dry-run / apply reports + ODbL dumps)
 report-*.md
 report-*.json
+dump-*.csv.gz
