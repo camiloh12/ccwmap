@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -68,8 +69,9 @@ def test_lookup_returns_none_when_no_row_anywhere(table_path: Path) -> None:
 PROD_TABLE = Path(__file__).parent.parent.parent / "data" / "state_laws" / "states.yaml"
 
 
-# (candidate_state, category, expected_cell_state) for the 12 written cells.
-# Federal-uniform categories resolve to the US cell via fallback.
+# (candidate_state, category, expected_cell_state) for the NO_GUN-resolving cells.
+# Federal-uniform categories resolve to the US cell via fallback. Bars are
+# UNCERTAIN, not NO_GUN — covered separately by test_bar_cells_resolve_to_uncertain.
 WRITTEN_RESOLUTIONS = [
     ("TX", RestrictionTag.FEDERAL_PROPERTY, "US"),
     ("FL", RestrictionTag.FEDERAL_PROPERTY, "US"),
@@ -83,8 +85,6 @@ WRITTEN_RESOLUTIONS = [
     ("TX", RestrictionTag.SCHOOL_K12, "TX"),
     ("FL", RestrictionTag.SCHOOL_K12, "FL"),
     ("PA", RestrictionTag.SCHOOL_K12, "PA"),
-    ("TX", RestrictionTag.BAR_ALCOHOL, "TX"),
-    ("FL", RestrictionTag.BAR_ALCOHOL, "FL"),
     ("FL", RestrictionTag.COLLEGE_UNIVERSITY, "FL"),
 ]
 
@@ -122,6 +122,19 @@ def test_bar_cells_are_medium_confidence():
         cell = table.lookup(st, RestrictionTag.BAR_ALCOHOL)
         assert cell is not None and cell.state == st
         assert cell.confidence == "medium"
+
+
+def test_bar_cells_resolve_to_uncertain():
+    # OSM bar/pub tagging cannot confirm the TX 51% / FL "primarily devoted"
+    # revenue test, so bars are pre-asserted UNCERTAIN (yellow), not NO_GUN (red),
+    # to avoid false red prohibitions on food-serving venues.
+    table = load_state_laws(PROD_TABLE)
+    for st in ("TX", "FL"):
+        cell = table.lookup(st, RestrictionTag.BAR_ALCOHOL)
+        assert cell is not None and cell.state == st
+        assert cell.default_status == "UNCERTAIN"
+        assert cell.source_filter == ["osm"]
+        assert cell.citation
 
 
 @pytest.mark.parametrize("state", ["TX", "PA"])
@@ -172,3 +185,32 @@ def test_source_filter_drop_edge_holds():
     )
     assert dropped == []
     assert stats_drop.dropped_no_cell == 1
+
+
+def test_osm_categories_for_state_resolves_per_state():
+    table = StateLawTable(rows=[
+        StateLawCell(state="TX", category=RestrictionTag.BAR_ALCOHOL,
+                     default_status="NO_GUN", confidence="medium", conditions=[],
+                     citation="x", last_verified_date=date(2026, 5, 31),
+                     source_filter=["osm"]),
+        StateLawCell(state="TX", category=RestrictionTag.STATE_LOCAL_GOVT,
+                     default_status="NO_GUN", confidence="high", conditions=[],
+                     citation="y", last_verified_date=date(2026, 5, 31),
+                     source_filter=["hifld_courts"]),
+    ])
+    assert table.osm_categories_for_state("TX") == {RestrictionTag.BAR_ALCOHOL}
+    # PA has no bar cell and no US fallback -> empty (documented in OMISSIONS.md).
+    assert table.osm_categories_for_state("PA") == set()
+    # A non-osm source_filter (hifld_courts) must never appear here.
+    assert RestrictionTag.STATE_LOCAL_GOVT not in table.osm_categories_for_state("TX")
+
+
+def test_osm_categories_for_state_uses_us_fallback():
+    table = StateLawTable(rows=[
+        StateLawCell(state="US", category=RestrictionTag.BAR_ALCOHOL,
+                     default_status="NO_GUN", confidence="medium", conditions=[],
+                     citation="x", last_verified_date=date(2026, 5, 31),
+                     source_filter=["osm"]),
+    ])
+    # No state-specific cell -> US fallback applies (matches lookup() semantics).
+    assert table.osm_categories_for_state("TX") == {RestrictionTag.BAR_ALCOHOL}

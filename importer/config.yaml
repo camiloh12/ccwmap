@@ -59,3 +59,15 @@ sources:
     dataset_version: "FAA-CY23"
     url: "https://www.faa.gov/sites/faa.gov/files/2024-10/cy23-commercial-service-enplanements.xlsx"
     nasr_url: "https://nfdc.faa.gov/webContent/28DaySub/extra/14_May_2026_APT_CSV.zip"
+  osm:
+    # OpenStreetMap venues via Overpass. ODbL (share-alike); the ODbL dump
+    # (stages/odbl_dump.py) republishes derived columns after each apply.
+    # Per-state auto-scope means only categories with an osm-filtered state-law
+    # cell are queried (pilot: BAR_ALCOHOL in TX/FL; PA generates no query).
+    cache_dir: "data/sources/osm"
+    dataset_version: "OSM-2026-06"
+    overpass_url: "https://overpass-api.de/api/interpreter"
+    area_selector_template: '["ISO3166-2"="US-{state}"]'
+    categories:
+      BAR_ALCOHOL:
+        tags: ["amenity=bar", "amenity=pub"]

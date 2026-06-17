@@ -1,0 +1,14 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API",
+  "elements": [
+    {"type": "node", "id": 1001, "lat": 29.7604, "lon": -95.3698,
+     "tags": {"amenity": "bar", "name": "The Houston Tap"}},
+    {"type": "way", "id": 2002, "center": {"lat": 29.7610, "lon": -95.3700},
+     "tags": {"amenity": "pub", "name": "Downtown Pub House"}},
+    {"type": "node", "id": 1003, "lat": 29.7000, "lon": -95.4000,
+     "tags": {"amenity": "bar"}},
+    {"type": "node", "id": 1004, "lat": 34.0522, "lon": -118.2437,
+     "tags": {"amenity": "bar", "name": "Out Of State Bar"}}
+  ]
+}

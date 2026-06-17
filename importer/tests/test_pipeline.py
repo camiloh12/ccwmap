@@ -121,6 +121,67 @@ def test_pipeline_dedups_across_sources() -> None:
     assert total_inserts == 1
 
 
+def _osm_bar_table() -> StateLawTable:
+    return StateLawTable(rows=[
+        StateLawCell(
+            state="TX", category=RestrictionTag.BAR_ALCOHOL,
+            default_status="NO_GUN", confidence="medium", conditions=[],
+            citation="TX Penal Code 46.03(a)(7)",
+            last_verified_date=date(2026, 5, 31), source_filter=["osm"],
+        ),
+    ])
+
+
+def _osm_bar() -> Candidate:
+    return Candidate(
+        source="osm", source_external_id="node/1", source_dataset_version="v",
+        name="The Houston Tap", latitude=29.7604, longitude=-95.3698,
+        coord_quality=CoordQuality.PRECISE,
+        category=RestrictionTag.BAR_ALCOHOL, state="TX",
+    )
+
+
+def test_apply_generates_odbl_dump_when_osm_inserts(monkeypatch) -> None:
+    import importer.pipeline as pipeline_mod
+    calls = {}
+
+    def fake_generate(*, client, out_dir, **kwargs):
+        calls["called"] = True
+        return "https://example/storage/v1/object/public/odbl-dumps/dump-2026-06-16.csv.gz"
+
+    monkeypatch.setattr(pipeline_mod, "generate_and_upload", fake_generate)
+
+    result = run_pipeline(
+        sources=[_FakeSource("osm", [_osm_bar()])],
+        state_laws=_osm_bar_table(),
+        client=_mock_client(),
+        states=["TX"],
+        mode="apply",
+        system_user_id="81775f8b-1a6a-47d6-b793-e9ab7e38634e",
+    )
+    assert calls.get("called") is True
+    assert result.odbl_dump_url.endswith("dump-2026-06-16.csv.gz")
+
+
+def test_dry_run_does_not_generate_odbl_dump(monkeypatch) -> None:
+    import importer.pipeline as pipeline_mod
+    calls = {}
+    monkeypatch.setattr(
+        pipeline_mod, "generate_and_upload",
+        lambda **kw: calls.setdefault("called", True),
+    )
+    result = run_pipeline(
+        sources=[_FakeSource("osm", [_osm_bar()])],
+        state_laws=_osm_bar_table(),
+        client=_mock_client(),
+        states=["TX"],
+        mode="dry-run",
+        system_user_id="81775f8b-1a6a-47d6-b793-e9ab7e38634e",
+    )
+    assert "called" not in calls
+    assert result.odbl_dump_url is None
+
+
 def test_pipeline_surfaces_ipeds_missing_cells() -> None:
     from datetime import date as _date
     from importer.state_laws import StateLawCell

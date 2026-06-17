@@ -181,3 +181,70 @@ def test_select_user_pins_filters_source_user(
     assert len(rows) == 1
     assert rows[0].source == "user"
     assert "source=eq.user" in str(httpx_mock.get_requests()[0].url)
+
+
+# ---------------------------------------------------------------------------
+# Storage methods + OSM dump reader (Task 6)
+# ---------------------------------------------------------------------------
+
+from importer.supabase_client import OsmDumpRow
+
+
+def test_select_osm_pins_for_dump_parses(client, httpx_mock):
+    httpx_mock.add_response(
+        method="GET",
+        json=[
+            {"source_external_id": "node/1001", "name": "The Houston Tap",
+             "latitude": 29.76, "longitude": -95.37},
+        ],
+    )
+    rows = client.select_osm_pins_for_dump()
+    assert rows == [OsmDumpRow(source_external_id="node/1001",
+                               name="The Houston Tap", latitude=29.76, longitude=-95.37)]
+    assert "source=eq.osm" in str(httpx_mock.get_requests()[0].url)
+
+
+def test_ensure_public_bucket_treats_existing_as_success(client, httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://example.supabase.co/storage/v1/bucket",
+        status_code=409,
+        json={"error": "Duplicate", "message": "already exists"},
+    )
+    client.ensure_public_bucket("odbl-dumps")  # must not raise
+
+
+def test_upload_object_posts_with_upsert(client, httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="https://example.supabase.co/storage/v1/object/odbl-dumps/dump-2026-06-16.csv.gz",
+        status_code=200,
+        json={"Key": "odbl-dumps/dump-2026-06-16.csv.gz"},
+    )
+    client.upload_object(
+        bucket="odbl-dumps", path="dump-2026-06-16.csv.gz",
+        data=b"\x1f\x8b", content_type="application/gzip",
+    )
+    req = httpx_mock.get_requests()[0]
+    assert req.headers.get("x-upsert") == "true"
+    assert req.content == b"\x1f\x8b"
+
+
+def test_public_object_url():
+    from importer.supabase_client import SupabaseClient
+    c = SupabaseClient(url="https://example.supabase.co", service_role_key="k",
+                       system_user_id="u")
+    assert c.public_object_url("odbl-dumps", "dump-2026-06-16.csv.gz") == (
+        "https://example.supabase.co/storage/v1/object/public/odbl-dumps/dump-2026-06-16.csv.gz"
+    )
+
+
+def test_delete_objects_sends_prefixes(client, httpx_mock):
+    httpx_mock.add_response(
+        method="DELETE",
+        url="https://example.supabase.co/storage/v1/object/odbl-dumps",
+        status_code=200, json=[],
+    )
+    client.delete_objects("odbl-dumps", ["dump-2026-01-01.csv.gz"])
+    req = httpx_mock.get_requests()[0]
+    assert b"dump-2026-01-01.csv.gz" in req.content

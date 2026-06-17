@@ -106,3 +106,12 @@ def test_dedup_equal_tier_tiebreak_is_deterministic():
     survivors_b = {cc.candidate.source for cc in dedup([military, courts], existing_user_pins=[]).survivors}
     assert survivors_a == survivors_b
     assert len(survivors_a) == 1
+
+
+def test_dedup_osm_loses_to_higher_priority_source():
+    # Same point + matching names; gsa (priority 4) outranks osm (priority 6).
+    gsa = _cc("gsa", "g1", "Veterans Hall", 30.2672, -97.7431)
+    osm = _cc("osm", "node/9", "Veterans Hall", 30.2673, -97.7432)
+    result = dedup([gsa, osm], existing_user_pins=[])
+    assert [cc.candidate.source for cc in result.survivors] == ["gsa"]
+    assert result.drops_by_pair[("gsa", "osm")] == 1

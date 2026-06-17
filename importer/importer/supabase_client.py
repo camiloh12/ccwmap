@@ -8,6 +8,15 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 
+class OsmDumpRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source_external_id: str
+    name: str
+    latitude: float
+    longitude: float
+
+
 class ExistingPinRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -69,7 +78,9 @@ class SupabaseClient:
         system_user_id: str,
         timeout: float = 30.0,
     ) -> None:
-        self._base = url.rstrip("/") + "/rest/v1"
+        self._project_url = url.rstrip("/")
+        self._storage_base = self._project_url + "/storage/v1"
+        self._base = self._project_url + "/rest/v1"
         self._headers = {
             "apikey": service_role_key,
             "Authorization": f"Bearer {service_role_key}",
@@ -191,3 +202,92 @@ class SupabaseClient:
                 json={"source_orphaned_at": "now()"},
             )
             r.raise_for_status()
+
+    def select_osm_pins_for_dump(self) -> list["OsmDumpRow"]:
+        """All source='osm' rows, derived columns only (for the ODbL dump)."""
+        out: list[OsmDumpRow] = []
+        offset = 0
+        page = 1000
+        while True:
+            headers = dict(self._headers)
+            headers["Range-Unit"] = "items"
+            headers["Range"] = f"{offset}-{offset + page - 1}"
+            params = {
+                "select": "source_external_id,name,latitude,longitude",
+                "source": "eq.osm",
+            }
+            r = self._client.get(f"{self._base}/pins", headers=headers, params=params)
+            r.raise_for_status()
+            rows = r.json()
+            out.extend(OsmDumpRow.model_validate(row) for row in rows)
+            if len(rows) < page:
+                break
+            offset += page
+        return out
+
+    def public_object_url(self, bucket: str, path: str) -> str:
+        return f"{self._storage_base}/object/public/{bucket}/{path}"
+
+    def ensure_public_bucket(self, bucket: str) -> None:
+        headers = {
+            "apikey": self._headers["apikey"],
+            "Authorization": self._headers["Authorization"],
+            "Content-Type": "application/json",
+        }
+        r = self._client.post(
+            f"{self._storage_base}/bucket",
+            headers=headers,
+            json={"id": bucket, "name": bucket, "public": True},
+        )
+        # 200/201 = created; 409 (or 400 "already exists") = idempotent success.
+        if r.status_code in (200, 201, 409):
+            return
+        if r.status_code == 400 and "exist" in r.text.lower():
+            return
+        r.raise_for_status()
+
+    def upload_object(
+        self, *, bucket: str, path: str, data: bytes, content_type: str
+    ) -> None:
+        headers = {
+            "apikey": self._headers["apikey"],
+            "Authorization": self._headers["Authorization"],
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        }
+        r = self._client.post(
+            f"{self._storage_base}/object/{bucket}/{path}",
+            headers=headers,
+            content=data,
+        )
+        r.raise_for_status()
+
+    def list_object_names(self, bucket: str) -> list[str]:
+        headers = {
+            "apikey": self._headers["apikey"],
+            "Authorization": self._headers["Authorization"],
+            "Content-Type": "application/json",
+        }
+        r = self._client.post(
+            f"{self._storage_base}/object/list/{bucket}",
+            headers=headers,
+            json={"prefix": "", "limit": 1000, "offset": 0},
+        )
+        r.raise_for_status()
+        return [obj["name"] for obj in r.json()]
+
+    def delete_objects(self, bucket: str, paths: list[str]) -> None:
+        if not paths:
+            return
+        headers = {
+            "apikey": self._headers["apikey"],
+            "Authorization": self._headers["Authorization"],
+            "Content-Type": "application/json",
+        }
+        r = self._client.request(
+            "DELETE",
+            f"{self._storage_base}/object/{bucket}",
+            headers=headers,
+            json={"prefixes": paths},
+        )
+        r.raise_for_status()

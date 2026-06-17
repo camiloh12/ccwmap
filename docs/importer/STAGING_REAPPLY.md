@@ -113,3 +113,23 @@ counts must be unchanged → re-runs proven non-duplicating.
 Pull up the target project on the map and judge the GSA layer's clustering. This
 is the standing open question on whether per-FRPP-building is the right altitude
 for a CCW map before any prod consideration.
+
+## 7. Phase 6 notes (OSM source + title-case normalisation)
+
+**`odbl-dumps` Storage bucket.** The `osm` source creates the public Storage
+bucket `odbl-dumps` idempotently on the first OSM apply — no manual dashboard
+setup step is required. Subsequent apply runs upload a new
+`dump-YYYY-MM-DD.csv.gz` to that bucket without recreating it.
+
+**Title-case label wave (first re-apply after Phase 6).** Phase 6 added all-caps
+label title-casing to the normalize stage. The first full re-apply after this
+change rewrites every previously imported all-caps label to title case. This is
+expected and is not a regression.
+
+Note that the importer's diff stage buckets **every** existing, non-user-modified
+row as **UPDATE** — it does not compare field values — so on any re-apply the
+report shows `INSERT 0` with `UPDATE` equal to the existing row count (it never
+drops to 0). The idempotency signal is therefore **INSERT 0** with unchanged
+per-source counts (Step 5), not `UPDATE 0`. What settles after this first
+title-case wave is the *stored data*: the second and later runs report the same
+`UPDATE` count but no longer change any name.

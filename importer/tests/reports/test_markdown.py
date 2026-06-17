@@ -63,3 +63,18 @@ def test_markdown_flags_missing_cells_section() -> None:
     assert "**Needs research**" in md
     assert "(TX, BAR_ALCOHOL)" in md
     assert "(TX, HEALTHCARE)" in md
+
+
+def test_markdown_renders_odbl_dump_url() -> None:
+    result = PipelineResult(
+        mode="apply",
+        started_at=datetime(2026, 6, 16, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 6, 16, tzinfo=timezone.utc),
+        states=["TX", "FL"],
+        sources=[],
+        dedup=DedupReport(),
+        odbl_dump_url="https://example.supabase.co/storage/v1/object/public/odbl-dumps/dump-2026-06-16.csv.gz",
+    )
+    md = render_markdown(result)
+    assert "## ODbL dump" in md
+    assert "dump-2026-06-16.csv.gz" in md

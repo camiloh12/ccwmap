@@ -27,11 +27,12 @@ from importer.sources.hifld_military import HifldMilitarySource
 from importer.sources.faa import FaaSource
 from importer.sources.ipeds import IpedsSource
 from importer.sources.nces import NcesSource
+from importer.sources.osm import OsmSource
 from importer.state_laws import load_state_laws
 from importer.supabase_client import SupabaseClient
 
 
-SUPPORTED_SOURCES = ("hifld_courts", "gsa", "hifld_military", "nces", "ipeds", "faa")
+SUPPORTED_SOURCES = ("hifld_courts", "gsa", "hifld_military", "nces", "ipeds", "faa", "osm")
 SUPPORTED_REFS = ("staging", "prod")
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # importer/../ == repo root
@@ -123,7 +124,7 @@ def _load_config() -> dict:
     return yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
 
 
-def _build_source(name, *, config, locator, repo_root):
+def _build_source(name, *, config, locator, repo_root, state_laws=None, states=None):
     cfg = config["sources"][name]
     cache_dir = Path(repo_root) / cfg["cache_dir"]
     version = cfg["dataset_version"]
@@ -165,6 +166,17 @@ def _build_source(name, *, config, locator, repo_root):
             state_locator=locator, dataset_version=version,
             url=url, nasr_url=cfg.get("nasr_url", ""),
         )
+    if name == "osm":
+        return OsmSource(
+            cache_dir=cache_dir,
+            state_locator=locator,
+            state_laws=state_laws,
+            states=states,
+            dataset_version=version,
+            area_selector_template=cfg["area_selector_template"],
+            category_tags={k: v["tags"] for k, v in cfg["categories"].items()},
+            overpass_url=cfg.get("overpass_url", ""),
+        )
     raise NotImplementedError(name)
 
 
@@ -205,7 +217,10 @@ def main(argv: list[str] | None = None) -> int:
             )
 
             sources = [
-                _build_source(name, config=config, locator=locator, repo_root=REPO_ROOT)
+                _build_source(
+                    name, config=config, locator=locator, repo_root=REPO_ROOT,
+                    state_laws=state_laws, states=args.states,
+                )
                 for name in args.sources
             ]
             result = run_pipeline(

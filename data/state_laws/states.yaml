@@ -81,7 +81,7 @@
 
 - state: TX
   category: BAR_ALCOHOL
-  default_status: NO_GUN
+  default_status: UNCERTAIN
   confidence: medium
   conditions:
     - "Premises deriving 51%+ of revenue from on-premises alcohol sales."
@@ -91,8 +91,10 @@
   source_filter:
     - osm
   notes: |
-    Generic OSM bar/pub tagging cannot confirm the 51% TABC designation, so
-    confidence is medium. Users verify with photos of the red sign.
+    Generic OSM bar/pub tagging cannot confirm the 51% TABC designation, and a
+    food-serving bar under 51% is not prohibited. Pre-asserted UNCERTAIN
+    (yellow), NOT NO_GUN (red), to avoid false prohibitions on bar-and-grills;
+    users verify locally / with the red sign.
 
 # ── Florida ──────────────────────────────────────────────────────────
 - state: FL
@@ -130,7 +132,7 @@
 
 - state: FL
   category: BAR_ALCOHOL
-  default_status: NO_GUN
+  default_status: UNCERTAIN
   confidence: medium
   conditions:
     - "Any portion of an alcohol-licensed establishment primarily devoted to on-premises consumption."
@@ -139,8 +141,9 @@
   source_filter:
     - osm
   notes: |
-    OSM venue tags cannot confirm the "primarily devoted" portion test, so
-    confidence is medium.
+    OSM venue tags cannot confirm the "primarily devoted" portion test, and a
+    restaurant with a bar is not a whole-venue red zone. Pre-asserted UNCERTAIN
+    (yellow), NOT NO_GUN (red); users verify locally.
 
 # ── Pennsylvania ─────────────────────────────────────────────────────
 - state: PA

@@ -49,6 +49,21 @@ class StateLawTable(BaseModel):
                 return row
         return None
 
+    def osm_categories_for_state(self, state: str) -> set[RestrictionTag]:
+        """Categories whose effective cell for `state` is OSM-filtered.
+
+        Uses the same state->US fallback as lookup(), so a state-specific cell
+        shadows the US cell exactly as classification will later resolve it.
+        Drives the OSM source's per-state Overpass query plan: we never query a
+        (state, category) combination that will not become a pin.
+        """
+        cats: set[RestrictionTag] = set()
+        for category in {row.category for row in self.rows}:
+            cell = self.lookup(state, category)
+            if cell and cell.source_filter and "osm" in cell.source_filter:
+                cats.add(category)
+        return cats
+
 
 def load_state_laws(path: Path) -> StateLawTable:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))

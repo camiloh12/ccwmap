@@ -82,6 +82,30 @@ def test_build_source_factory_constructs_each(tmp_path):
         assert src.SOURCE_NAME == name
 
 
+def test_osm_is_a_supported_source():
+    from importer.cli import SUPPORTED_SOURCES
+    assert "osm" in SUPPORTED_SOURCES
+
+
+def test_build_source_constructs_osm(tmp_path):
+    import yaml
+    from pathlib import Path
+    from importer.cli import _build_source, CONFIG_PATH, STATES_BOUNDARY_FIXTURE, STATES_YAML
+    from importer.geo.states import load_state_locator
+    from importer.state_laws import load_state_laws
+    from importer.sources.osm import OsmSource
+
+    config = yaml.safe_load(Path(CONFIG_PATH).read_text(encoding="utf-8"))
+    locator = load_state_locator(STATES_BOUNDARY_FIXTURE)
+    laws = load_state_laws(STATES_YAML)
+    src = _build_source(
+        "osm", config=config, locator=locator, repo_root=tmp_path,
+        state_laws=laws, states=["TX", "FL", "PA"],
+    )
+    assert isinstance(src, OsmSource)
+    assert src.SOURCE_NAME == "osm"
+
+
 def test_module_entrypoint_actually_runs_main() -> None:
     # `python -m importer.cli ...` is the invocation used by every CI workflow,
     # the operator README, and the Task 19 smoke. Without an

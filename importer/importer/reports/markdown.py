@@ -57,6 +57,12 @@ def render_markdown(r: PipelineResult) -> str:
         lines.append("")
         lines.extend(_source_block(s))
 
+    if r.odbl_dump_url:
+        lines.append("## ODbL dump")
+        lines.append("")
+        lines.append(f"- OpenStreetMap-derived database published: {r.odbl_dump_url}")
+        lines.append("")
+
     if r.errors:
         lines.append("## Errors")
         lines.append("")

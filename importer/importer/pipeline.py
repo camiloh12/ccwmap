@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from importer.reports import DedupReport, PipelineResult, SourceResult
 from importer.sources.base import Source
@@ -11,6 +12,7 @@ from importer.stages.apply_state_law import ApplyStateLawStats, apply_state_law
 from importer.stages.dedup import dedup
 from importer.stages.diff import DiffStats, diff_candidates
 from importer.stages.normalize import NormalizeStats, normalize
+from importer.stages.odbl_dump import generate_and_upload
 from importer.stages.refine_coords import refine_coords
 from importer.state_laws import StateLawTable
 from importer.supabase_client import SupabaseClient
@@ -88,6 +90,17 @@ def run_pipeline(
             geocode_missed=ps["geocode_miss"],
         ))
 
+    # Phase D: ODbL dump (apply mode only, and only when OSM rows actually landed).
+    odbl_dump_url = None
+    if mode == "apply":
+        osm_applied = sum(
+            len(sr.diff.inserts) + len(sr.diff.updates)
+            for sr in source_results
+            if sr.source == "osm"
+        )
+        if osm_applied > 0:
+            odbl_dump_url = generate_and_upload(client=client, out_dir=Path.cwd())
+
     return PipelineResult(
         mode=mode,
         started_at=started_at,
@@ -99,4 +112,5 @@ def run_pipeline(
             within_source_dups=dedup_out.within_source_dups,
             drops_by_pair=dedup_out.drops_by_pair,
         ),
+        odbl_dump_url=odbl_dump_url,
     )
