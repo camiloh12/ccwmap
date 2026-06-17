@@ -30,6 +30,7 @@ import 'package:ccwmap/domain/models/restriction_tag.dart';
 import 'package:ccwmap/domain/models/location.dart';
 import 'package:ccwmap/domain/models/pin_metadata.dart';
 import 'package:uuid/uuid.dart';
+import '../map/map_render_helpers.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -72,9 +73,14 @@ class _MapScreenState extends State<MapScreen> {
   // re-adding, which made markers blink (render -> gone for a frame -> render)
   // on every pan/zoom.
   bool _pinLayersCreated = false;
-  bool _clusterLayersCreated = false;
-  bool _isUpdatingClusters = false;
-  bool _pendingClusterUpdate = false;
+  bool _heatmapLayerCreated = false;
+  bool _isUpdatingHeatmap = false;
+  bool _pendingHeatmapUpdate = false;
+  // Resolved from the live style at load (basemap water fill id) so the
+  // heatmap + land mask can be inserted beneath it. Null on the demotiles
+  // fallback style (no water layer to clip against).
+  String? _waterLayerId;
+  bool _landMaskCreated = false;
 
   // Debug state (toggled by long-pressing the title bar — lets user verify
   // iOS POI tap detection on-device without a Mac)
@@ -145,7 +151,7 @@ class _MapScreenState extends State<MapScreen> {
   void _onClustersChanged() {
     if (!mounted) return;
     final clusters = _viewModel?.viewportClusters.value ?? const [];
-    _updateClustersLayer(clusters);
+    _updateHeatmapLayer(clusters);
   }
 
   /// Request location permission and get current location
@@ -326,7 +332,9 @@ class _MapScreenState extends State<MapScreen> {
     // A (re)loaded style drops every source/layer natively, so they must be
     // recreated (not data-swapped) on the next update.
     _pinLayersCreated = false;
-    _clusterLayersCreated = false;
+    _heatmapLayerCreated = false;
+    _landMaskCreated = false;
+    _waterLayerId = null;
 
     // Now that the style is loaded, camera animations will stick on iOS.
     _tryEnableLocationComponent(from: 'style-loaded');
@@ -523,148 +531,131 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Render server-aggregated cluster circles at low zoom levels.
+  /// Render the low-zoom density heatmap from server cluster aggregates.
   ///
-  /// Mirrors `_updatePinsLayer`'s pattern: tear down existing layers/source
-  /// in reverse order, then add a GeoJSON source, a count-sized circle
-  /// layer, and a count-text symbol layer on top. The symbol layer has
-  /// `enableInteraction: false` so taps fall through to the circle (Task 15
-  /// wires cluster tap routing).
+  /// Each cluster centroid becomes a heatmap point weighted by its `count`.
+  /// The layer is inserted beneath the land mask (and thus beneath the
+  /// basemap water + labels) so the glow is clipped to US land. When the RPC
+  /// returns individual pins instead of clusters, `clusters` is empty and the
+  /// heatmap source is cleared — the density-driven glow→pins handoff.
   ///
-  /// Reentrancy: if a fire arrives mid-await, set the pending flag and
-  /// re-trigger from `finally` with the freshest value from the notifier
-  /// (the captured `clusters` arg could be stale by then).
-  Future<void> _updateClustersLayer(List<MapItemCluster> clusters) async {
+  /// Reentrancy mirrors the old cluster updater: if a fire arrives mid-await,
+  /// set the pending flag and re-trigger from `finally` with the freshest
+  /// value off the notifier.
+  Future<void> _updateHeatmapLayer(List<MapItemCluster> clusters) async {
     if (_mapController == null) return;
-    if (_isUpdatingClusters) {
-      _pendingClusterUpdate = true;
+    if (_isUpdatingHeatmap) {
+      _pendingHeatmapUpdate = true;
       return;
     }
-    _isUpdatingClusters = true;
-    _pendingClusterUpdate = false;
+    _isUpdatingHeatmap = true;
+    _pendingHeatmapUpdate = false;
 
     try {
-      final features = clusters
-          .map(
-            (c) => {
-              'type': 'Feature',
-              'geometry': {
-                'type': 'Point',
-                'coordinates': [c.centroidLng, c.centroidLat],
-              },
-              'properties': {
-                'count': c.count,
-                'status': c.dominantStatus.colorCode,
-              },
-            },
-          )
-          .toList();
+      final geojson = buildClusterHeatmapGeoJson(clusters);
 
-      final geojson = {'type': 'FeatureCollection', 'features': features};
-
-      // Fast path: layers already exist — swap data in place (no blink on
-      // pan/zoom). An empty feature list just clears the rendered clusters.
-      if (_clusterLayersCreated) {
-        await _mapController!.setGeoJsonSource('clusters-source', geojson);
-        await _applyCachedPinsVisibility();
+      // Fast path: swap data in place (no blink) once the layer exists.
+      if (_heatmapLayerCreated) {
+        await _mapController!.setGeoJsonSource(kHeatmapSourceId, geojson);
         return;
       }
 
-      // Tear down in reverse order of creation (layers before source).
-      try {
-        await _mapController!.removeLayer('clusters-count-layer');
-      } catch (_) {
-        // Layer doesn't exist yet, that's ok
+      // Tear down any prior heatmap layer/source (e.g. after a style reload),
+      // plus the legacy cluster circle/count layers from the old design.
+      for (final layerId in const [
+        kHeatmapLayerId,
+        'clusters-count-layer', // legacy
+        'clusters-circle-layer', // legacy
+      ]) {
+        try {
+          await _mapController!.removeLayer(layerId);
+        } catch (_) {}
       }
-      try {
-        await _mapController!.removeLayer('clusters-circle-layer');
-      } catch (_) {
-        // Layer doesn't exist yet, that's ok
-      }
-      try {
-        await _mapController!.removeSource('clusters-source');
-      } catch (_) {
-        // Source doesn't exist yet, that's ok
+      for (final sourceId in const [kHeatmapSourceId, 'clusters-source']) {
+        try {
+          await _mapController!.removeSource(sourceId);
+        } catch (_) {}
       }
 
-      await _mapController!.addGeoJsonSource('clusters-source', geojson);
+      await _mapController!.addGeoJsonSource(kHeatmapSourceId, geojson);
 
-      // Cluster circle: radius scales with count. Small clusters (cnt 1-4)
-      // render at pin-sized radius (10-12) with no count label — they read
-      // as individual pins, not as fake "cluster of 1" bubbles. From cnt=5
-      // up they grow into proper cluster bubbles (16 → 42). See
-      // docs/dev/CLUSTER_RENDERING.md.
-      await _mapController!.addCircleLayer(
-        'clusters-source',
-        'clusters-circle-layer',
-        CircleLayerProperties(
-          circleRadius: [
+      // Insert beneath the land mask if present (which itself sits beneath the
+      // basemap water fill), else directly beneath water, else on top (the
+      // demotiles fallback has neither — acceptable for the dev-only style).
+      final belowId = _landMaskCreated ? kLandMaskLayerId : _waterLayerId;
+
+      await _mapController!.addHeatmapLayer(
+        kHeatmapSourceId,
+        kHeatmapLayerId,
+        HeatmapLayerProperties(
+          // Denser cells glow brighter. Tune stops against real data.
+          heatmapWeight: [
             'interpolate',
             ['linear'],
             ['get', 'count'],
             1,
-            10,
-            4,
-            12,
-            5,
-            16,
-            10,
-            22,
-            100,
-            32,
-            1000,
-            42,
+            0.15,
+            50,
+            0.4,
+            500,
+            0.8,
+            2000,
+            1.0,
           ],
-          circleColor: [
-            'match',
-            ['get', 'status'],
-            0, '#4CAF50', // ALLOWED - Green
-            1, '#FFC107', // UNCERTAIN - Yellow
-            2, '#F44336', // NO_GUN - Red
-            '#999999', // Default gray
+          // Larger kernel at low zoom for a smooth regional glow.
+          heatmapRadius: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3,
+            26.0,
+            6,
+            38.0,
+            9,
+            52.0,
           ],
-          circleStrokeWidth: 2.0,
-          circleStrokeColor: '#FFFFFF',
-          circleOpacity: 0.85,
+          heatmapIntensity: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            3,
+            0.6,
+            9,
+            1.2,
+          ],
+          // Cool-teal ramp; density 0 fully transparent so the map shows
+          // through. NOT zoom-ramped: visibility is data-driven (the source
+          // is empty whenever the RPC returns individual pins).
+          heatmapColor: [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0.0,
+            'rgba(14,165,165,0)',
+            0.2,
+            'rgba(153,246,228,0.45)',
+            0.5,
+            'rgba(45,212,191,0.75)',
+            0.8,
+            'rgba(14,165,165,0.90)',
+            1.0,
+            'rgba(13,148,136,0.95)',
+          ],
+          heatmapOpacity: 0.9,
         ),
+        belowLayerId: belowId,
       );
 
-      // Count label on top — only rendered on real clusters (cnt >= 5).
-      // Small "cluster of 1" / "cluster of 2" markers stay unlabeled and
-      // read as pins, not as numbered bubbles. enableInteraction: false
-      // so the underlying circle still receives taps (Task 15 routes them).
-      await _mapController!.addSymbolLayer(
-        'clusters-source',
-        'clusters-count-layer',
-        SymbolLayerProperties(
-          textField: ['get', 'count'],
-          textSize: 14.0,
-          textColor: '#FFFFFF',
-          textHaloColor: '#000000',
-          textHaloWidth: 1.0,
-          textAllowOverlap: true,
-          textIgnorePlacement: true,
-        ),
-        enableInteraction: false,
-        filter: [
-          '>=',
-          ['get', 'count'],
-          5,
-        ],
-      );
-
-      await _applyCachedPinsVisibility();
-      _clusterLayersCreated = true;
+      _heatmapLayerCreated = true;
     } catch (e) {
-      // Rebuild from scratch next time rather than data-swap a half-built state.
-      _clusterLayersCreated = false;
-      debugPrint('MapScreen: Error updating clusters layer: $e');
+      _heatmapLayerCreated = false;
+      debugPrint('MapScreen: Error updating heatmap layer: $e');
     } finally {
-      _isUpdatingClusters = false;
-      if (_pendingClusterUpdate) {
-        _pendingClusterUpdate = false;
+      _isUpdatingHeatmap = false;
+      if (_pendingHeatmapUpdate) {
+        _pendingHeatmapUpdate = false;
         // Re-pull from viewModel — captured cluster list could be stale.
-        _updateClustersLayer(_viewModel?.viewportClusters.value ?? const []);
+        _updateHeatmapLayer(_viewModel?.viewportClusters.value ?? const []);
       }
     }
   }
