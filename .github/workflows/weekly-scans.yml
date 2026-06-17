@@ -23,10 +23,13 @@ jobs:
         id: scan
         uses: google/osv-scanner-action/osv-scanner-action@v2.3.5
         with:
-          scan-args: |-
-            --lockfile=pubspec.lock
-            --lockfile=ios/Podfile.lock
-            -r .
+          # Recursively auto-discover every committed lockfile (pubspec.lock,
+          # importer/uv.lock, and ios/Podfile.lock if it ever lands). We do NOT
+          # reference ios/Podfile.lock explicitly: it is not committed (Flutter
+          # generates it during the macOS iOS build), and osv-scanner aborts the
+          # whole run when an explicit --lockfile path is missing — which is what
+          # made this job fail every week and file false-positive security issues.
+          scan-args: -r .
         continue-on-error: true
       - name: Open GitHub issue on failure
         if: steps.scan.outcome == 'failure'
@@ -49,7 +52,7 @@ jobs:
               repo: context.repo.repo,
               title,
               labels: ['security'],
-              body: `OSV scanner reported vulnerabilities in pubspec.lock or Podfile.lock.\n\nFailing run: ${runUrl}\n\nTriage:\n1. Click the run link above and open the "OSV scanner" step log.\n2. Identify affected packages and severity.\n3. Bump the affected dep via a \`chore/deps-*\` branch, or document why we're deferring.`,
+              body: `The OSV dependency scan exited non-zero. That means **either** known vulnerabilities were found in a committed lockfile (pubspec.lock / importer/uv.lock), **or** the scan itself errored (e.g. a referenced lockfile path is missing). Open the run log to see which.\n\nFailing run: ${runUrl}\n\nTriage:\n1. Click the run link above and open the "OSV scanner" step log.\n2. If vulnerabilities: identify affected packages + severity, then bump via a \`chore/deps-*\` branch (or document why we're deferring).\n3. If a scan error: fix the scan config (e.g. a missing/renamed lockfile path) rather than treating it as a vuln.`,
             });
 
   codeql-kotlin:
