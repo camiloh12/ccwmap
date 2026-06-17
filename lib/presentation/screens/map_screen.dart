@@ -1812,8 +1812,9 @@ class _MapScreenState extends State<MapScreen> {
             final props = feature['properties'] as Map?;
             final featureClass = props?['class']?.toString();
             final hasSubclass = props?['subclass'] != null;
-            if (featureClass != null && placeClasses.contains(featureClass))
+            if (featureClass != null && placeClasses.contains(featureClass)) {
               continue;
+            }
             if (props?['admin_level'] != null) continue;
             // Catches countries (iso_a2 only) and continents (name only).
             if (featureClass == null && !hasSubclass) continue;
