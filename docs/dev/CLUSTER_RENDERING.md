@@ -3,6 +3,17 @@
 **Status:** Option B implemented in Phase 1 (commit `fbb3724` + follow-up).
 Last updated 2026-05-24.
 
+> **UPDATE 2026-06-17:** Low-zoom rendering changed from Option B cluster
+> bubbles to a **teal density heatmap clipped to US land** — see
+> `docs/superpowers/specs/2026-06-17-heatmap-density-lowzoom-design.md`.
+> Cluster circles, count labels, and tap-to-zoom were removed; the server
+> `get_pins_in_view` cluster output now feeds a MapLibre heatmap layer
+> (weighted by `count`), inserted beneath the basemap `Water` fill and a
+> bundled non-US land mask. Mine/cached pins fade out at low zoom via a
+> `circle-opacity` zoom ramp. The Option A/B/C analysis below is retained for
+> historical context. A pixel-perfect glow→pins cross-fade and server-side
+> grid-size tuning for a smoother glow remain deferred follow-ups.
+
 This note captures the three viable approaches to rendering pins and
 clusters across zoom levels, the trade-offs that led us to Option B for
 the pilot ship, and the conditions under which we should revisit each.
