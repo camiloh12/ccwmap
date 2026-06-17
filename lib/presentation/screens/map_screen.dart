@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' show Point;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -339,11 +341,14 @@ class _MapScreenState extends State<MapScreen> {
     // Now that the style is loaded, camera animations will stick on iOS.
     _tryEnableLocationComponent(from: 'style-loaded');
 
-    // Add pins layer to map
-    _updatePinsLayer();
-
-    // Initial bbox fetch for the starting viewport.
-    _onCameraIdle();
+    // Resolve the water layer + add the land mask, THEN add pins and fetch —
+    // so the heatmap (added when the first fetch returns) can anchor beneath
+    // the mask/water.
+    _initStaticMapLayers().then((_) {
+      if (!mounted) return;
+      _updatePinsLayer();
+      _onCameraIdle();
+    });
   }
 
   /// Update pins on the map using circle layers
@@ -527,6 +532,74 @@ class _MapScreenState extends State<MapScreen> {
       if (_pendingLayerUpdate) {
         _pendingLayerUpdate = false;
         _updatePinsLayer();
+      }
+    }
+  }
+
+  /// One-time per style-load setup of the static map layers the heatmap
+  /// depends on: resolve the basemap water fill id, then add the non-US land
+  /// mask fill beneath it. Both are no-ops on the demotiles fallback style
+  /// (no water layer) — the heatmap then renders unclipped, which is
+  /// acceptable for that dev-only style.
+  Future<void> _initStaticMapLayers() async {
+    final controller = _mapController;
+    if (controller == null) return;
+
+    // Resolve the water layer id from the live style.
+    try {
+      final ids = (await controller.getLayerIds())
+          .map((e) => e.toString())
+          .toList();
+      _waterLayerId = resolveWaterLayerId(ids);
+    } catch (e) {
+      debugPrint('MapScreen: getLayerIds failed: $e');
+      _waterLayerId = null;
+    }
+
+    // Add the foreign-land mask beneath the water fill so it covers any glow
+    // bleeding onto Canada/Mexico/Cuba while the basemap water covers ocean
+    // bleed. Skipped if we couldn't resolve a water anchor.
+    if (_waterLayerId != null) {
+      try {
+        final maskGeoJsonStr = await rootBundle.loadString(kLandMaskAsset);
+        final maskGeoJson = jsonDecode(maskGeoJsonStr) as Map<String, dynamic>;
+        try {
+          await controller.removeLayer(kLandMaskLayerId);
+        } catch (_) {}
+        try {
+          await controller.removeSource(kLandMaskSourceId);
+        } catch (_) {}
+        await controller.addGeoJsonSource(kLandMaskSourceId, maskGeoJson);
+        await controller.addFillLayer(
+          kLandMaskSourceId,
+          kLandMaskLayerId,
+          FillLayerProperties(
+            fillColor: kLandMaskColor,
+            // Zoom-gate the mask: opaque at low zoom (clip the glow), fully
+            // transparent by metro zoom so border cities (El Paso/Juárez,
+            // San Diego/Tijuana) show the real basemap for Mexico/Canada
+            // where there's no glow to clip. Tracks the heatmap's active range.
+            fillOpacity: const [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              9,
+              1.0,
+              11,
+              0.0,
+            ],
+          ),
+          belowLayerId: _waterLayerId,
+        );
+        _landMaskCreated = true;
+      } catch (e) {
+        debugPrint('MapScreen: land mask add failed: $e');
+        _landMaskCreated = false;
+        // If the source was added but the fill layer failed, drop the orphan
+        // source so it isn't left dangling for the rest of this style's life.
+        try {
+          await controller.removeSource(kLandMaskSourceId);
+        } catch (_) {}
       }
     }
   }
