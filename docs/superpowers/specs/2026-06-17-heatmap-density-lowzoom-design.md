@@ -110,7 +110,7 @@ location puck + app UI
 
 ### Basemap fallback
 
-When no MapTiler key is configured the app falls back to MapLibre demotiles (dev/testing only), whose layer ids differ. The clip degrades gracefully there — if the water layer can't be resolved, the heatmap renders without the ocean clip (acceptable for the dev-only fallback). The foreign-land mask still applies.
+When no MapTiler key is configured the app falls back to MapLibre demotiles (dev/testing only), whose layer ids differ. The clip degrades gracefully there — if the water layer can't be resolved, the foreign-land mask is also skipped (it anchors `belowLayerId` against the water fill, and its `hsl(54,100%,97%)` color is tuned for streets-v4), so the heatmap renders fully unclipped. This is acceptable for the dev-only fallback.
 
 ---
 
