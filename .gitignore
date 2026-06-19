@@ -75,3 +75,6 @@ importer/htmlcov/
 data/sources/*
 !data/sources/.gitkeep
 !data/sources/.hifld_courts_url.txt
+
+# Brainstorming visual companion (transient mockups)
+.superpowers/

@@ -15,6 +15,7 @@ import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
+import 'package:ccwmap/presentation/map/cluster_label.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
@@ -554,6 +555,7 @@ class _MapScreenState extends State<MapScreen> {
               },
               'properties': {
                 'count': c.count,
+                'label': abbreviateCount(c.count),
                 'status': c.dominantStatus.colorCode,
               },
             },
@@ -589,56 +591,49 @@ class _MapScreenState extends State<MapScreen> {
 
       await _mapController!.addGeoJsonSource('clusters-source', geojson);
 
-      // Cluster circle: radius scales with count. Small clusters (cnt 1-4)
-      // render at pin-sized radius (10-12) with no count label — they read
-      // as individual pins, not as fake "cluster of 1" bubbles. From cnt=5
-      // up they grow into proper cluster bubbles (16 → 42). See
+      // Cluster bubble: uniform blue, with a smaller, capped radius so dense
+      // low-zoom views don't merge into one overlapping blob. The abbreviated
+      // count label (not the circle size) communicates magnitude. See
       // docs/dev/CLUSTER_RENDERING.md.
       await _mapController!.addCircleLayer(
         'clusters-source',
         'clusters-circle-layer',
         CircleLayerProperties(
+          // Grows gently with count then plateaus (~24 px) to avoid blobs.
           circleRadius: [
             'interpolate',
             ['linear'],
             ['get', 'count'],
             1,
+            7,
             10,
-            4,
             12,
-            5,
-            16,
-            10,
-            22,
             100,
-            32,
+            16,
             1000,
-            42,
+            20,
+            10000,
+            24,
           ],
-          circleColor: [
-            'match',
-            ['get', 'status'],
-            0, '#4CAF50', // ALLOWED - Green
-            1, '#FFC107', // UNCERTAIN - Yellow
-            2, '#F44336', // NO_GUN - Red
-            '#999999', // Default gray
-          ],
+          // Uniform blue — clusters read as "zoom in for detail", visually
+          // distinct from the green/yellow/red individual status pins.
+          circleColor: '#2563EB',
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
-          circleOpacity: 0.85,
+          circleOpacity: 0.9,
         ),
       );
 
-      // Count label on top — only rendered on real clusters (cnt >= 5).
-      // Small "cluster of 1" / "cluster of 2" markers stay unlabeled and
-      // read as pins, not as numbered bubbles. enableInteraction: false
-      // so the underlying circle still receives taps (Task 15 routes them).
+      // Abbreviated count label on top — only on clusters big enough to fit it
+      // (cnt >= 5); tiny clusters stay as unlabeled blue dots. Uses the
+      // precomputed 'label' property (e.g. "4.5k"). enableInteraction: false
+      // so the underlying circle still receives taps.
       await _mapController!.addSymbolLayer(
         'clusters-source',
         'clusters-count-layer',
         SymbolLayerProperties(
-          textField: ['get', 'count'],
-          textSize: 14.0,
+          textField: ['get', 'label'],
+          textSize: 12.0,
           textColor: '#FFFFFF',
           textHaloColor: '#000000',
           textHaloWidth: 1.0,
@@ -1756,8 +1751,9 @@ class _MapScreenState extends State<MapScreen> {
             final props = feature['properties'] as Map?;
             final featureClass = props?['class']?.toString();
             final hasSubclass = props?['subclass'] != null;
-            if (featureClass != null && placeClasses.contains(featureClass))
+            if (featureClass != null && placeClasses.contains(featureClass)) {
               continue;
+            }
             if (props?['admin_level'] != null) continue;
             // Catches countries (iso_a2 only) and continents (name only).
             if (featureClass == null && !hasSubclass) continue;
