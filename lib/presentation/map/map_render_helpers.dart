@@ -1,20 +1,13 @@
 import '../../domain/models/map_item.dart';
 
-// Source/layer ids for the low-zoom density heatmap and land mask.
+// Source/layer ids for the low-zoom density glow.
 const String kHeatmapSourceId = 'clusters-heatmap-source';
 const String kHeatmapLayerId = 'clusters-heatmap-layer';
-const String kLandMaskSourceId = 'land-mask-source';
-const String kLandMaskLayerId = 'land-mask-layer';
 
-// Asset path for the bundled non-US land polygon (Task 1).
-const String kLandMaskAsset = 'assets/geo/world_minus_us.geojson';
-
-// streets-v4 basemap background/land color — keep the mask seamless.
-const String kLandMaskColor = 'hsl(54, 100%, 97%)';
-
-/// Builds a GeoJSON FeatureCollection of weighted points for the density
-/// heatmap, one point per server cluster. `count` becomes the heatmap weight.
-/// Coordinates are emitted [lng, lat] per the GeoJSON spec.
+/// Builds a GeoJSON FeatureCollection of weighted points for the low-zoom
+/// density glow, one point per server cluster. `count` drives the glow disc's
+/// radius/color/opacity (see the circle layer in MapScreen). Coordinates are
+/// emitted [lng, lat] per the GeoJSON spec.
 Map<String, dynamic> buildClusterHeatmapGeoJson(List<MapItemCluster> clusters) {
   return {
     'type': 'FeatureCollection',

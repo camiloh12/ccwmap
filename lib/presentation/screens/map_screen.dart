@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' show Point;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform, visibleForTesting;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -79,10 +77,9 @@ class _MapScreenState extends State<MapScreen> {
   bool _isUpdatingHeatmap = false;
   bool _pendingHeatmapUpdate = false;
   // Resolved from the live style at load (basemap water fill id) so the
-  // heatmap + land mask can be inserted beneath it. Null on the demotiles
-  // fallback style (no water layer to clip against).
+  // density glow can be inserted beneath it. Null on the demotiles fallback
+  // style (no water layer to clip against).
   String? _waterLayerId;
-  bool _landMaskCreated = false;
 
   // Debug state (toggled by long-pressing the title bar — lets user verify
   // iOS POI tap detection on-device without a Mac)
@@ -314,15 +311,13 @@ class _MapScreenState extends State<MapScreen> {
     // recreated (not data-swapped) on the next update.
     _pinLayersCreated = false;
     _heatmapLayerCreated = false;
-    _landMaskCreated = false;
     _waterLayerId = null;
 
     // Now that the style is loaded, camera animations will stick on iOS.
     _tryEnableLocationComponent(from: 'style-loaded');
 
-    // Resolve the water layer + add the land mask, THEN add pins and fetch —
-    // so the heatmap (added when the first fetch returns) can anchor beneath
-    // the mask/water.
+    // Resolve the water layer first, THEN add pins and fetch — so the density
+    // glow (added when the first fetch returns) can anchor beneath water.
     _initStaticMapLayers().then((_) {
       if (!mounted) return;
       _updatePinsLayer();
@@ -427,6 +422,18 @@ class _MapScreenState extends State<MapScreen> {
             12,
             0.8,
           ],
+          // Fade the white stroke on the same ramp as the fill. Without this
+          // the ring keeps its default full opacity at low zoom (where the
+          // fill is gone), leaving hollow white circles floating on the glow.
+          circleStrokeOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            0.0,
+            12,
+            1.0,
+          ],
         ),
         filter: [
           '==',
@@ -454,6 +461,16 @@ class _MapScreenState extends State<MapScreen> {
             0.0,
             12,
             0.8,
+          ],
+          // Fade the white stroke on the same ramp as the fill (see above).
+          circleStrokeOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10,
+            0.0,
+            12,
+            1.0,
           ],
         ),
         filter: [
@@ -553,10 +570,9 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// One-time per style-load setup of the static map layers the heatmap
-  /// depends on: resolve the basemap water fill id, then add the non-US land
-  /// mask fill beneath it. Both are no-ops on the demotiles fallback style
-  /// (no water layer) — the heatmap then renders unclipped, which is
+  /// One-time per style-load setup: resolve the basemap water fill id so the
+  /// density glow can be inserted beneath it (clips ocean bleed). Null on the
+  /// demotiles fallback style (no water layer) — the glow then renders on top,
   /// acceptable for that dev-only style.
   Future<void> _initStaticMapLayers() async {
     final controller = _mapController;
@@ -572,62 +588,17 @@ class _MapScreenState extends State<MapScreen> {
       debugPrint('MapScreen: getLayerIds failed: $e');
       _waterLayerId = null;
     }
-
-    // Add the foreign-land mask beneath the water fill so it covers any glow
-    // bleeding onto Canada/Mexico/Cuba while the basemap water covers ocean
-    // bleed. Skipped if we couldn't resolve a water anchor.
-    if (_waterLayerId != null) {
-      try {
-        final maskGeoJsonStr = await rootBundle.loadString(kLandMaskAsset);
-        final maskGeoJson = jsonDecode(maskGeoJsonStr) as Map<String, dynamic>;
-        try {
-          await controller.removeLayer(kLandMaskLayerId);
-        } catch (_) {}
-        try {
-          await controller.removeSource(kLandMaskSourceId);
-        } catch (_) {}
-        await controller.addGeoJsonSource(kLandMaskSourceId, maskGeoJson);
-        await controller.addFillLayer(
-          kLandMaskSourceId,
-          kLandMaskLayerId,
-          FillLayerProperties(
-            fillColor: kLandMaskColor,
-            // Zoom-gate the mask: opaque at low zoom (clip the glow), fully
-            // transparent by metro zoom so border cities (El Paso/Juárez,
-            // San Diego/Tijuana) show the real basemap for Mexico/Canada
-            // where there's no glow to clip. Tracks the heatmap's active range.
-            fillOpacity: const [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              9,
-              1.0,
-              11,
-              0.0,
-            ],
-          ),
-          belowLayerId: _waterLayerId,
-        );
-        _landMaskCreated = true;
-      } catch (e) {
-        debugPrint('MapScreen: land mask add failed: $e');
-        _landMaskCreated = false;
-        // If the source was added but the fill layer failed, drop the orphan
-        // source so it isn't left dangling for the rest of this style's life.
-        try {
-          await controller.removeSource(kLandMaskSourceId);
-        } catch (_) {}
-      }
-    }
   }
 
-  /// Render the low-zoom density heatmap from server cluster aggregates.
+  /// Render the low-zoom density glow from server cluster aggregates.
   ///
-  /// Each cluster centroid becomes a heatmap point weighted by its `count`.
-  /// The layer is inserted beneath the land mask (and thus beneath the
-  /// basemap water + labels) so the glow is clipped to US land. When the RPC
-  /// returns individual pins instead of clusters, `clusters` is empty and the
-  /// heatmap source is cleared — the density-driven glow→pins handoff.
+  /// Each cluster centroid becomes a soft, blurred circle ("glow disc") whose
+  /// radius/color/opacity scale with its `count` — a crash-safe stand-in for a
+  /// native heatmap layer (see the circle layer below for why). The layer is
+  /// inserted beneath the land mask (and thus beneath the basemap water +
+  /// labels) so the glow is clipped to US land. When the RPC returns individual
+  /// pins instead of clusters, `clusters` is empty and the glow source is
+  /// cleared — the density-driven glow→pins handoff.
   ///
   /// Reentrancy mirrors the old cluster updater: if a fire arrives mid-await,
   /// set the pending flag and re-trigger from `finally` with the freshest
@@ -669,69 +640,70 @@ class _MapScreenState extends State<MapScreen> {
 
       await _mapController!.addGeoJsonSource(kHeatmapSourceId, geojson);
 
-      // Insert beneath the land mask if present (which itself sits beneath the
-      // basemap water fill), else directly beneath water, else on top (the
-      // demotiles fallback has neither — acceptable for the dev-only style).
-      final belowId = _landMaskCreated ? kLandMaskLayerId : _waterLayerId;
+      // Insert beneath the basemap water fill so ocean bleed is clipped, else
+      // on top (the demotiles fallback has no water — acceptable for the
+      // dev-only style). Foreign-land bleed is left unclipped by design.
+      final belowId = _waterLayerId;
 
-      await _mapController!.addHeatmapLayer(
+      // Density glow rendered as soft translucent discs (one per cluster),
+      // NOT a native heatmap layer. maplibre-native segfaults on the Android
+      // TextureView render thread whenever a heatmap (which draws via an
+      // offscreen render pass) is rendered during zoom — confirmed on-device
+      // and matching the unfixed upstream maplibre-react-native#954. Circle
+      // layers render in the normal pass and are crash-free. We approximate the
+      // heatmap look with a count-driven teal ramp (denser clusters read hotter)
+      // plus heavy blur so neighbouring discs merge into a continuous regional
+      // glow. Visibility stays data-driven: the source is empty whenever the
+      // RPC returns individual pins, so the glow clears itself at metro zoom.
+      await _mapController!.addCircleLayer(
         kHeatmapSourceId,
         kHeatmapLayerId,
-        HeatmapLayerProperties(
-          // Denser cells glow brighter. Tune stops against real data.
-          heatmapWeight: [
+        CircleLayerProperties(
+          // Light teal (sparse) → deep teal (dense). Tune stops against data.
+          circleColor: [
             'interpolate',
             ['linear'],
             ['get', 'count'],
             1,
-            0.15,
+            'rgb(153,246,228)',
             50,
-            0.4,
+            'rgb(45,212,191)',
             500,
-            0.8,
+            'rgb(14,165,165)',
             2000,
-            1.0,
+            'rgb(13,148,136)',
           ],
-          // Larger kernel at low zoom for a smooth regional glow.
-          heatmapRadius: [
+          // Bigger halo for busier clusters (screen px); blur feathers it out.
+          circleRadius: [
             'interpolate',
             ['linear'],
-            ['zoom'],
-            3,
-            26.0,
-            6,
+            ['get', 'count'],
+            1,
+            14.0,
+            50,
+            24.0,
+            500,
             38.0,
-            9,
-            52.0,
+            2000,
+            55.0,
           ],
-          heatmapIntensity: [
+          // ~1 radius of feather so discs read as a soft glow, not hard dots.
+          circleBlur: 1.0,
+          // Translucent so overlapping discs stack into brighter dense regions.
+          circleOpacity: [
             'interpolate',
             ['linear'],
-            ['zoom'],
-            3,
-            0.6,
-            9,
-            1.2,
+            ['get', 'count'],
+            1,
+            0.30,
+            50,
+            0.45,
+            500,
+            0.65,
+            2000,
+            0.80,
           ],
-          // Cool-teal ramp; density 0 fully transparent so the map shows
-          // through. NOT zoom-ramped: visibility is data-driven (the source
-          // is empty whenever the RPC returns individual pins).
-          heatmapColor: [
-            'interpolate',
-            ['linear'],
-            ['heatmap-density'],
-            0.0,
-            'rgba(14,165,165,0)',
-            0.2,
-            'rgba(153,246,228,0.45)',
-            0.5,
-            'rgba(45,212,191,0.75)',
-            0.8,
-            'rgba(14,165,165,0.90)',
-            1.0,
-            'rgba(13,148,136,0.95)',
-          ],
-          heatmapOpacity: 0.9,
+          circleStrokeWidth: 0.0,
         ),
         belowLayerId: belowId,
       );
@@ -739,7 +711,7 @@ class _MapScreenState extends State<MapScreen> {
       _heatmapLayerCreated = true;
     } catch (e) {
       _heatmapLayerCreated = false;
-      debugPrint('MapScreen: Error updating heatmap layer: $e');
+      debugPrint('MapScreen: Error updating density glow layer: $e');
     } finally {
       _isUpdatingHeatmap = false;
       if (_pendingHeatmapUpdate) {
