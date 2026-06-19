@@ -1,8 +1,8 @@
 # Low-Zoom Heatmap Density View Design
 
 **Date:** 2026-06-17
-**Status:** Draft — pending implementation plan via writing-plans
-**Supersedes:** the cluster-bubble rendering decision in `docs/dev/CLUSTER_RENDERING.md` (Option B) at low zoom.
+**Status:** **PARKED 2026-06-19** — implemented and tested on-device, then set aside. The native heatmap (`addHeatmapLayer`) crashes Android (TextureView render-thread SIGSEGV; matches unfixed maplibre-react-native#954) and a crash-free circle-glow variant was explored, but the owner preferred discrete cluster bubbles. Both variants live on the `feature/heatmap-lowzoom` branch. Low-zoom rendering instead uses **refined cluster bubbles** — see `docs/dev/CLUSTER_RENDERING.md` ("2026-06-19 refinement").
+**Supersedes:** nothing — Option B (cluster bubbles) in `docs/dev/CLUSTER_RENDERING.md` remains the shipped low-zoom approach, refined 2026-06-19 to fix the two problems below (overlap → capped radius; all-red → uniform blue).
 
 ## Background
 

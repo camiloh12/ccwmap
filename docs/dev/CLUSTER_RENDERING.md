@@ -1,7 +1,10 @@
 # Cluster rendering: approach, alternatives, and revisit triggers
 
-**Status:** Option B implemented in Phase 1 (commit `fbb3724` + follow-up).
-Last updated 2026-05-24.
+**Status:** Option B implemented in Phase 1 (commit `fbb3724` + follow-up),
+**refined 2026-06-19** on `feature/cluster-bubbles` — uniform blue bubbles,
+small capped radius, abbreviated counts (see "2026-06-19 refinement" below).
+A low-zoom density-**heatmap** variant was explored and **parked** (it crashed
+Android — see that section). Last updated 2026-06-19.
 
 This note captures the three viable approaches to rendering pins and
 clusters across zoom levels, the trade-offs that led us to Option B for
@@ -58,12 +61,17 @@ sourced from the same GeoJSON via filter expressions:
 - `cached-pins-layer` — features where `isMine == false`. Hidden when
   `viewportClusters` is non-empty.
 
-Cluster rendering uses MapLibre filter expressions to distinguish:
+Cluster rendering (refined 2026-06-19 — see that section below):
 
-- Cluster count `< 5` → renders as a small dot (radius ~10–12), no
-  count label. Visually reads as a pin.
-- Cluster count `≥ 5` → renders as a proper cluster bubble (radius
-  scales up to 42 at count=1000), with a count label.
+- Bubbles are **uniform blue** (`#2563EB`), not colored by dominant
+  status. Most pre-populated pins are `NO_GUN`, so status coloring made
+  the whole zoomed-out map a red smear; blue reads as "zoom in for
+  detail" and stays distinct from the green/yellow/red individual pins.
+- Radius is **small and capped** (~7 px at count 1, plateauing ~24 px),
+  so dense low-zoom views no longer merge into an overlapping blob.
+- Count `≥ 5` → shows an **abbreviated** count label (`4.5k`, `23k`,
+  `1.5M`) via `abbreviateCount` (`lib/presentation/map/cluster_label.dart`,
+  unit-tested). Count `< 5` → small unlabeled blue dot.
 
 **Pros.**
 - Eliminates double-render (cached pins are hidden when clusters cover
@@ -144,3 +152,30 @@ the spec's rollout plan.
 
 If the visual issues recur in a way Option B can't easily resolve, jump
 straight to Option C rather than iterating further on B.
+
+## 2026-06-19 — heatmap variant explored and parked, Option B refined
+
+The pre-populate data (~23,825 pins concentrated in TX/FL/PA) made the
+original Option B bubbles ugly at country zoom for two reasons: (1) adjacent
+grid cells with large count-scaled radii **overlapped into a blob**, and
+(2) bubbles colored by `dominant_status` were **almost all red** (most
+pre-populated pins are `NO_GUN`), reading as one alarming smear.
+
+The "heatmap overlay" middle ground (floated under Option A above) was built
+and tested on-device, then parked:
+
+- A **native MapLibre heatmap layer** (`addHeatmapLayer`) SIGSEGVs the Android
+  TextureView render thread on zoom (offscreen render pass; matches unfixed
+  upstream maplibre-react-native#954). It can't ship on Android with
+  `maplibre_gl` 0.24.1, and upgrading is blocked by an unverified iOS-18 Metal
+  regression.
+- A crash-free **blurred circle "glow"** replacement was then tried and set
+  aside — the owner preferred discrete, readable bubbles over a glow.
+
+Both variants live on the `feature/heatmap-lowzoom` branch in case we revisit.
+
+The shipped answer **refines Option B** to fix the two root problems directly:
+**uniform blue** (kills the red smear) and a **small capped radius** (kills the
+blob), with **abbreviated counts** so the number — not the size — conveys
+magnitude. Implemented in `_updateClustersLayer` (`map_screen.dart`) +
+`abbreviateCount` (`lib/presentation/map/cluster_label.dart`).
