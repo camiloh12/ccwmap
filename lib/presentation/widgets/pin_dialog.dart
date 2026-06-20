@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:ccwmap/core/profanity_filter.dart';
 import 'package:ccwmap/domain/models/pin_status.dart';
 import 'package:ccwmap/domain/models/restriction_tag.dart';
+import 'pin_provenance.dart';
 
 /// Result object returned when dialog is confirmed
 class PinDialogResult {
@@ -37,6 +39,14 @@ class PinDialog extends StatefulWidget {
   final VoidCallback? onReport;
   final VoidCallback? onBlock;
 
+  /// Provenance — non-null only for pins read from the server/cache. When
+  /// [source] is not 'user', a verify-locally caveat block renders.
+  final String? source;
+  final String? confidence;
+  final String? legalCitation;
+  final String? legalCitationVerifiedDate;
+  final String? sourceExternalId;
+
   const PinDialog({
     super.key,
     required this.isEditMode,
@@ -52,6 +62,11 @@ class PinDialog extends StatefulWidget {
     this.onSignInToEdit,
     this.onReport,
     this.onBlock,
+    this.source,
+    this.confidence,
+    this.legalCitation,
+    this.legalCitationVerifiedDate,
+    this.sourceExternalId,
   }) : assert(
          !isReadOnly || onSignInToEdit != null,
          'onSignInToEdit is required when isReadOnly is true',
@@ -142,6 +157,8 @@ class _PinDialogState extends State<PinDialog> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              if (_buildProvenanceBanner() case final banner?) banner,
 
               // Name Text Field
               Text(
@@ -412,6 +429,76 @@ class _PinDialogState extends State<PinDialog> {
               ? null
               : (value) => setState(() => _selectedRestrictionTag = value),
         ),
+      ),
+    );
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Widget? _buildProvenanceBanner() {
+    final source = widget.source;
+    if (source == null) return null;
+    final caveat = caveatFor(
+      source: source,
+      confidence: widget.confidence,
+      legalCitation: widget.legalCitation,
+      legalCitationVerifiedDate: widget.legalCitationVerifiedDate,
+    );
+    if (caveat == null) return null;
+
+    final bg = caveat.elevated ? const Color(0xFFFFF3E0) : const Color(0xFFF5F5F5);
+    final border = caveat.elevated ? const Color(0xFFFFB74D) : const Color(0xFFBDBDBD);
+    final osmUrl = osmObjectUrl(source: source, sourceExternalId: widget.sourceExternalId);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                caveat.elevated ? Icons.warning_amber_rounded : Icons.info_outline,
+                size: 18,
+                color: Colors.black87,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  caveat.headline,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(caveat.body, style: const TextStyle(fontSize: 13)),
+          if (osmUrl != null) ...[
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _openUrl(osmUrl),
+              child: const Text(
+                '© OpenStreetMap contributors (ODbL)',
+                style: TextStyle(
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                  color: Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
