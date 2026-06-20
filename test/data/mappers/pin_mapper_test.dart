@@ -244,4 +244,48 @@ void main() {
       expect(entity.source, 'user');
     });
   });
+
+  group('PinMapper provenance', () {
+    Pin systemPin() => Pin(
+          id: 'p1',
+          name: 'Lincoln Elementary',
+          location: Location.fromLatLng(30.1, -97.7),
+          status: PinStatus.NO_GUN,
+          restrictionTag: RestrictionTag.SCHOOL_K12,
+          metadata: PinMetadata(
+            createdBy: 'sys',
+            createdAt: DateTime.utc(2026, 1, 1),
+            lastModified: DateTime.utc(2026, 1, 1),
+            source: 'nces',
+            sourceExternalId: '480000100001',
+            confidence: 'high',
+            legalCitation: 'TX Penal Code 46.03(a)(1)',
+            legalCitationVerifiedDate: '2026-05-31',
+          ),
+        );
+
+    test('toEntity preserves source instead of hardcoding user', () {
+      final e = PinMapper.toEntity(systemPin());
+      expect(e.source, 'nces');
+      expect(e.confidence, 'high');
+      expect(e.legalCitation, 'TX Penal Code 46.03(a)(1)');
+      expect(e.sourceExternalId, '480000100001');
+      expect(e.legalCitationVerifiedDate, '2026-05-31');
+    });
+
+    test('toCachedEntity preserves provenance and sets cachedAt', () {
+      final now = DateTime.utc(2026, 6, 1);
+      final e = PinMapper.toCachedEntity(systemPin(), cachedAt: now);
+      expect(e.source, 'nces');
+      expect(e.cachedAt, now.millisecondsSinceEpoch);
+    });
+
+    test('round-trips provenance through fromEntity', () {
+      final back = PinMapper.fromEntity(PinMapper.toEntity(systemPin()));
+      expect(back.metadata.source, 'nces');
+      expect(back.metadata.confidence, 'high');
+      expect(back.metadata.legalCitation, 'TX Penal Code 46.03(a)(1)');
+      expect(back.metadata.sourceExternalId, '480000100001');
+    });
+  });
 }
