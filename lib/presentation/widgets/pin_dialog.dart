@@ -158,7 +158,7 @@ class _PinDialogState extends State<PinDialog> {
               ),
               const SizedBox(height: 24),
 
-              if (_buildProvenanceBanner() case final banner?) banner,
+              ?_buildProvenanceBanner(),
 
               // Name Text Field
               Text(

@@ -38,7 +38,7 @@ void main() {
         source: 'nces',
         confidence: 'high',
         legalCitation: 'TX Penal Code 46.03');
-    expect(find.textContaining('verify locally'), findsWidgets);
+    expect(find.textContaining('verify locally'), findsNWidgets(2));
     expect(find.textContaining('TX Penal Code 46.03'), findsOneWidget);
   });
 
