@@ -23,6 +23,7 @@ import 'package:ccwmap/presentation/widgets/report_pin_dialog.dart';
 import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
+import 'package:ccwmap/presentation/screens/about_legal_screen.dart';
 import 'package:ccwmap/presentation/screens/settings_screen.dart';
 import 'package:ccwmap/domain/models/map_item.dart';
 import 'package:ccwmap/domain/models/pin.dart';
@@ -2389,6 +2390,31 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
+
+              // Always-visible attribution badge (guests have no menu). Tapping
+              // opens the full ODbL/MapTiler credits.
+              Positioned(
+                bottom: 4,
+                left: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AboutLegalScreen(),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      '© OSM · MapTiler',
+                      style: TextStyle(fontSize: 10, color: Colors.black87),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
