@@ -2403,7 +2403,10 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(4),

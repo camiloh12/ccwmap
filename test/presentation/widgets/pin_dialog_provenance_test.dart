@@ -33,11 +33,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('shows caveat for a system pin with its citation', (tester) async {
-    await pump(tester,
-        source: 'nces',
-        confidence: 'high',
-        legalCitation: 'TX Penal Code 46.03');
+  testWidgets('shows caveat for a system pin with its citation', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      source: 'nces',
+      confidence: 'high',
+      legalCitation: 'TX Penal Code 46.03',
+    );
     expect(find.textContaining('verify locally'), findsNWidgets(2));
     expect(find.textContaining('TX Penal Code 46.03'), findsOneWidget);
   });
@@ -48,8 +52,12 @@ void main() {
   });
 
   testWidgets('shows OSM/ODbL credit for osm pins', (tester) async {
-    await pump(tester,
-        source: 'osm', confidence: 'medium', sourceExternalId: 'node/123');
+    await pump(
+      tester,
+      source: 'osm',
+      confidence: 'medium',
+      sourceExternalId: 'node/123',
+    );
     expect(find.textContaining('OpenStreetMap contributors'), findsOneWidget);
   });
 }

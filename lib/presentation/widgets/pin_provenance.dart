@@ -1,5 +1,6 @@
 /// Pure presentation logic for the system-pin provenance caveat. No Flutter
 /// imports so it is unit-testable without pumping a widget.
+library;
 
 class ProvenanceCaveat {
   /// Short bold line, e.g. "Uncertain — verify locally".
@@ -50,19 +51,21 @@ ProvenanceCaveat? caveatFor({
 }) {
   if (source == 'user') return null;
 
-  final citation =
-      (legalCitation == null || legalCitation.isEmpty) ? null : legalCitation;
+  final citation = (legalCitation == null || legalCitation.isEmpty)
+      ? null
+      : legalCitation;
   final verified =
       (legalCitationVerifiedDate == null || legalCitationVerifiedDate.isEmpty)
-          ? null
-          : legalCitationVerifiedDate;
+      ? null
+      : legalCitationVerifiedDate;
   final cite = citation == null ? '' : ' under $citation';
   final asOf = verified == null ? '' : ' (verified $verified)';
 
   if (confidence == 'medium') {
     return ProvenanceCaveat(
       headline: 'Uncertain — verify locally',
-      body: 'This venue may restrict carry$cite, but we could not confirm it '
+      body:
+          'This venue may restrict carry$cite, but we could not confirm it '
           'meets the legal threshold. Treat as uncertain and verify locally.',
       elevated: true,
     );
@@ -70,7 +73,8 @@ ProvenanceCaveat? caveatFor({
 
   return ProvenanceCaveat(
     headline: 'Auto-classified — verify locally',
-    body: 'This location was auto-classified from ${sourceLabel(source)}$cite'
+    body:
+        'This location was auto-classified from ${sourceLabel(source)}$cite'
         '$asOf. Laws and posted signage change — verify locally before relying '
         'on this.',
     elevated: false,

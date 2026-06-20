@@ -451,9 +451,16 @@ class _PinDialogState extends State<PinDialog> {
     );
     if (caveat == null) return null;
 
-    final bg = caveat.elevated ? const Color(0xFFFFF3E0) : const Color(0xFFF5F5F5);
-    final border = caveat.elevated ? const Color(0xFFFFB74D) : const Color(0xFFBDBDBD);
-    final osmUrl = osmObjectUrl(source: source, sourceExternalId: widget.sourceExternalId);
+    final bg = caveat.elevated
+        ? const Color(0xFFFFF3E0)
+        : const Color(0xFFF5F5F5);
+    final border = caveat.elevated
+        ? const Color(0xFFFFB74D)
+        : const Color(0xFFBDBDBD);
+    final osmUrl = osmObjectUrl(
+      source: source,
+      sourceExternalId: widget.sourceExternalId,
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -469,7 +476,9 @@ class _PinDialogState extends State<PinDialog> {
           Row(
             children: [
               Icon(
-                caveat.elevated ? Icons.warning_amber_rounded : Icons.info_outline,
+                caveat.elevated
+                    ? Icons.warning_amber_rounded
+                    : Icons.info_outline,
                 size: 18,
                 color: Colors.black87,
               ),

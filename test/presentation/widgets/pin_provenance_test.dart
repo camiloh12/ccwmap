@@ -37,8 +37,10 @@ void main() {
   });
 
   test('osmObjectUrl only for valid osm ids', () {
-    expect(osmObjectUrl(source: 'osm', sourceExternalId: 'node/123'),
-        'https://www.openstreetmap.org/node/123');
+    expect(
+      osmObjectUrl(source: 'osm', sourceExternalId: 'node/123'),
+      'https://www.openstreetmap.org/node/123',
+    );
     expect(osmObjectUrl(source: 'nces', sourceExternalId: 'node/123'), isNull);
     expect(osmObjectUrl(source: 'osm', sourceExternalId: 'garbage'), isNull);
   });

@@ -247,22 +247,22 @@ void main() {
 
   group('PinMapper provenance', () {
     Pin systemPin() => Pin(
-          id: 'p1',
-          name: 'Lincoln Elementary',
-          location: Location.fromLatLng(30.1, -97.7),
-          status: PinStatus.NO_GUN,
-          restrictionTag: RestrictionTag.SCHOOL_K12,
-          metadata: PinMetadata(
-            createdBy: 'sys',
-            createdAt: DateTime.utc(2026, 1, 1),
-            lastModified: DateTime.utc(2026, 1, 1),
-            source: 'nces',
-            sourceExternalId: '480000100001',
-            confidence: 'high',
-            legalCitation: 'TX Penal Code 46.03(a)(1)',
-            legalCitationVerifiedDate: '2026-05-31',
-          ),
-        );
+      id: 'p1',
+      name: 'Lincoln Elementary',
+      location: Location.fromLatLng(30.1, -97.7),
+      status: PinStatus.NO_GUN,
+      restrictionTag: RestrictionTag.SCHOOL_K12,
+      metadata: PinMetadata(
+        createdBy: 'sys',
+        createdAt: DateTime.utc(2026, 1, 1),
+        lastModified: DateTime.utc(2026, 1, 1),
+        source: 'nces',
+        sourceExternalId: '480000100001',
+        confidence: 'high',
+        legalCitation: 'TX Penal Code 46.03(a)(1)',
+        legalCitationVerifiedDate: '2026-05-31',
+      ),
+    );
 
     test('toEntity preserves source instead of hardcoding user', () {
       final e = PinMapper.toEntity(systemPin());

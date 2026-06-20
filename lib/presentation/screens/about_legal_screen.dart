@@ -21,7 +21,10 @@ class AboutLegalScreen extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text('Map data', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text(
+              'Map data',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
             const Text(
               'Some pins are derived from OpenStreetMap and are made available '
@@ -35,9 +38,14 @@ class AboutLegalScreen extends StatelessWidget {
               child: const Text('OpenStreetMap copyright & ODbL'),
             ),
             const Divider(height: 32),
-            const Text('Basemap', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text(
+              'Basemap',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 12),
-            const Text('Basemap tiles © MapTiler © OpenStreetMap contributors.'),
+            const Text(
+              'Basemap tiles © MapTiler © OpenStreetMap contributors.',
+            ),
             TextButton(
               onPressed: () => _open('https://www.maptiler.com/copyright/'),
               child: const Text('MapTiler attribution'),
