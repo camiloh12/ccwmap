@@ -104,5 +104,34 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('parses provenance columns for a system pin row', () {
+      final item = GetPinsInViewRow.parse({
+        'kind': 'pin',
+        'pin_id': 'p1',
+        'name': 'Federal Courthouse',
+        'latitude': 30.0,
+        'longitude': -97.0,
+        'status': 2,
+        'restriction_tag': 'STATE_LOCAL_GOVT',
+        'has_security_screening': true,
+        'has_posted_signage': false,
+        'created_by': '81775f8b-1a6a-47d6-b793-e9ab7e38634e',
+        'created_at': '2026-05-31T00:00:00Z',
+        'last_modified': '2026-05-31T00:00:00Z',
+        'source': 'hifld_courts',
+        'source_external_id': 'GLOBALID-123',
+        'confidence': 'high',
+        'legal_citation': 'TX Penal Code 46.03(a)(3)',
+        'legal_citation_verified_date': '2026-05-31',
+      });
+      expect(item, isA<MapItemPin>());
+      final pin = (item as MapItemPin).pin;
+      expect(pin.metadata.source, 'hifld_courts');
+      expect(pin.metadata.confidence, 'high');
+      expect(pin.metadata.legalCitation, 'TX Penal Code 46.03(a)(3)');
+      expect(pin.metadata.sourceExternalId, 'GLOBALID-123');
+      expect(pin.metadata.legalCitationVerifiedDate, '2026-05-31');
+    });
   });
 }
