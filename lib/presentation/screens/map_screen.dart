@@ -1265,8 +1265,9 @@ class _MapScreenState extends State<MapScreen> {
     final auth = Provider.of<AuthViewModel>(context, listen: false);
     final currentUserId = auth.currentUser?.id;
     String? pinCreatorId;
+    Pin? existing;
     if (isEditMode && pinId != null) {
-      final existing = await _viewModel?.getPinById(pinId);
+      existing = await _viewModel?.getPinById(pinId);
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
@@ -1288,6 +1289,11 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: initialRestrictionTag,
         initialHasSecurityScreening: initialHasSecurityScreening,
         initialHasPostedSignage: initialHasPostedSignage,
+        source: existing?.metadata.source,
+        confidence: existing?.metadata.confidence,
+        legalCitation: existing?.metadata.legalCitation,
+        legalCitationVerifiedDate: existing?.metadata.legalCitationVerifiedDate,
+        sourceExternalId: existing?.metadata.sourceExternalId,
         onReport: canModerate && pinId != null
             ? () => _handleReportPin(dialogContext, pinId)
             : null,
@@ -1593,6 +1599,11 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: pin.restrictionTag,
         initialHasSecurityScreening: pin.hasSecurityScreening,
         initialHasPostedSignage: pin.hasPostedSignage,
+        source: pin.metadata.source,
+        confidence: pin.metadata.confidence,
+        legalCitation: pin.metadata.legalCitation,
+        legalCitationVerifiedDate: pin.metadata.legalCitationVerifiedDate,
+        sourceExternalId: pin.metadata.sourceExternalId,
         onConfirm: (_) {
           // Unreachable in read-only mode; provided to satisfy required param.
         },
