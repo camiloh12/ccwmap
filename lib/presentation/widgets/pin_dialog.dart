@@ -158,8 +158,6 @@ class _PinDialogState extends State<PinDialog> {
               ),
               const SizedBox(height: 24),
 
-              ?_buildProvenanceBanner(),
-
               // Name Text Field
               Text(
                 'Location name:',
@@ -351,6 +349,10 @@ class _PinDialogState extends State<PinDialog> {
                     ),
                   ],
                 ),
+
+              // Provenance caveat — rendered at the very bottom, below the
+              // action buttons, so it reads as a closing footnote.
+              ?_buildProvenanceBanner(),
             ],
           ),
         ),
@@ -463,7 +465,7 @@ class _PinDialogState extends State<PinDialog> {
     );
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(top: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: bg,
