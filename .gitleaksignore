@@ -15,3 +15,9 @@
 # already committed in migration 008's RLS policy, lib/core/system_constants.dart,
 # and the staging seed. Flagged by the default generic-api-key entropy rule.
 bac40eed9a2160e17dea44e0fc94f3afb788807e:docs/superpowers/plans/2026-05-24-pre-populate-pins-phase-2.md:generic-api-key:36
+
+# False positive: same public system-user UUID (kSystemUserId,
+# 81775f8b-1a6a-47d6-b793-e9ab7e38634e) in a pre-flight SQL example inside the
+# Phase 7 Stage B prod-import plan doc. Not a secret — same fixed owner id as
+# above. Flagged by the default generic-api-key entropy rule.
+976ff6612e7a89239cf4bb66a75030587f7821ee:docs/superpowers/plans/2026-06-19-phase7-stage-b-prod-import.md:generic-api-key:398
