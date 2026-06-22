@@ -15,8 +15,9 @@ the pilot ship, and the conditions under which we should revisit each.
 CCW Map ships a tiered sync model (see spec §5):
 
 - **Mine pins** — full bidirectional sync, never cluster; rendered as
-  individual dots that fade out below ~zoom 12 (so they don't linger over
-  the cluster bubbles on zoom-out — see the rendering section below).
+  individual dots that are hidden at cluster zoom (in step with the cached
+  pins) so they don't linger over the bubbles on zoom-out — see the
+  rendering section below.
 - **Cached non-mine pins** — fetched by viewport bbox, LRU-evicted.
 - **Everywhere else** — fetched on demand at the current zoom.
 
@@ -59,12 +60,14 @@ is supported by `maplibre_gl` 0.24.1 — see `references/copilot-tools.md`).
 constituent pins). The client splits its pin layer into two layers
 sourced from the same GeoJSON via filter expressions:
 
-- `mine-pins-layer` — features where `isMine == true`. Fades out below
-  ~zoom 12 via a zoom-opacity ramp (circle `11→0.0, 12→0.8`; label
-  `11→0.0, 12.5→1.0`). The RPC excludes my pins from its clusters (they
-  sync via MyPinsSync), so a cluster-presence toggle can't hide them — and
-  in a sparse area no clusters form at all — so the ramp is keyed on zoom,
-  matching the RPC's zoom-12 cluster→individual cutover.
+- `mine-pins-layer` — features where `isMine == true`. Hidden (whole-layer
+  visibility) when `viewportClusters` is non-empty, in lockstep with the
+  cached pins. The RPC excludes my pins from its clusters (they sync via
+  MyPinsSync), so hiding them isn't about double-render — it's so the user's
+  own pins vanish at the same cluster cutover instead of lingering as lone
+  dots over the bubbles on zoom-out. Toggling visibility (not fill opacity)
+  also drops the white circle stroke — a fill-opacity ramp left the ring
+  drawn at low zoom.
 - `cached-pins-layer` — features where `isMine == false`. Hidden when
   `viewportClusters` is non-empty.
 
@@ -84,8 +87,9 @@ Cluster rendering (refined 2026-06-19 — see that section below):
 - Eliminates double-render (cached pins are hidden when clusters cover
   the viewport).
 - The user's own pins read clearly at metro zoom (the "I just dropped a
-  pin" loop) but fade out on zoom-out, so the country/region view collapses
-  to clean cluster bubbles instead of leaving lone dots scattered on top.
+  pin" loop) but disappear in step with the cached pins on zoom-out, so the
+  country/region view collapses to clean cluster bubbles instead of leaving
+  lone dots scattered on top.
 - Single server response type (always cluster rows) — simpler RPC
   surface, simpler client parser path.
 - No grid artifacts (AVG centroid stays from prior fix).
