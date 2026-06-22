@@ -24,6 +24,11 @@ class SupabasePinMapper {
       photoUri: pin.metadata.photoUri,
       notes: pin.metadata.notes,
       votes: pin.metadata.votes,
+      source: pin.metadata.source,
+      sourceExternalId: pin.metadata.sourceExternalId,
+      confidence: pin.metadata.confidence,
+      legalCitation: pin.metadata.legalCitation,
+      legalCitationVerifiedDate: pin.metadata.legalCitationVerifiedDate,
     );
   }
 
@@ -44,6 +49,11 @@ class SupabasePinMapper {
         photoUri: dto.photoUri,
         notes: dto.notes,
         votes: dto.votes,
+        source: dto.source,
+        sourceExternalId: dto.sourceExternalId,
+        confidence: dto.confidence,
+        legalCitation: dto.legalCitation,
+        legalCitationVerifiedDate: dto.legalCitationVerifiedDate,
       ),
     );
   }

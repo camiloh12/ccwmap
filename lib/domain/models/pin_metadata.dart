@@ -6,6 +6,15 @@ class PinMetadata {
   final String? notes;
   final int votes;
 
+  /// Provenance — `'user'` for user-created pins, otherwise the importer
+  /// source code (`nces`, `gsa`, `osm`, …). The other four are populated by
+  /// the importer and are null on user pins.
+  final String source;
+  final String? sourceExternalId;
+  final String? confidence; // 'high' | 'medium' | 'low'
+  final String? legalCitation;
+  final String? legalCitationVerifiedDate; // ISO date string (YYYY-MM-DD)
+
   PinMetadata({
     this.createdBy,
     required this.createdAt,
@@ -13,6 +22,11 @@ class PinMetadata {
     this.photoUri,
     this.notes,
     this.votes = 0,
+    this.source = 'user',
+    this.sourceExternalId,
+    this.confidence,
+    this.legalCitation,
+    this.legalCitationVerifiedDate,
   });
 
   PinMetadata copyWith({
@@ -22,6 +36,11 @@ class PinMetadata {
     String? photoUri,
     String? notes,
     int? votes,
+    String? source,
+    String? sourceExternalId,
+    String? confidence,
+    String? legalCitation,
+    String? legalCitationVerifiedDate,
   }) {
     return PinMetadata(
       createdBy: createdBy ?? this.createdBy,
@@ -30,6 +49,12 @@ class PinMetadata {
       photoUri: photoUri ?? this.photoUri,
       notes: notes ?? this.notes,
       votes: votes ?? this.votes,
+      source: source ?? this.source,
+      sourceExternalId: sourceExternalId ?? this.sourceExternalId,
+      confidence: confidence ?? this.confidence,
+      legalCitation: legalCitation ?? this.legalCitation,
+      legalCitationVerifiedDate:
+          legalCitationVerifiedDate ?? this.legalCitationVerifiedDate,
     );
   }
 
@@ -41,6 +66,11 @@ class PinMetadata {
       'photoUri': photoUri,
       'notes': notes,
       'votes': votes,
+      'source': source,
+      'sourceExternalId': sourceExternalId,
+      'confidence': confidence,
+      'legalCitation': legalCitation,
+      'legalCitationVerifiedDate': legalCitationVerifiedDate,
     };
   }
 
@@ -52,6 +82,11 @@ class PinMetadata {
       photoUri: json['photoUri'] as String?,
       notes: json['notes'] as String?,
       votes: json['votes'] as int? ?? 0,
+      source: (json['source'] as String?) ?? 'user',
+      sourceExternalId: json['sourceExternalId'] as String?,
+      confidence: json['confidence'] as String?,
+      legalCitation: json['legalCitation'] as String?,
+      legalCitationVerifiedDate: json['legalCitationVerifiedDate'] as String?,
     );
   }
 
@@ -65,7 +100,12 @@ class PinMetadata {
           lastModified == other.lastModified &&
           photoUri == other.photoUri &&
           notes == other.notes &&
-          votes == other.votes;
+          votes == other.votes &&
+          source == other.source &&
+          sourceExternalId == other.sourceExternalId &&
+          confidence == other.confidence &&
+          legalCitation == other.legalCitation &&
+          legalCitationVerifiedDate == other.legalCitationVerifiedDate;
 
   @override
   int get hashCode =>
@@ -74,5 +114,10 @@ class PinMetadata {
       lastModified.hashCode ^
       photoUri.hashCode ^
       notes.hashCode ^
-      votes.hashCode;
+      votes.hashCode ^
+      source.hashCode ^
+      sourceExternalId.hashCode ^
+      confidence.hashCode ^
+      legalCitation.hashCode ^
+      legalCitationVerifiedDate.hashCode;
 }

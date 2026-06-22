@@ -42,6 +42,11 @@ class GetPinsInViewRow {
         createdBy: j['created_by'] as String?,
         createdAt: DateTime.parse(j['created_at'] as String),
         lastModified: DateTime.parse(j['last_modified'] as String),
+        source: (j['source'] as String?) ?? 'user',
+        sourceExternalId: j['source_external_id'] as String?,
+        confidence: j['confidence'] as String?,
+        legalCitation: j['legal_citation'] as String?,
+        legalCitationVerifiedDate: j['legal_citation_verified_date'] as String?,
       ),
     );
   }

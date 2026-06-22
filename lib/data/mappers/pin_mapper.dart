@@ -24,7 +24,11 @@ class PinMapper {
       photoUri: pin.metadata.photoUri,
       notes: pin.metadata.notes,
       votes: pin.metadata.votes,
-      source: 'user',
+      source: pin.metadata.source,
+      sourceExternalId: pin.metadata.sourceExternalId,
+      confidence: pin.metadata.confidence,
+      legalCitation: pin.metadata.legalCitation,
+      legalCitationVerifiedDate: pin.metadata.legalCitationVerifiedDate,
       userModified: false,
       cachedAt: null,
     );
@@ -49,14 +53,19 @@ class PinMapper {
         photoUri: entity.photoUri,
         notes: entity.notes,
         votes: entity.votes,
+        source: entity.source,
+        sourceExternalId: entity.sourceExternalId,
+        confidence: entity.confidence,
+        legalCitation: entity.legalCitation,
+        legalCitationVerifiedDate: entity.legalCitationVerifiedDate,
       ),
     );
   }
 
   /// Build a [PinEntity] for the bbox-cache flow. Sets `cachedAt` so the LRU
-  /// eviction in `ViewportPinsManager` can find this row. `source` is left
-  /// at the default `'user'` — Phase 1 callers should overwrite from the RPC
-  /// row before insert when provenance is known.
+  /// eviction in `ViewportPinsManager` can find this row. Provenance (`source`,
+  /// `confidence`, …) is carried from `pin.metadata` by `toEntity`, so cached
+  /// system pins retain their origin.
   static PinEntity toCachedEntity(Pin pin, {required DateTime cachedAt}) {
     final base = toEntity(pin);
     return base.copyWith(cachedAt: Value(cachedAt.millisecondsSinceEpoch));

@@ -23,6 +23,7 @@ import 'package:ccwmap/presentation/widgets/report_pin_dialog.dart';
 import 'package:ccwmap/presentation/widgets/sign_in_prompt_sheet.dart';
 import 'package:ccwmap/presentation/widgets/compass_button.dart';
 import 'package:ccwmap/presentation/utils/error_messages.dart';
+import 'package:ccwmap/presentation/screens/about_legal_screen.dart';
 import 'package:ccwmap/presentation/screens/settings_screen.dart';
 import 'package:ccwmap/domain/models/map_item.dart';
 import 'package:ccwmap/domain/models/pin.dart';
@@ -362,7 +363,7 @@ class _MapScreenState extends State<MapScreen> {
       // what caused the render -> gone-for-a-frame -> render flash.
       if (_pinLayersCreated) {
         await _mapController!.setGeoJsonSource('pins-source', geojson);
-        await _applyCachedPinsVisibility();
+        await _applyIndividualPinsVisibility();
         return;
       }
 
@@ -411,12 +412,17 @@ class _MapScreenState extends State<MapScreen> {
         '#999999', // Default gray
       ];
 
-      // Split the pin features into two layers via filter expressions.
-      // - mine-pins-layer: features where isMine == true.    Always visible.
-      // - cached-pins-layer: features where isMine == false. Hidden by
-      //   _applyCachedPinsVisibility when clusters are present at low zoom,
-      //   so the user never sees cached pins double-rendered underneath
-      //   their containing cluster bubble. See docs/dev/CLUSTER_RENDERING.md.
+      // Split the pin features into two layers via filter expressions; both
+      // are toggled off together by _applyIndividualPinsVisibility whenever
+      // clusters are present (low zoom), so on zoom-out the map collapses
+      // cleanly to cluster bubbles with no individual dots left on top, then
+      // both reappear at zoom >= 12 where the RPC returns individual pins.
+      // - cached-pins-layer (isMine == false): hidden so cached pins aren't
+      //   double-rendered underneath the cluster bubbles that aggregate them.
+      // - mine-pins-layer (isMine == true): the RPC excludes my pins from its
+      //   clusters (they sync via MyPinsSync), but we hide them in step with
+      //   the cached pins so they don't linger as lone dots on zoom-out.
+      // See docs/dev/CLUSTER_RENDERING.md.
       await _mapController!.addCircleLayer(
         'pins-source',
         'mine-pins-layer',
@@ -508,7 +514,7 @@ class _MapScreenState extends State<MapScreen> {
         ],
       );
 
-      await _applyCachedPinsVisibility();
+      await _applyIndividualPinsVisibility();
       _pinLayersCreated = true;
     } catch (e) {
       // Rebuild from scratch next time rather than data-swap a half-built state.
@@ -568,7 +574,7 @@ class _MapScreenState extends State<MapScreen> {
       // pan/zoom). An empty feature list just clears the rendered clusters.
       if (_clusterLayersCreated) {
         await _mapController!.setGeoJsonSource('clusters-source', geojson);
-        await _applyCachedPinsVisibility();
+        await _applyIndividualPinsVisibility();
         return;
       }
 
@@ -648,7 +654,7 @@ class _MapScreenState extends State<MapScreen> {
         ],
       );
 
-      await _applyCachedPinsVisibility();
+      await _applyIndividualPinsVisibility();
       _clusterLayersCreated = true;
     } catch (e) {
       // Rebuild from scratch next time rather than data-swap a half-built state.
@@ -664,26 +670,31 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  /// Hide the `cached-pins-layer` (and its label layer) whenever the
-  /// cluster layer is non-empty, so the map doesn't double-render pins
-  /// underneath the clusters that aggregate them. Mine pins live in
-  /// `mine-pins-layer` and stay visible at every zoom — the user must
-  /// always see their own pins regardless of cluster presence.
+  /// Hide every individual-pin layer (the `cached-pins-layer` and
+  /// `mine-pins-layer` circle layers plus their label layers) whenever the
+  /// cluster layer is non-empty, so on zoom-out the map collapses cleanly to
+  /// cluster bubbles. Cached pins are hidden to avoid double-rendering
+  /// underneath the clusters that aggregate them; mine pins aren't in the
+  /// RPC's clusters, but are hidden in step so they vanish at the same moment
+  /// instead of lingering as lone dots over the bubbles. All four reappear at
+  /// zoom >= 12 where the RPC returns individual pins instead of clusters.
+  ///
+  /// Toggling whole-layer visibility (not fill opacity) also means the white
+  /// circle stroke disappears with the dot — a fill-opacity ramp would leave
+  /// the stroke ring drawn at low zoom.
   ///
   /// Reads `viewportClusters.value` at call time (not closure-captured)
   /// so the latest cluster set drives the decision. Safe to call from
   /// either updater — whichever ran more recently wins.
-  Future<void> _applyCachedPinsVisibility() async {
+  Future<void> _applyIndividualPinsVisibility() async {
     final controller = _mapController;
     if (controller == null) return;
-    final hideCached =
-        (_viewModel?.viewportClusters.value ?? const []).isNotEmpty;
+    final visible = (_viewModel?.viewportClusters.value ?? const []).isEmpty;
     try {
-      await controller.setLayerVisibility('cached-pins-layer', !hideCached);
-      await controller.setLayerVisibility(
-        'cached-pins-labels-layer',
-        !hideCached,
-      );
+      await controller.setLayerVisibility('cached-pins-layer', visible);
+      await controller.setLayerVisibility('cached-pins-labels-layer', visible);
+      await controller.setLayerVisibility('mine-pins-layer', visible);
+      await controller.setLayerVisibility('mine-pins-labels-layer', visible);
     } catch (e) {
       debugPrint('MapScreen: setLayerVisibility failed: $e');
     }
@@ -694,9 +705,8 @@ class _MapScreenState extends State<MapScreen> {
   /// Each feature carries an `isMine` property derived from comparing the
   /// pin's `createdBy` against the current authenticated user id. The map
   /// uses this property to filter the GeoJSON into two layers
-  /// (`mine-pins-layer`, `cached-pins-layer`) so visibility can be toggled
-  /// independently — cached non-mine pins are hidden when clusters are
-  /// present at low zoom, but mine pins remain visible at every zoom.
+  /// (`mine-pins-layer`, `cached-pins-layer`); both are hidden together by
+  /// _applyIndividualPinsVisibility when clusters are present at low zoom.
   /// See [docs/dev/CLUSTER_RENDERING.md] for the rendering strategy.
   Map<String, dynamic> _buildPinsGeoJson() {
     final auth = Provider.of<AuthViewModel>(context, listen: false);
@@ -1265,8 +1275,9 @@ class _MapScreenState extends State<MapScreen> {
     final auth = Provider.of<AuthViewModel>(context, listen: false);
     final currentUserId = auth.currentUser?.id;
     String? pinCreatorId;
+    Pin? existing;
     if (isEditMode && pinId != null) {
-      final existing = await _viewModel?.getPinById(pinId);
+      existing = await _viewModel?.getPinById(pinId);
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
@@ -1288,6 +1299,11 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: initialRestrictionTag,
         initialHasSecurityScreening: initialHasSecurityScreening,
         initialHasPostedSignage: initialHasPostedSignage,
+        source: existing?.metadata.source,
+        confidence: existing?.metadata.confidence,
+        legalCitation: existing?.metadata.legalCitation,
+        legalCitationVerifiedDate: existing?.metadata.legalCitationVerifiedDate,
+        sourceExternalId: existing?.metadata.sourceExternalId,
         onReport: canModerate && pinId != null
             ? () => _handleReportPin(dialogContext, pinId)
             : null,
@@ -1593,6 +1609,11 @@ class _MapScreenState extends State<MapScreen> {
         initialRestrictionTag: pin.restrictionTag,
         initialHasSecurityScreening: pin.hasSecurityScreening,
         initialHasPostedSignage: pin.hasPostedSignage,
+        source: pin.metadata.source,
+        confidence: pin.metadata.confidence,
+        legalCitation: pin.metadata.legalCitation,
+        legalCitationVerifiedDate: pin.metadata.legalCitationVerifiedDate,
+        sourceExternalId: pin.metadata.sourceExternalId,
         onConfirm: (_) {
           // Unreachable in read-only mode; provided to satisfy required param.
         },
@@ -2378,6 +2399,34 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                 ),
+
+              // Always-visible attribution badge (guests have no menu). Tapping
+              // opens the full ODbL/MapTiler credits.
+              Positioned(
+                bottom: 4,
+                left: 8,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AboutLegalScreen(),
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.8),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text(
+                      '© OSM · MapTiler',
+                      style: TextStyle(fontSize: 10, color: Colors.black87),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );

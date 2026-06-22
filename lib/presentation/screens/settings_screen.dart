@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
+import 'package:ccwmap/presentation/screens/about_legal_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -87,6 +88,18 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 32),
+              OutlinedButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AboutLegalScreen(),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('About & Legal'),
+              ),
+              const SizedBox(height: 16),
               OutlinedButton(
                 onPressed: auth.isLoading
                     ? null

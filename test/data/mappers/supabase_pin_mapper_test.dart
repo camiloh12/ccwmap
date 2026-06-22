@@ -263,6 +263,41 @@ void main() {
         expect(restored.restrictionTag, tag);
       }
     });
+
+    test('round-trips provenance DTO <-> domain', () {
+      final dto = SupabasePinDto(
+        id: 'p1',
+        name: 'Bar None',
+        latitude: 30.0,
+        longitude: -97.0,
+        status: 2,
+        restrictionTag: 'BAR_ALCOHOL',
+        hasSecurityScreening: false,
+        hasPostedSignage: false,
+        createdBy: 'user-123',
+        createdAt: '2026-05-31T00:00:00Z',
+        lastModified: '2026-05-31T00:00:00Z',
+        votes: 0,
+        source: 'osm',
+        sourceExternalId: 'node/123',
+        confidence: 'medium',
+        legalCitation: 'TX Penal Code 46.03(a)(7)',
+        legalCitationVerifiedDate: '2026-05-31',
+      );
+      final pin = SupabasePinMapper.fromDto(dto);
+      expect(pin.metadata.source, 'osm');
+      expect(pin.metadata.sourceExternalId, 'node/123');
+      expect(pin.metadata.confidence, 'medium');
+      expect(pin.metadata.legalCitation, 'TX Penal Code 46.03(a)(7)');
+      expect(pin.metadata.legalCitationVerifiedDate, '2026-05-31');
+
+      final back = SupabasePinMapper.toDto(pin);
+      expect(back.source, 'osm');
+      expect(back.sourceExternalId, 'node/123');
+      expect(back.confidence, 'medium');
+      expect(back.legalCitation, 'TX Penal Code 46.03(a)(7)');
+      expect(back.legalCitationVerifiedDate, '2026-05-31');
+    });
   });
 
   group('SupabasePinDto provenance round-trip', () {
