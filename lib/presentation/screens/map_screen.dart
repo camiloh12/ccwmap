@@ -413,7 +413,12 @@ class _MapScreenState extends State<MapScreen> {
       ];
 
       // Split the pin features into two layers via filter expressions.
-      // - mine-pins-layer: features where isMine == true.    Always visible.
+      // - mine-pins-layer: features where isMine == true.  Faded out below
+      //   zoom ~12 via a zoom-opacity ramp so the user's own pins don't
+      //   linger as scattered individual dots over the cluster bubbles on
+      //   zoom-out. The RPC excludes my pins from its clusters (they sync via
+      //   MyPinsSync), so a cluster-presence toggle can't hide them — and in a
+      //   sparse area no clusters form at all — but a zoom ramp always can.
       // - cached-pins-layer: features where isMine == false. Hidden by
       //   _applyCachedPinsVisibility when clusters are present at low zoom,
       //   so the user never sees cached pins double-rendered underneath
@@ -426,7 +431,19 @@ class _MapScreenState extends State<MapScreen> {
           circleColor: circleColorByStatus,
           circleStrokeWidth: 2.0,
           circleStrokeColor: '#FFFFFF',
-          circleOpacity: 0.8,
+          // Fade my own pins in only as the map crosses from cluster view to
+          // individual-pin view (the RPC switches at zoom 12). Below ~zoom 11
+          // they're invisible, so zooming out leaves only the cluster bubbles
+          // — not my pins scattered on top. See docs/dev/CLUSTER_RENDERING.md.
+          circleOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.0,
+            12,
+            0.8,
+          ],
         ),
         filter: [
           '==',
@@ -474,6 +491,17 @@ class _MapScreenState extends State<MapScreen> {
           textMaxWidth: 10.0,
           textAllowOverlap: false,
           textIgnorePlacement: false,
+          // Fade labels in with their dots — hidden at cluster zoom, legible by
+          // metro zoom. Mirrors the mine-pins-layer circle-opacity ramp.
+          textOpacity: const [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11,
+            0.0,
+            12.5,
+            1.0,
+          ],
         ),
         enableInteraction: false,
         filter: [
@@ -667,9 +695,10 @@ class _MapScreenState extends State<MapScreen> {
 
   /// Hide the `cached-pins-layer` (and its label layer) whenever the
   /// cluster layer is non-empty, so the map doesn't double-render pins
-  /// underneath the clusters that aggregate them. Mine pins live in
-  /// `mine-pins-layer` and stay visible at every zoom — the user must
-  /// always see their own pins regardless of cluster presence.
+  /// underneath the clusters that aggregate them. Mine pins (in
+  /// `mine-pins-layer`) are NOT governed by this toggle — the RPC leaves my
+  /// pins out of its clusters, so they fade by a zoom-opacity ramp set at
+  /// layer-creation time rather than by cluster presence.
   ///
   /// Reads `viewportClusters.value` at call time (not closure-captured)
   /// so the latest cluster set drives the decision. Safe to call from
@@ -695,9 +724,9 @@ class _MapScreenState extends State<MapScreen> {
   /// Each feature carries an `isMine` property derived from comparing the
   /// pin's `createdBy` against the current authenticated user id. The map
   /// uses this property to filter the GeoJSON into two layers
-  /// (`mine-pins-layer`, `cached-pins-layer`) so visibility can be toggled
-  /// independently — cached non-mine pins are hidden when clusters are
-  /// present at low zoom, but mine pins remain visible at every zoom.
+  /// (`mine-pins-layer`, `cached-pins-layer`) handled independently —
+  /// cached non-mine pins are hidden when clusters are present at low zoom;
+  /// mine pins fade out below ~zoom 12 via a zoom-opacity ramp.
   /// See [docs/dev/CLUSTER_RENDERING.md] for the rendering strategy.
   Map<String, dynamic> _buildPinsGeoJson() {
     final auth = Provider.of<AuthViewModel>(context, listen: false);
