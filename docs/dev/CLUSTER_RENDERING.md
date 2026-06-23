@@ -60,16 +60,31 @@ is supported by `maplibre_gl` 0.24.1 — see `references/copilot-tools.md`).
 constituent pins). The client splits its pin layer into two layers
 sourced from the same GeoJSON via filter expressions:
 
+Both individual-pin layers are governed by `individualPinsVisible(zoom,
+hasClusters)` (`lib/presentation/map/pin_visibility.dart`): visible only at
+zoom ≥ `kClusterCutoverZoom` (12) **and** when `viewportClusters` is empty. The
+zoom term is load-bearing — see "sparse viewports" below.
+
 - `mine-pins-layer` — features where `isMine == true`. Hidden (whole-layer
-  visibility) when `viewportClusters` is non-empty, in lockstep with the
-  cached pins. The RPC excludes my pins from its clusters (they sync via
+  visibility) below the cutover or when clusters are present, in lockstep with
+  the cached pins. The RPC excludes my pins from its clusters (they sync via
   MyPinsSync), so hiding them isn't about double-render — it's so the user's
-  own pins vanish at the same cluster cutover instead of lingering as lone
-  dots over the bubbles on zoom-out. Toggling visibility (not fill opacity)
-  also drops the white circle stroke — a fill-opacity ramp left the ring
-  drawn at low zoom.
-- `cached-pins-layer` — features where `isMine == false`. Hidden when
-  `viewportClusters` is non-empty.
+  own pins vanish at the cluster cutover instead of lingering as lone dots over
+  the bubbles on zoom-out. Toggling visibility (not fill opacity) also drops the
+  white circle stroke — a fill-opacity ramp left the ring drawn at low zoom.
+- `cached-pins-layer` — features where `isMine == false`. Hidden below the
+  cutover or when clusters are present.
+
+**Sparse viewports (why the zoom term matters).** `get_pins_in_view` returns no
+cluster rows when the bbox holds no *other-user* pins — prod before the data
+import, or any region containing only the caller's own pins. An earlier version
+gated visibility on cluster presence alone, so in those viewports the individual
+pins never hid and lingered at continental zoom (regression from commit
+`a906f72`, which dropped the zoom-keyed fade added in `1f698bf`). Gating on
+`_lastIdleZoom` restores the cutover behavior while keeping the hard whole-layer
+toggle (no lingering stroke ring). `_applyIndividualPinsVisibility` is also
+re-run from `_onCameraIdle`, so the hide happens on the zoom gesture rather than
+waiting for the debounced bbox fetch.
 
 Cluster rendering (refined 2026-06-19 — see that section below):
 
@@ -96,17 +111,12 @@ Cluster rendering (refined 2026-06-19 — see that section below):
 - "Cluster of 1" visually reads as a pin instead of a fake cluster bubble.
 
 **Cons.**
-- Brief ~500ms gap on zoom-out where cached pins linger before clusters
-  arrive (bounded by `BboxRequestDebouncer`'s debounce window).
 - Small "single-pin clusters" still tap-to-zoom rather than tap-to-open
   the pin — slightly surprising UX but consistent: any cluster tap zooms
   in, and at zoom ≥ 12 individual pins take over.
 - Requires the split-layer plumbing in the client; not free.
 
 **When to revisit.**
-- If the 500ms zoom-out gap is reported as jarring, add eager hiding
-  of `cached-pins-layer` on zoom-threshold-crossing (don't wait for the
-  RPC to return).
 - If the "single-pin cluster" tap UX becomes a complaint, special-case
   cnt=1 clusters to open the pin instead of zooming in.
 
