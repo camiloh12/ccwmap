@@ -70,23 +70,26 @@ jobs:
       - name: Build IPA (SHOW_DEBUG_UI=true for beta)
         run: flutter build ipa --release --dart-define=SHOW_DEBUG_UI=true --export-options-plist=ios/ExportOptions.plist
 
-      - name: Read release notes (en-US) for TestFlight
-        id: notes
+      # Upload via altool directly rather than apple-actions/upload-testflight-build@v3.
+      # The action swallowed altool's non-zero exit: a missing/expired App Store
+      # Connect agreement made altool fail with HTTP 403, yet the step (and the
+      # whole release run) reported success and nothing reached TestFlight. A bare
+      # `run:` uses `bash -eo pipefail`, so a non-zero altool exit fails the job.
+      # altool reads the API key from ~/.appstoreconnect/private_keys/AuthKey_<id>.p8.
+      # (The v3 action also no longer accepts `release-notes`; TestFlight "What's
+      # New" is set in App Store Connect. Play still gets notes via whatsNewDirectory.)
+      - name: Upload to TestFlight (altool — fails the job on error)
+        env:
+          ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          {
-            echo 'content<<NOTES_EOF'
-            cat release_notes/whatsnew-en-US
-            echo NOTES_EOF
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Upload to TestFlight
-        uses: apple-actions/upload-testflight-build@v3
-        with:
-          app-path: build/ios/ipa/ccwmap.ipa
-          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
-          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          release-notes: ${{ steps.notes.outputs.content }}
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          printf '%s' "$ASC_PRIVATE_KEY" \
+            > "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          xcrun altool --upload-app --type ios \
+            --file build/ios/ipa/ccwmap.ipa \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
 
   deploy-android-internal:
     name: Android → Play Internal
