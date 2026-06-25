@@ -36,6 +36,13 @@ jobs:
       - name: Select Xcode 26
         run: sudo xcode-select -s $(ls -d /Applications/Xcode_26*.app | head -1)
 
+      # macos-latest rolled to the macOS 26 image (2026-06-23), whose Xcode 26
+      # ships without the iOS platform SDK pre-installed, so `flutter build ipa`
+      # fails with "iOS 26.0 is not installed. Please download and install the
+      # platform from Xcode > Settings > Components." Download it explicitly.
+      - name: Ensure iOS platform SDK is installed
+        run: xcodebuild -downloadPlatform iOS
+
       - uses: ./.github/actions/setup-flutter
         with:
           supabase-url: ${{ secrets.SUPABASE_URL }}
