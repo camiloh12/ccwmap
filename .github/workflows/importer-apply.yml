@@ -14,6 +14,16 @@ on:
         description: 'Type exactly: I-KNOW-THIS-WRITES-TO-STAGING or I-KNOW-THIS-WRITES-TO-PROD'
         required: true
         type: string
+      sources:
+        description: 'Comma-separated source names (default: all 7)'
+        required: false
+        type: string
+        default: 'hifld_courts,gsa,hifld_military,nces,ipeds,faa,osm'
+      states:
+        description: 'Comma-separated USPS state codes'
+        required: false
+        type: string
+        default: 'TX,FL,PA'
 
 concurrency:
   group: importer-${{ inputs.target }}
@@ -54,8 +64,8 @@ jobs:
         run: |
           uv run --no-sync python -m importer.cli \
             --apply \
-            --states TX,FL,PA \
-            --sources hifld_courts \
+            --states "${{ inputs.states }}" \
+            --sources "${{ inputs.sources }}" \
             --project-ref ${{ inputs.target }} \
             --i-know-this-writes-to-${{ inputs.target }} \
             --report-out "$GITHUB_WORKSPACE/importer-report.md"
