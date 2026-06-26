@@ -45,8 +45,27 @@ jobs:
       # ships without the iOS platform SDK pre-installed, so `flutter build ipa`
       # fails with "iOS 26.0 is not installed. Please download and install the
       # platform from Xcode > Settings > Components." Download it explicitly.
+      #
+      # `xcodebuild -downloadPlatform iOS` is flaky on GitHub's macOS runners —
+      # it fails ~40% of the time with "Unable to connect to simulator" (exit 70)
+      # during the post-download simulator handshake even though the SDK content
+      # downloads fine. Open upstream issue with no fix yet
+      # (actions/runner-images#13459, #12763), so retry before giving up.
       - name: Ensure iOS platform SDK is installed
-        run: xcodebuild -downloadPlatform iOS
+        run: |
+          for attempt in 1 2 3 4 5; do
+            echo "::group::Download iOS platform (attempt ${attempt}/5)"
+            if xcodebuild -downloadPlatform iOS; then
+              echo "::endgroup::"
+              echo "iOS platform SDK installed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "Attempt ${attempt} failed ('Unable to connect to simulator'); retrying in 15s..."
+            sleep 15
+          done
+          echo "iOS platform download failed after 5 attempts." >&2
+          exit 1
 
       - uses: ./.github/actions/setup-flutter
         with:
