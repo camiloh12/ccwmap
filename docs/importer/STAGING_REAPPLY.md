@@ -10,8 +10,10 @@ Two environments are involved:
 - **PowerShell** — run from `importer/` with the target project's service-role
   key in `IMPORTER_SUPABASE_SERVICE_ROLE_KEY`.
 - **SQL editor** — the Supabase **dashboard** SQL editor for the target project
-  (for staging that is project `miihmfhnsfmwgrvgayns`). Do **not** use the
-  Supabase MCP for staging — it is bound to prod.
+  (for staging that is project `miihmfhnsfmwgrvgayns`). The Supabase MCP is
+  currently bound to **staging** (`.mcp.json` `project_ref =
+  miihmfhnsfmwgrvgayns`, as of 2026-06-14), so MCP queries also hit staging; the
+  dashboard editor works regardless and is what these steps assume.
 
 All importer-written pins are owned by the system user
 `81775f8b-1a6a-47d6-b793-e9ab7e38634e` (`kSystemUserId`, same UUID in prod and
