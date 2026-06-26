@@ -8,8 +8,8 @@ projects:
     project_ref: "miihmfhnsfmwgrvgayns"
     url: "https://miihmfhnsfmwgrvgayns.supabase.co"
   prod:
-    project_ref: "REPLACE-WITH-PROD-PROJECT-REF"
-    url: "https://REPLACE-WITH-PROD-PROJECT-REF.supabase.co"
+    project_ref: "gqbxloaqamokbolcvesg"
+    url: "https://gqbxloaqamokbolcvesg.supabase.co"
 
 sources:
   hifld_courts:
