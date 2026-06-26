@@ -16,6 +16,7 @@ import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/map/cluster_label.dart';
+import 'package:ccwmap/presentation/map/pin_visibility.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
@@ -77,6 +78,12 @@ class _MapScreenState extends State<MapScreen> {
   bool _clusterLayersCreated = false;
   bool _isUpdatingClusters = false;
   bool _pendingClusterUpdate = false;
+
+  // Integer zoom from the most recent camera-idle — the same value sent to the
+  // get_pins_in_view RPC. Drives _applyIndividualPinsVisibility's zoom cutover
+  // so individual pins hide at low zoom even in sparse areas where the RPC
+  // returns no clusters. Defaults to the initial continental zoom.
+  int _lastIdleZoom = _initialZoom.round();
 
   // Debug state (toggled by long-pressing the title bar — lets user verify
   // iOS POI tap detection on-device without a Mac)
@@ -671,25 +678,38 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   /// Hide every individual-pin layer (the `cached-pins-layer` and
-  /// `mine-pins-layer` circle layers plus their label layers) whenever the
-  /// cluster layer is non-empty, so on zoom-out the map collapses cleanly to
-  /// cluster bubbles. Cached pins are hidden to avoid double-rendering
-  /// underneath the clusters that aggregate them; mine pins aren't in the
-  /// RPC's clusters, but are hidden in step so they vanish at the same moment
-  /// instead of lingering as lone dots over the bubbles. All four reappear at
-  /// zoom >= 12 where the RPC returns individual pins instead of clusters.
+  /// `mine-pins-layer` circle layers plus their label layers) below the cluster
+  /// cutover zoom or whenever the cluster layer is non-empty, so on zoom-out the
+  /// map collapses cleanly to cluster bubbles. Cached pins are hidden to avoid
+  /// double-rendering underneath the clusters that aggregate them; mine pins
+  /// aren't in the RPC's clusters, but are hidden in step so they vanish at the
+  /// same moment instead of lingering as lone dots over the bubbles. All four
+  /// reappear at zoom >= [kClusterCutoverZoom] where the RPC returns individual
+  /// pins instead of clusters.
+  ///
+  /// Gating on `_lastIdleZoom` (not cluster presence alone) is essential in
+  /// sparse viewports — prod with no imported pins, or any area holding only the
+  /// caller's own pins (which the RPC excludes from its clusters) — where the
+  /// RPC returns no clusters at all, so a cluster-presence-only toggle would
+  /// leave individual pins drawn at continental zoom. See [individualPinsVisible]
+  /// and docs/dev/CLUSTER_RENDERING.md.
   ///
   /// Toggling whole-layer visibility (not fill opacity) also means the white
   /// circle stroke disappears with the dot — a fill-opacity ramp would leave
   /// the stroke ring drawn at low zoom.
   ///
-  /// Reads `viewportClusters.value` at call time (not closure-captured)
-  /// so the latest cluster set drives the decision. Safe to call from
-  /// either updater — whichever ran more recently wins.
+  /// Reads `viewportClusters.value` and `_lastIdleZoom` at call time (not
+  /// closure-captured) so the latest state drives the decision. Safe to call
+  /// from either updater — whichever ran more recently wins.
   Future<void> _applyIndividualPinsVisibility() async {
     final controller = _mapController;
     if (controller == null) return;
-    final visible = (_viewModel?.viewportClusters.value ?? const []).isEmpty;
+    final hasClusters =
+        (_viewModel?.viewportClusters.value ?? const []).isNotEmpty;
+    final visible = individualPinsVisible(
+      zoom: _lastIdleZoom,
+      hasClusters: hasClusters,
+    );
     try {
       await controller.setLayerVisibility('cached-pins-layer', visible);
       await controller.setLayerVisibility('cached-pins-labels-layer', visible);
@@ -923,13 +943,19 @@ class _MapScreenState extends State<MapScreen> {
     try {
       final bounds = await controller.getVisibleRegion();
       final z = controller.cameraPosition?.zoom ?? _initialZoom;
+      _lastIdleZoom = z.round();
       viewModel.onCameraIdle(
         swLat: bounds.southwest.latitude,
         swLng: bounds.southwest.longitude,
         neLat: bounds.northeast.latitude,
         neLng: bounds.northeast.longitude,
-        zoom: z.round(),
+        zoom: _lastIdleZoom,
       );
+      // Re-evaluate individual-pin visibility against the new zoom immediately,
+      // so a zoom-out below the cluster cutover hides them without waiting for
+      // the debounced bbox fetch to land (in a sparse viewport that fetch
+      // returns no clusters, so cluster presence alone would never hide them).
+      await _applyIndividualPinsVisibility();
     } catch (e) {
       debugPrint('MapScreen: getVisibleRegion failed: $e');
     }
