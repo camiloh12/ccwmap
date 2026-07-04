@@ -129,3 +129,42 @@ def test_module_entrypoint_actually_runs_main() -> None:
     # main() reaches the missing-env-var guard and returns 2.
     assert result.returncode == 2
     assert "IMPORTER_SUPABASE_SERVICE_ROLE_KEY" in result.stderr
+
+
+def test_prod_project_ref_is_configured_not_placeholder():
+    """The prod target must be a real Supabase ref before any prod apply.
+    A leftover REPLACE-WITH-PROD-PROJECT-REF builds a garbage URL that
+    silently points at a non-existent host."""
+    import yaml
+    from pathlib import Path
+    from importer.cli import CONFIG_PATH
+
+    config = yaml.safe_load(Path(CONFIG_PATH).read_text(encoding="utf-8"))
+    prod = config["projects"]["prod"]
+    assert prod["project_ref"] == "gqbxloaqamokbolcvesg"
+    assert prod["url"] == "https://gqbxloaqamokbolcvesg.supabase.co"
+    assert "REPLACE-WITH" not in prod["project_ref"]
+    assert "REPLACE-WITH" not in prod["url"]
+
+
+def test_main_errors_on_placeholder_project_url(monkeypatch):
+    """If a project url is ever re-blanked to a placeholder, main() must
+    refuse to run rather than build a client against a non-existent host."""
+    import importer.cli as cli
+
+    monkeypatch.setenv("IMPORTER_SUPABASE_SERVICE_ROLE_KEY", "dummy")
+    monkeypatch.setattr(cli, "_load_config", lambda: {
+        "system_user_id": "x",
+        "projects": {
+            "prod": {
+                "project_ref": "REPLACE-WITH-PROD-PROJECT-REF",
+                "url": "https://REPLACE-WITH-PROD-PROJECT-REF.supabase.co",
+            }
+        },
+        "sources": {},
+    })
+    rc = cli.main([
+        "--dry-run", "--states", "TX",
+        "--sources", "hifld_courts", "--project-ref", "prod",
+    ])
+    assert rc == 2

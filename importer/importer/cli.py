@@ -198,6 +198,12 @@ def main(argv: list[str] | None = None) -> int:
 
     config = _load_config()
     project = config["projects"][args.project_ref]
+    if "REPLACE-WITH" in project["url"]:
+        sys.stderr.write(
+            f"ERROR: project '{args.project_ref}' is not configured "
+            f"(url is still a placeholder: {project['url']}).\n"
+        )
+        return 2
     system_user_id = config["system_user_id"]
 
     locator = load_state_locator(STATES_BOUNDARY_FIXTURE)
