@@ -58,13 +58,8 @@ jobs:
             importer-report.json
           retention-days: 14
 
-  secret-scan:
-    name: Secret scan (gitleaks)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # NOTE: the "Secret scan (gitleaks)" job that used to live here was removed.
+  # gitleaks now runs unconditionally in pr-checks.yml (which fires on every PR),
+  # so it is the single source of the required "Secret scan (gitleaks)" context.
+  # Keeping a second same-named job here produced a duplicate check context on
+  # importer/mixed PRs.
