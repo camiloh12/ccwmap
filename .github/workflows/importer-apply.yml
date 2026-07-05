@@ -40,6 +40,11 @@ jobs:
         working-directory: importer
     steps:
       - name: Validate confirmation phrase
+        # Runs before checkout, so override the job-level
+        # `working-directory: importer` — that dir does not exist until checkout
+        # populates it, and bash cannot start in a missing cwd. This step needs
+        # no repo files (pure string comparison); the workspace root always exists.
+        working-directory: ${{ github.workspace }}
         run: |
           expected="I-KNOW-THIS-WRITES-TO-$(echo '${{ inputs.target }}' | tr a-z A-Z)"
           if [ "${{ inputs.confirm }}" != "$expected" ]; then
