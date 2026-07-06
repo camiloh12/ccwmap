@@ -245,11 +245,14 @@ LANGUAGE plpgsql
 SECURITY INVOKER  -- respect RLS on pins; caller's auth.uid() reads through
 AS $$
 DECLARE
-  -- pins.location is a generated `geometry` column (SRID 4326), per the
-  -- existing baseline schema. Keep the bbox in geometry too so the
-  -- ST_Intersects(geometry, geometry) overload resolves cleanly — mixing
-  -- in `::geography` casts would fail because PostGIS has no
-  -- ST_Intersects(geometry, geography) overload.
+  -- NOTE (superseded by migration 010): this comment originally asserted
+  -- pins.location was `geometry`. That was only true on staging; PROD's
+  -- location is `geography` (see CLAUDE.md / 011_location_geography_parity).
+  -- The geometry-only assumption below broke the cluster branch on prod
+  -- (ST_SnapToGrid has no geography overload). 010 replaces this function
+  -- with a geography-safe version. bbox stays geometry: ST_Intersects
+  -- resolves against both a geometry and a geography location column and
+  -- keeps using the GIST index either way.
   bbox geometry := ST_MakeEnvelope(sw_lng, sw_lat, ne_lng, ne_lat, 4326);
   candidate_count INT;
   grid_size double precision;
