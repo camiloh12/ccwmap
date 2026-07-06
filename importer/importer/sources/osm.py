@@ -14,6 +14,7 @@ License: ODbL (share-alike) — the only pilot source so licensed. The ODbL dump
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
@@ -37,6 +38,16 @@ class OsmSource(Source):
     _USER_AGENT: ClassVar[str] = (
         "ccwmap-importer/1.0 (+https://camiloh12.github.io/ccwmap; camilo@kyberneticlabs.com)"
     )
+
+    # Overpass is a free, shared, frequently-overloaded service. It returns 429
+    # when rate-limiting and 502/503/504 when its front-end is saturated (a 504
+    # aborted the first prod import mid-fetch). Retry those transient statuses
+    # and transport timeouts with exponential backoff; a plain 4xx (bad query,
+    # 406 UA) is permanent and must fail fast. Mirrors the app's sync retry
+    # policy (3 attempts, exponential backoff).
+    _MAX_ATTEMPTS: ClassVar[int] = 3
+    _BACKOFF_BASE_SECONDS: ClassVar[float] = 1.0
+    _RETRYABLE_STATUS: ClassVar[frozenset[int]] = frozenset({429, 500, 502, 503, 504})
 
     def __init__(
         self,
@@ -130,9 +141,31 @@ class OsmSource(Source):
                 if dest.exists() and not refetch:
                     continue
                 query = self._build_query(state, tags)
+                r = self._post_with_retry(client, query)
+                dest.write_bytes(r.content)
+
+    def _post_with_retry(self, client: httpx.Client, query: str) -> httpx.Response:
+        """POST a query to Overpass, retrying transient failures (retryable
+        statuses + transport timeouts) with exponential backoff. Re-raises the
+        last error once attempts are exhausted, or immediately on a
+        non-transient (4xx) status."""
+        for attempt in range(self._MAX_ATTEMPTS):
+            try:
                 r = client.post(self._overpass_url, content=query.encode("utf-8"))
                 r.raise_for_status()
-                dest.write_bytes(r.content)
+                return r
+            except httpx.HTTPStatusError as exc:
+                if (
+                    exc.response.status_code not in self._RETRYABLE_STATUS
+                    or attempt == self._MAX_ATTEMPTS - 1
+                ):
+                    raise
+            except httpx.TransportError:
+                # Connection resets / read timeouts — always transient.
+                if attempt == self._MAX_ATTEMPTS - 1:
+                    raise
+            time.sleep(self._BACKOFF_BASE_SECONDS * (2 ** attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def _element_coords(self, el: dict) -> tuple[float, float] | None:
         if "lat" in el and "lon" in el:

@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -69,6 +70,66 @@ def test_fetch_sends_descriptive_user_agent(tmp_path, httpx_mock: HTTPXMock):
     ua = httpx_mock.get_requests()[0].headers["User-Agent"]
     assert "ccwmap" in ua.lower()
     assert "httpx" not in ua.lower()  # not the default library UA
+
+
+def test_fetch_retries_transient_overpass_error_then_succeeds(
+    tmp_path, httpx_mock: HTTPXMock, monkeypatch
+):
+    # Overpass is a free, shared service that regularly returns 5xx/timeouts
+    # under load — a 504 aborted the first prod import mid-fetch. fetch() must
+    # retry transient failures and succeed on a later attempt, not kill the
+    # whole 7-source run on the first blip.
+    monkeypatch.setattr("time.sleep", lambda *a, **k: None)  # no real backoff
+    httpx_mock.add_response(
+        method="POST",
+        url="https://overpass.example/api/interpreter",
+        status_code=504,
+    )
+    httpx_mock.add_response(
+        method="POST",
+        url="https://overpass.example/api/interpreter",
+        json={"elements": []},
+    )
+    src = _make_source(tmp_path, ["TX"])
+    src.fetch()
+    assert (tmp_path / "TX.json").exists()          # succeeded despite the 504
+    assert len(httpx_mock.get_requests()) == 2      # retried once
+
+
+def test_fetch_gives_up_after_max_attempts_on_persistent_error(
+    tmp_path, httpx_mock: HTTPXMock, monkeypatch
+):
+    # Persistent 5xx must eventually surface as an error (bounded retries), not
+    # loop forever — the run should fail loudly if Overpass is truly down.
+    monkeypatch.setattr("time.sleep", lambda *a, **k: None)
+    for _ in range(OsmSource._MAX_ATTEMPTS):
+        httpx_mock.add_response(
+            method="POST",
+            url="https://overpass.example/api/interpreter",
+            status_code=503,
+        )
+    src = _make_source(tmp_path, ["TX"])
+    with pytest.raises(httpx.HTTPStatusError):
+        src.fetch()
+    assert len(httpx_mock.get_requests()) == OsmSource._MAX_ATTEMPTS
+    assert not (tmp_path / "TX.json").exists()
+
+
+def test_fetch_does_not_retry_non_transient_4xx(
+    tmp_path, httpx_mock: HTTPXMock, monkeypatch
+):
+    # A 400/406 is a permanent client error (bad query, bad UA) — retrying wastes
+    # time and hammers Overpass. Fail fast after a single attempt.
+    monkeypatch.setattr("time.sleep", lambda *a, **k: None)
+    httpx_mock.add_response(
+        method="POST",
+        url="https://overpass.example/api/interpreter",
+        status_code=400,
+    )
+    src = _make_source(tmp_path, ["TX"])
+    with pytest.raises(httpx.HTTPStatusError):
+        src.fetch()
+    assert len(httpx_mock.get_requests()) == 1      # no retry
 
 
 def test_iter_candidates_parses_nodes_and_way_centers(tmp_path):
