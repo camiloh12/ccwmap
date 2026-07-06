@@ -65,13 +65,19 @@ $function$;
 --   Column order, types, defaults, and the generated `location` expression
 --   match prod exactly as of 2026-05-16. The name-length CHECK is added
 --   by 007_pin_name_length.sql, not here.
+--
+--   location is GEOGRAPHY to match prod (the original 001-003 baseline). An
+--   earlier revision of this file declared it as geometry, which diverged from
+--   prod and hid a cluster-RPC bug (ST_SnapToGrid has no geography overload);
+--   011_location_geography_parity.sql retrofits already-created geometry
+--   environments. Keep this geography.
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS public.pins (
   id                       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   longitude                double precision NOT NULL,
   latitude                 double precision NOT NULL,
-  location                 geometry GENERATED ALWAYS AS
+  location                 geography GENERATED ALWAYS AS
                              (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326))
                              STORED,
   status                   integer NOT NULL,

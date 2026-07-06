@@ -454,8 +454,10 @@ Re-trigger the apply workflow with identical inputs. Expected: report shows **IN
 
 ### Task 9: Spot check + monitor (OPERATOR)
 
-- [ ] **Step 1: On-device spot check against prod**
+- [x] **Step 1: On-device spot check against prod**
 Pan Houston / Miami / Philadelphia — clusters render/expand sensibly. Open a system NO_GUN pin → the **verify-locally caveat** banner shows. Open Settings → **ODbL attribution** present. Open an OSM bar → it is **yellow/UNCERTAIN**, not red.
+
+  > **Defect found + fixed 2026-07-06 (PR #47, branch `fix/get-pins-in-view-geography`).** The spot check surfaced **no clusters at zoom-out** on prod (zoom-in showed the imported pins fine). Root cause: prod's `pins.location` is `geography`, but `get_pins_in_view`'s cluster branch called `ST_SnapToGrid(p.location, …)` (no geography overload) → `42883`. Staging never caught it because its `000_baseline.sql` typed `location` as `geometry`. Fix: migration `010` casts `p.location::geometry` inside `ST_SnapToGrid` (applied + verified on prod, on-device confirmed); migration `011` converges staging `location` `geometry → geography` (idempotent, no-op on prod) so staging finally reproduces prod's spatial path; `000_baseline.sql` now declares geography. Full `pins` column/type fingerprint verified identical prod == staging. See CLAUDE.md BUG-005.
 
 - [ ] **Step 2: Monitor**
 Daily health-check (already pings prod). Declare the pilot stable after **≥7 consecutive clean days**. Watch for delete-rate-limit trigger fires or RLS-denied write anomalies.
