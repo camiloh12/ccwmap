@@ -70,6 +70,11 @@ importer/dist/
 importer/*.egg-info/
 importer/htmlcov/
 
+# Operator-generated dry-run / apply report artifacts (transient, not source).
+# The runbook writes these next to the CLI (e.g. importer/prod-dryrun.md).
+importer/*-dryrun.json
+importer/*-dryrun.md
+
 # Cached source datasets (we commit fixtures under importer/tests/fixtures/
 # but NOT the full multi-MB downloads). Per spec §1.
 data/sources/*
