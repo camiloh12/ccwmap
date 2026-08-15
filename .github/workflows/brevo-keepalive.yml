@@ -1,0 +1,100 @@
+name: Brevo Keep-Alive
+
+# Brevo deactivates API keys that go 3 months without an API call. Moderation
+# traffic is naturally near-zero, so a perfectly healthy key looks abandoned —
+# which is exactly how the original `ccwmap-mod` key died. Nothing surfaced the
+# failure: pin_reports / blocked_users rows kept inserting, the webhook kept
+# firing, send-moderation-email kept 500ing on a 401, and the moderator alert
+# emails simply stopped arriving.
+#
+# This job hits the function's /health endpoint monthly, which:
+#   1. Counts as key usage, resetting Brevo's 3-month inactivity clock.
+#   2. Fails loudly (red run + GitHub issue) the moment the key stops working,
+#      instead of at the moment a real report needs to reach a human.
+#
+# The health endpoint calls Brevo's read-only /v3/account — no email is sent and
+# no credits are consumed. Run this workflow manually with "send test email"
+# checked to also exercise the real send path (verified sender + credits).
+
+on:
+  schedule:
+    - cron: '0 13 1 * *'  # 1st of each month, 13:00 UTC = 09:00 ET
+  workflow_dispatch:
+    inputs:
+      send_test_email:
+        description: 'Also send a real heartbeat email (full end-to-end send test)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: brevo-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Brevo key health
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Ping send-moderation-email /health
+        id: health
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SEND: ${{ inputs.send_test_email == true && '1' || '0' }}
+        run: |
+          set -uo pipefail
+          url="${SUPABASE_URL%/}/functions/v1/send-moderation-email/health?send=${SEND}"
+          code=$(curl -sS --max-time 30 -o response.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "$url" || echo '000')
+          echo "HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            # Only dumped on failure: Brevo's error text is useful for triage and
+            # carries no secret. The success body reports plan/credit details, so
+            # it stays out of the (potentially public) run log.
+            echo "response: $(cat response.json)"
+            exit 1
+          fi
+          echo "Brevo key is healthy."
+
+      - name: Open GitHub issue on failure
+        if: steps.health.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const titlePrefix = 'Brevo moderation key health check failed';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            // Dedupe: one open issue at a time, same as the weekly dep scan.
+            const existing = await github.rest.search.issuesAndPullRequests({
+              q: `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open label:security "${titlePrefix}"`,
+            });
+            if (existing.data.total_count > 0) {
+              core.info(`Existing open issue found (#${existing.data.items[0].number}); skipping duplicate.`);
+              return;
+            }
+            const title = `${titlePrefix} (${new Date().toISOString().slice(0,10)})`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              labels: ['security'],
+              body: [
+                '`send-moderation-email` could not authenticate against Brevo. **Assume moderation alert emails are silently failing right now** — reports and blocks still write to the database, but no email reaches the moderator, so the 24h SLA in `docs/dev/MODERATION.md` is not being met.',
+                '',
+                `Failing run: ${runUrl}`,
+                '',
+                'Triage:',
+                '1. Open the run log. `HTTP 401` means the key was revoked or deactivated; `HTTP 5xx`/`000` usually means the function or network, not the key.',
+                '2. Rotate: generate a new key in Brevo (SMTP & API → API Keys), then `supabase secrets set BREVO_API_KEY=<new-key>` against **prod** and redeploy the function. Full steps: `docs/dev/DEPLOY.md`.',
+                '3. Re-run this workflow with "send test email" checked to confirm the whole send path works.',
+                '4. Check `pin_reports` and `blocked_users` for rows created since the last green run — those alerts were never delivered and still need review.',
+              ].join('\n'),
+            });
+
+      - name: Fail the job if the health check failed
+        if: steps.health.outcome == 'failure'
+        run: exit 1
