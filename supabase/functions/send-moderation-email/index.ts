@@ -63,6 +63,80 @@ async function sendEmail(subject: string, body: string): Promise<void> {
   }
 }
 
+function json(status: number, body: Record<string, unknown>): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+// GET|POST /health — verifies BREVO_API_KEY still authenticates against Brevo.
+//
+// Called monthly by .github/workflows/brevo-keepalive.yml for two reasons:
+//   1. Brevo deactivates API keys after 3 months with no API calls. Moderation
+//      traffic is naturally near-zero, so a perfectly healthy key looks
+//      abandoned — which is how the original ccwmap-mod key died silently,
+//      taking pin_reports/blocked_users alerts with it. This call counts as
+//      usage and resets that clock.
+//   2. A dead key otherwise surfaces only when a real report arrives and the
+//      email never lands. This turns that into a failed workflow run.
+//
+// /v3/account is read-only: it sends nothing and burns no email credits.
+// Pass ?send=1 to additionally send a real heartbeat email, which exercises the
+// full path (key + verified sender + credits) rather than auth alone.
+async function healthCheck(send: boolean): Promise<Response> {
+  if (!BREVO_API_KEY) {
+    return json(500, { ok: false, error: "BREVO_API_KEY secret is not set" });
+  }
+
+  const res = await fetch("https://api.brevo.com/v3/account", {
+    headers: { "accept": "application/json", "api-key": BREVO_API_KEY },
+  });
+  const body = await res.text();
+
+  if (!res.ok) {
+    console.error(`healthcheck: Brevo rejected the key — ${res.status}: ${body || "(empty body)"}`);
+    return json(500, {
+      ok: false,
+      check: "brevo-account",
+      status: res.status,
+      error: body || "(empty body)",
+    });
+  }
+
+  let plan: unknown = null;
+  try {
+    plan = (JSON.parse(body) as { plan?: unknown }).plan ?? null;
+  } catch {
+    // Brevo changed the response shape; auth still succeeded, which is the point.
+  }
+  console.log(`healthcheck: Brevo key OK (${res.status})`);
+
+  if (!send) {
+    return json(200, { ok: true, check: "brevo-account", status: res.status, plan });
+  }
+
+  try {
+    await sendEmail(
+      "[CCW Map] Moderation email heartbeat",
+      [
+        "This is an automated monthly heartbeat from send-moderation-email.",
+        "",
+        "It confirms the Brevo key, the verified sender, and email credits are",
+        "all working — meaning a real pin report or user block would reach you.",
+        "",
+        "Nothing to action.",
+      ].join("\n"),
+    );
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error(`healthcheck: heartbeat send failed — ${message}`);
+    return json(500, { ok: false, check: "brevo-send", error: message });
+  }
+
+  return json(200, { ok: true, check: "brevo-send", sentTo: MOD_TO, plan });
+}
+
 function formatReport(r: Record<string, unknown>): { subject: string; body: string } {
   const subject = `[CCW Map] Pin reported — ${r.reason}`;
   const body = [
@@ -93,6 +167,18 @@ function formatBlock(r: Record<string, unknown>): { subject: string; body: strin
 
 Deno.serve(async (req) => {
   console.log(`request: method=${req.method} url=${req.url}`);
+
+  const url = new URL(req.url);
+  if (url.pathname.endsWith("/health")) {
+    try {
+      return await healthCheck(url.searchParams.get("send") === "1");
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error(`healthcheck error: ${message}`);
+      return json(500, { ok: false, error: message });
+    }
+  }
+
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }

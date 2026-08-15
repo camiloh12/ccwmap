@@ -212,8 +212,11 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 
 - `send-moderation-email` — webhook target fired on `INSERT` into
   `pin_reports` or `blocked_users`. Sends the moderator a formatted
-  plaintext email via Resend. See `docs/dev/MODERATION.md` and
-  `docs/dev/DEPLOY.md`.
+  plaintext email via **Brevo** (REST API key `BREVO_API_KEY`, not SMTP).
+  Exposes a `/health` sub-path pinged monthly by
+  `.github/workflows/brevo-keepalive.yml` — Brevo deactivates API keys
+  after 3 months idle, and moderation traffic alone is too sparse to keep
+  one alive. See `docs/dev/MODERATION.md` and `docs/dev/DEPLOY.md`.
 
 ## Authentication
 
