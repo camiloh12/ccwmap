@@ -43,7 +43,7 @@ void callbackDispatcher() {
       if (!networkMonitor.isOnline) {
         networkMonitor.dispose();
         await database.close();
-        return Future.value(true); // Return success even if offline
+        return true; // Return success even if offline
       }
 
       // Create data sources
@@ -71,9 +71,9 @@ void callbackDispatcher() {
       await database.close();
 
       // Return true on success, false on failure
-      return Future.value(result.isSuccess);
+      return result.isSuccess;
     } catch (e) {
-      return Future.value(false);
+      return false;
     }
   });
 }
