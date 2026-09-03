@@ -39,6 +39,14 @@ jobs:
               - 'analysis_options.yaml'
               - 'android/**'
               - 'ios/**'
+              # CI's own config counts as app-facing. setup-flutter decides
+              # which Flutter version every job below installs, so a change
+              # there can alter analyze/test/build results without touching a
+              # line of app code — exactly the case you most want re-run.
+              # Without this, a PR that edits only .github/ skips every Flutter
+              # job and still reports green, which reads as "verified" when
+              # nothing was built.
+              - '.github/**'
 
   format:
     name: Format
