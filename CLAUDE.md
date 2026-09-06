@@ -99,6 +99,23 @@ _No open bugs._
 
 - **Production guarantee:** The only trigger for a public-store build is a `v*.*.*` tag push, which can only run `production.yml`, which does not pass `SHOW_DEBUG_UI`. There is no path from developer action to a public build that carries the debug UI. See `docs/dev/GIT_FLOW.md` for the full release playbook.
 
+### Flutter version is pinned in CI
+
+`.github/actions/setup-flutter` installs a **pinned** Flutter version (its
+`flutter-version` default), and every workflow — `pr-checks`, `release`,
+`production`, `weekly-scans` — goes through that one action. Keep the pin equal
+to the Flutter version in "Toolchain versions" above.
+
+It was previously unpinned (`default: ''`), meaning CI installed whatever
+`stable` was on the day it ran. On 2026-09-03 stable moved 3.41.7 → 3.47.2 and
+promoted `unawaited_return_in_try_block` from info to **warning**; `flutter
+analyze --no-fatal-infos` does not suppress warnings, so an unrelated
+Play-compliance PR went red. CI must not change underneath us.
+
+**Upgrading Flutter is now one deliberate PR:** bump the pin *and* the
+"Toolchain versions" entry together, and let CI prove the new version builds
+Android and iOS before merging.
+
 ## Project Overview
 
 CCW Map is a mobile application that enables users to collaboratively map and share information about concealed carry weapon (CCW) zones across the United States. The app uses an offline-first architecture with cloud synchronization.

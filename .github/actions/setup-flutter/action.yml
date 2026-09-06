@@ -11,9 +11,25 @@ inputs:
     description: MapTiler API key
     required: true
   flutter-version:
-    description: Optional Flutter version override. Empty uses channel latest.
+    description: >-
+      Flutter version to install. Defaults to the version pinned below, which
+      must match the toolchain recorded in CLAUDE.md. Pass a value only to
+      deliberately test a different version; pass '' to float to channel latest
+      (not recommended — see the comment on the default).
     required: false
-    default: ''
+    # PINNED ON PURPOSE. This used to be '', which made every workflow install
+    # whatever `stable` happened to be that day. That is a landmine: a Flutter
+    # release can red every PR with no change on our side. It fired on
+    # 2026-09-03 — stable had moved 3.41.7 -> 3.47.2, which promoted
+    # `unawaited_return_in_try_block` from info to warning, and `flutter analyze
+    # --no-fatal-infos` does not suppress warnings, so an urgent Play-compliance
+    # PR went red for a reason unrelated to its diff.
+    #
+    # Keep this equal to the Flutter version in CLAUDE.md's "Toolchain versions"
+    # section, which is what the app is developed and tested against locally.
+    # Upgrading Flutter is now a deliberate, reviewable change: bump both here
+    # and in CLAUDE.md in the same PR, and let CI prove the new version builds.
+    default: '3.41.7'
 runs:
   using: composite
   steps:
