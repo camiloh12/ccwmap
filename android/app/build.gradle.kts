@@ -31,7 +31,13 @@ android {
     defaultConfig {
         applicationId = "com.ccwmap.app"
         minSdk = flutter.minSdkVersion  // Minimum Android 5.0 (Lollipop)
-        targetSdk = 35  // Required for 2026 Play Store compliance
+        // Android 16. Play requires the target API level to stay within one
+        // year of the latest Android release; from 2026-08-30 an app still
+        // targeting API 35 can no longer be updated. Pinned explicitly rather
+        // than via flutter.targetSdkVersion (also 36 on Flutter 3.41) so a
+        // future SDK upgrade cannot silently move the target and pull in a
+        // new batch of behavior changes unreviewed.
+        targetSdk = 36
         // Read from pubspec.yaml via the Flutter Gradle plugin so CI's
         // stamp step (sed on pubspec) actually takes effect. Previously
         // hardcoded to 0.2.0 / 4, which caused Play Internal to display

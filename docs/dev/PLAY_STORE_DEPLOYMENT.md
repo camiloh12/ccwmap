@@ -2,7 +2,8 @@
 
 **App:** CCW Map
 **Target Platform:** Android
-**Requirements:** Android API 35 (2026 compliance)
+**Requirements:** Android API 36 (Play target-API policy: from 2026-08-30 an
+app targeting API 35 can no longer be updated)
 **Timeline:** 2-4 hours prep + 1-7 days review
 
 ---
@@ -11,8 +12,8 @@
 
 ### 1.1 Update Build Configuration
 - [x] Open `android/app/build.gradle` (Note: Using build.gradle.kts - Kotlin DSL)
-- [x] Set `compileSdk = 35`
-- [x] Set `targetSdk = 35` in `defaultConfig`
+- [x] Set `compileSdk = 36`
+- [x] Set `targetSdk = 36` in `defaultConfig`
 - [x] Verify `minSdk = 21`
 - [x] Set initial `versionCode = 1` and `versionName = "1.0.0"`
 - [x] Verify `applicationId = "com.ccwmap.app"`
@@ -575,7 +576,7 @@
 If your app is rejected, check these common issues:
 - [ ] Missing data safety declaration (completed in Phase 4.3)
 - [ ] Privacy policy not accessible or complete
-- [ ] targetSdk below 35 (should be 35)
+- [ ] targetSdk below 36 (should be 36)
 - [ ] Missing or incomplete content rating
 - [ ] App crashes on startup
 - [ ] Deep links not working (test in 8.4)
