@@ -1,3 +1,2 @@
-Pin details now show where each entry's info comes from, with a "verify locally" reminder for anything we can't fully confirm.
-New About > Legal screen credits our map data sources (OpenStreetMap, MapTiler).
-Cleaner, easier-to-read pin clusters when zoomed out.
+Updated for Android 16 compatibility.
+Internal maintenance and build improvements. No changes to existing features.
