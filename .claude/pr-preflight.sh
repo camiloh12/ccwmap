@@ -34,20 +34,23 @@ fi
 
 run_flutter=0
 run_importer=0
+run_ci=0
 if [ -z "$changed" ]; then
   run_flutter=1
   run_importer=1
+  run_ci=1
 else
   printf '%s\n' "$changed" | grep -qE '^(lib/|test/|integration_test/|pubspec\.(yaml|lock)|analysis_options\.yaml)' && run_flutter=1
   printf '%s\n' "$changed" | grep -qE '^importer/' && run_importer=1
+  printf '%s\n' "$changed" | grep -qE '^(ci/|\.github/workflows/db-)' && run_ci=1
 fi
 
-if [ "$run_flutter" = 0 ] && [ "$run_importer" = 0 ]; then
-  echo "PR preflight: no Flutter or importer source changed (docs/ci/config only) — nothing to check."
+if [ "$run_flutter" = 0 ] && [ "$run_importer" = 0 ] && [ "$run_ci" = 0 ]; then
+  echo "PR preflight: no Flutter, importer, or DB-pipeline source changed (docs/config only) — nothing to check."
   exit 0
 fi
 
-echo "PR preflight — flutter=$run_flutter importer=$run_importer"
+echo "PR preflight — flutter=$run_flutter importer=$run_importer ci=$run_ci"
 
 if [ "$run_flutter" = 1 ]; then
   echo "== Flutter: dart format check =="
@@ -61,6 +64,11 @@ fi
 if [ "$run_importer" = 1 ]; then
   echo "== importer: uv sync + pytest =="
   ( cd importer && uv sync --frozen --extra dev && uv run --no-sync pytest -q ) || fail "importer pytest"
+fi
+
+if [ "$run_ci" = 1 ]; then
+  echo "== ci: DB pipeline workflow + script tests =="
+  uv run --no-project --with pytest --with pyyaml pytest ci/tests -q || fail "ci tests"
 fi
 
 echo "✓ PR preflight clean."

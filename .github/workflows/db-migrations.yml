@@ -1,0 +1,171 @@
+name: DB Migrations
+
+# Applies supabase/migrations/*.sql with the pinned Supabase CLI.
+#   PR     → staging-pr: re-applies this PR's own new migrations, then db push.
+#   merge  → staging → plan (prod dry-run, listed in the run summary)
+#            → apply (waits for owner approval in the `production` environment).
+# PROD_DB_URL exists only as an environment secret of `production-plan` and
+# `production`, both limited to master — PR code can never read it.
+# Design: docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md
+# Operator guide: docs/dev/STAGING.md "Applying migrations".
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/db-migrations.yml'
+      - '.github/workflows/db-repair.yml'
+      - 'ci/**'
+  push:
+    branches: [master]
+    paths:
+      - 'supabase/migrations/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SUPABASE_CLI_VERSION: '2.118.0'
+
+jobs:
+  workflow-tests:
+    name: Workflow structure tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+      - name: Run ci/tests
+        run: uv run --no-project --with pytest --with pyyaml pytest ci/tests -q
+
+  staging-pr:
+    name: Apply to staging (PR)
+    if: github.event_name == 'pull_request'
+    needs: workflow-tests
+    runs-on: ubuntu-latest
+    concurrency:
+      group: db-staging
+      cancel-in-progress: false
+    env:
+      DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # origin/master is needed to find this PR's added migrations
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Re-apply this PR's own new migrations
+        # A migration added by this PR may already be recorded on staging from an
+        # earlier push of the same PR. Clearing its history row makes db push run
+        # the (possibly edited) SQL again — safe because migrations are idempotent
+        # by convention. Reverting a never-recorded version is a no-op DELETE.
+        run: |
+          set -euo pipefail
+          versions=$(git diff --name-only --diff-filter=A origin/master...HEAD -- 'supabase/migrations/*.sql' \
+            | xargs -r -n1 basename | cut -d_ -f1 | sort -u | tr '\n' ' ')
+          if [ -n "$versions" ]; then
+            echo "Clearing staging history rows for: $versions"
+            # shellcheck disable=SC2086 # intentionally unquoted: one argument per version
+            supabase migration repair --status reverted $versions --db-url "$DB_URL"
+          else
+            echo "This PR adds no migrations."
+          fi
+      - name: Push to staging
+        run: supabase db push --include-all --yes --db-url "$DB_URL"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Staging migration history'
+            echo '```'
+            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  staging:
+    name: Apply to staging
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: db-staging
+      cancel-in-progress: false
+    env:
+      DB_URL: ${{ secrets.STAGING_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Push to staging
+        run: supabase db push --include-all --yes --db-url "$DB_URL"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Staging migration history'
+            echo '```'
+            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  plan:
+    name: Plan prod (dry run)
+    if: github.event_name != 'pull_request'
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production-plan
+    outputs:
+      pending: ${{ steps.plan.outputs.pending }}
+      migrations: ${{ steps.plan.outputs.migrations }}
+    env:
+      DB_URL: ${{ secrets.PROD_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Dry-run against prod
+        id: plan
+        run: |
+          set -euo pipefail
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > plan.json
+          python3 ci/db_plan.py plan.json
+
+  apply:
+    name: Apply to prod
+    if: github.event_name != 'pull_request' && needs.plan.outputs.pending == 'true'
+    needs: [staging, plan]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: db-prod
+      cancel-in-progress: false
+    env:
+      DB_URL: ${{ secrets.PROD_DB_URL }}
+      APPROVED: ${{ needs.plan.outputs.migrations }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Push the approved migrations to prod
+        run: |
+          set -euo pipefail
+          # Re-plan and refuse if prod's pending list is no longer what was approved.
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > replan.json
+          python3 ci/db_plan.py replan.json --expect "$APPROVED"
+          supabase db push --include-all --yes --db-url "$DB_URL"
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '### Prod migration history'
+            echo '```'
+            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

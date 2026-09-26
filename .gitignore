@@ -83,3 +83,6 @@ data/sources/*
 
 # Brainstorming visual companion (transient mockups)
 .superpowers/
+
+# Supabase CLI local cache (written when the CLI runs in the repo; e.g. cli-latest)
+supabase/.temp/
