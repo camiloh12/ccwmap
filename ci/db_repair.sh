@@ -36,11 +36,19 @@ case "$action" in
     ;;
 esac
 
-listing="$(supabase migration list --db-url "$DB_URL" 2>&1 | "${redact[@]}")"
+# Capture the status instead of letting set -e exit here: a failed list must
+# still print its (redacted) error, or the step fails with no output at all.
+rc=0
+listing="$(supabase migration list --db-url "$DB_URL" 2>&1 | "${redact[@]}")" || rc=$?
 echo "$listing"
 {
-  echo "### Migration history after \`$action\`"
+  if [ "$rc" -eq 0 ]; then
+    echo "### Migration history after \`$action\`"
+  else
+    echo "### \`supabase migration list\` failed (exit $rc) after \`$action\`"
+  fi
   echo '```'
   echo "$listing"
   echo '```'
 } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+exit "$rc"

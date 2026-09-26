@@ -29,16 +29,18 @@ def run_script(tmp_path):
         pytest.skip("bash not available")
     log = tmp_path / "calls.log"
     stub = tmp_path / "supabase"
-    # The stub echoes the DB URL to stderr, like a real CLI connection error.
+    # The stub echoes the DB URL to stderr, like a real CLI connection error,
+    # and exits 1 when its subcommand ("list"/"repair") is named in STUB_FAIL.
     stub.write_text(
         '#!/usr/bin/env bash\necho "$*" >> "$STUB_LOG"\necho "LOCAL | REMOTE"\n'
-        'echo "failed to connect: $DB_URL" >&2\n',
+        'echo "failed to connect: $DB_URL" >&2\n'
+        'case " $STUB_FAIL " in *" $2 "*) exit 1 ;; esac\n',
         encoding="utf-8",
     )
     stub.chmod(0o755)
     summary = tmp_path / "summary.md"
 
-    def run(action: str, versions: str = ""):
+    def run(action: str, versions: str = "", fail: str = ""):
         env = {
             **os.environ,
             "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
@@ -46,6 +48,7 @@ def run_script(tmp_path):
             "DB_URL": STUB_URL,
             "GITHUB_STEP_SUMMARY": str(summary),
             "PYTHON": sys.executable,
+            "STUB_FAIL": fail,
         }
         proc = subprocess.run(
             [BASH, str(SCRIPT), action, versions], env=env, capture_output=True, text=True
@@ -90,6 +93,26 @@ def test_cli_output_never_contains_the_db_url(run_script):
         published = proc.stdout + proc.stderr + summary.read_text(encoding="utf-8")
         for leaked in (STUB_URL, "s3cr%24tPass", "s3cr$tPass", "postgresql://"):
             assert leaked not in published, (action, leaked)
+
+
+def test_failed_list_still_shows_its_redacted_error(run_script):
+    # Prod run 36279368166: `migration list` failed and the step exited 1 with
+    # no output, because the captured error was never printed.
+    proc, _, summary = run_script("list", fail="list")
+    assert proc.returncode != 0
+    summary_text = summary.read_text(encoding="utf-8") if summary.exists() else ""
+    assert "failed to connect: " in proc.stdout + proc.stderr
+    assert "failed to connect: " in summary_text
+    published = proc.stdout + proc.stderr + summary_text
+    for leaked in (STUB_URL, "s3cr%24tPass", "s3cr$tPass", "postgresql://"):
+        assert leaked not in published, leaked
+
+
+def test_failed_repair_stops_before_listing(run_script):
+    proc, calls, _ = run_script("applied", "008", fail="repair")
+    assert proc.returncode != 0
+    assert "failed to connect: " in proc.stdout + proc.stderr
+    assert calls == [f"migration repair --status applied 008 --db-url {STUB_URL}"]
 
 
 def test_non_numeric_version_is_rejected(run_script):
