@@ -6,9 +6,17 @@
 # blocks the tool call and feeds the reason back to Claude. Routine pushes
 # (plain `git push`) never reach here.
 #
-# Stdin carries the PreToolUse JSON payload; we don't need it (the `if` filter
-# already decided this should run), so it's ignored.
+# Stdin carries the PreToolUse JSON payload. Re-check the command here rather
+# than trusting the `if` filter alone: the harness runs the hook anyway for
+# commands it can't parse (heredocs, multi-line `python -c`, ...), which once ran
+# a full `flutter test` on a MEMORY.md append — the test process hung and froze
+# the session for hours.
 set -uo pipefail
+
+payload="$(cat)"
+if ! printf '%s' "$payload" | grep -qE '(gh pr create|git push -u)'; then
+  exit 0
+fi
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$root/.claude/pr-preflight.sh"
