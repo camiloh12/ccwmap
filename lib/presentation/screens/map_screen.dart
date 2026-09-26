@@ -55,6 +55,14 @@ bool isOtherUserPin({
   return true;
 }
 
+/// Returns false for pre-populated system pins. Signed-in users may correct
+/// them (edits are allowed and mark the pin `user_modified`, so re-imports
+/// leave the correction alone) but not delete them — RLS rejects the DELETE
+/// (migration 012). Used to gate the Delete button on the pin edit dialog.
+@visibleForTesting
+bool canDeletePin({required String? pinCreatorId}) =>
+    pinCreatorId != kSystemUserId;
+
 class _MapScreenState extends State<MapScreen> {
   MapLibreMapController? _mapController;
   final LocationService _locationService = LocationService();
@@ -1428,7 +1436,10 @@ class _MapScreenState extends State<MapScreen> {
             }
           }
         },
-        onDelete: isEditMode && pinId != null
+        onDelete:
+            isEditMode &&
+                pinId != null &&
+                canDeletePin(pinCreatorId: pinCreatorId)
             ? () async {
                 debugPrint('Pin delete requested for ID: $pinId');
 

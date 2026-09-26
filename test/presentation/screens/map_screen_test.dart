@@ -42,4 +42,21 @@ void main() {
       );
     });
   });
+
+  group('canDeletePin', () {
+    test('returns false for a pre-populated system pin', () {
+      expect(canDeletePin(pinCreatorId: kSystemUserId), isFalse);
+    });
+
+    test('returns true for a user-created pin', () {
+      expect(
+        canDeletePin(pinCreatorId: 'f7e6d5c4-2222-4333-9444-555555555555'),
+        isTrue,
+      );
+    });
+
+    test('returns true when the creator is unknown', () {
+      expect(canDeletePin(pinCreatorId: null), isTrue);
+    });
+  });
 }

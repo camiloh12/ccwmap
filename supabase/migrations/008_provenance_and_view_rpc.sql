@@ -402,6 +402,11 @@ GRANT UPDATE
 --     policies preserves the read path. The previous `deny_system_user_writes`
 --     policy name is dropped so re-applying this migration cleanly
 --     replaces it on already-migrated environments.
+--
+--     SUPERSEDED by 012_system_pins_user_correctable.sql (BUG-006): the
+--     UPDATE/DELETE policies below test the ROW's created_by, so they block
+--     every signed-in user from correcting system pins — not just the system
+--     user's session. 012 re-creates all three with auth.uid() checks.
 -- =============================================================================
 
 DROP POLICY IF EXISTS "deny_system_user_writes" ON pins;
