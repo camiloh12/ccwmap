@@ -94,16 +94,39 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
     }
   }
 
-  /// Update an existing pin in Supabase
+  /// Update an existing pin in Supabase.
   ///
-  /// Throws exception if pin doesn't exist or on API error.
+  /// Like `delete()`, Postgrest's `update()` does not throw when RLS filters
+  /// the row — it returns 0 rows affected. We ask for the updated ids back
+  /// and, if none came back, check whether the row still exists:
+  /// - row exists → the UPDATE was rejected (e.g. RLS); throw so the sync
+  ///   queue retries and surfaces the error instead of the edit silently
+  ///   reverting on the next viewport fetch (BUG-006).
+  /// - row gone → it was deleted remotely; nothing left to update, succeed.
+  ///
+  /// Throws on API error.
   @override
   Future<void> updatePin(SupabasePinDto pin) async {
     try {
-      await _supabase
+      final updated = await _supabase
           .from('pins')
           .update(pin.toJsonForUpdate())
-          .eq('id', pin.id);
+          .eq('id', pin.id)
+          .select('id');
+      if (updated.isNotEmpty) return;
+
+      final survivor = await _supabase
+          .from('pins')
+          .select('id')
+          .eq('id', pin.id)
+          .maybeSingle();
+
+      if (survivor != null) {
+        throw Exception(
+          'Remote update did not apply to pin ${pin.id} — row exists but '
+          'UPDATE affected 0 rows. Check Supabase RLS policy.',
+        );
+      }
     } catch (e) {
       rethrow;
     }

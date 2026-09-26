@@ -13,7 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Flutter** 3.41.7 stable / **Dart** 3.11.5
 - **Android**: AGP 8.13.0, Gradle 8.14, Kotlin 2.3.20, Java 21 LTS, compileSdk 36, targetSdk 36
 - **iOS**: deployment target 14.0, UIScene lifecycle (AppDelegate implements `FlutterImplicitEngineDelegate`; `Info.plist` has `UIApplicationSceneManifest` pointing at `FlutterSceneDelegate`)
-- **Test count**: 233 (bumped 2026-05-24; previously 109)
+- **Test count**: 266 (2026-09-26, BUG-006; previously 233)
 
 #### Upgrades deferred (known blockers)
 
@@ -24,6 +24,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Known Bugs (Do Not Fix Without Being Asked)
 
 _No open bugs._
+
+### BUG-006 (FIXED): Users could not edit or delete pre-populated pins — edits silently reverted
+- **Platform:** Android, iOS, web — server-side (RLS), all app versions.
+- **Original symptom:** Found 2026-09-26 while closing the Stage B stability check (82 days after the prod import, the data showed **0** user edits and **0** deletions). A signed-in user tapping an imported (system-owned) pin got the full edit dialog; saving appeared to succeed, then the change reverted on the next viewport fetch. Delete removed the pin on that device only; the server kept it for everyone else.
+- **Root cause:** Migration 008 §9's RESTRICTIVE `deny_system_user_update` / `deny_system_user_delete` policies tested the **row's** creator (`created_by IS DISTINCT FROM <system uuid>`) instead of the **session** (`auth.uid()`). The spec wanted to deny sessions logged in *as* the system user; the shipped policies instead denied *every* user's writes to system pins. Postgrest reports an RLS-filtered UPDATE as success with 0 rows (the BUG-002 pattern), and `SupabaseRemoteDataSource.updatePin` never checked, so the sync queue treated the edit as uploaded. This also made the spec's user-correction path dead code: `set_user_modified` could never fire on a system pin, so the importer's "skip `user_modified` rows" branch could never protect a correction.
+- **Fix (branch `fix/system-pins-user-editable`):** owner decision **"edit yes, delete no"**.
+  1. **`012_system_pins_user_correctable.sql`** re-creates the three restrictive policies. UPDATE denies only the system user's *session*, so any other signed-in user can correct a system pin (008 §8's column grants still keep provenance and `created_by` read-only). DELETE still blocks deleting system-owned pins and now also blocks the system session from deleting anything. INSERT additionally blocks the system session. Deletes stay blocked because the importer doesn't read `pin_deletions` and pin ids are random, so a deleted system pin would be re-inserted by the next import.
+  2. **`SupabaseRemoteDataSource.updatePin`** now requests the updated ids back. On 0 rows it checks whether the row still exists: if it does, it throws (so the sync queue retries and surfaces the error); if the row is gone, it treats the pin as deleted remotely and succeeds.
+  3. **`canDeletePin`** (`map_screen.dart`) hides the Delete button on system pins.
+- **Verification:** on staging, before 012, the same session and same statements gave user pin updated=1/deleted=1 vs system pin updated=0/deleted=0 with no error. After 012, in a rolled-back probe matrix: user edits a system pin → 1 row and `user_modified` flips to true; user deletes a system pin → 0; user edits/deletes a user pin → 1/1; the system session's update/delete/insert → all denied.
+- **Lesson:** a RESTRICTIVE policy's `USING` clause decides *which rows* a session may touch, not *which sessions* may write. "Deny user X" belongs on `auth.uid()`, not on a row column. And any write path that can be RLS-filtered needs a row-count check, because Postgrest returns 0 rows instead of an error.
 
 ### BUG-005 (FIXED): Production showed no map clusters when zoomed out
 - **Platform:** Production backend only — staging was unaffected, which is exactly why it slipped through pre-import testing.
@@ -217,7 +228,7 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 
 - Same schema as local with PostgreSQL types (UUID, DOUBLE PRECISION, TIMESTAMPTZ)
 - Additional: `location` column (PostGIS GEOGRAPHY for spatial queries)
-- RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy)
+- RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy). Pre-populated (system-owned) pins can be **updated but not deleted** by users, and a session logged in as the system user can't write at all (migration 012, BUG-006).
 - Automatic `last_modified` trigger on updates
 - Additional tables for SP-2 (v0.4.0):
   - `user_agreements` — versioned EULA acceptance

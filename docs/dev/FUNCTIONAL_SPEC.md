@@ -144,14 +144,17 @@ A mobile app with an interactive map where authenticated users can:
   - Current status pre-selected
   - Restriction tag (if applicable)
   - Security screening/signage checkboxes
-  - "Save", "Delete", and "Cancel" buttons
-- Any authenticated user can delete any pin (crowd-sourced cleanup)
-- Any authenticated user can update status (crowd-sourced corrections)
+  - "Save", "Delete", and "Cancel" buttons (no "Delete" on pre-populated pins)
+- Any authenticated user can delete any user-created pin (crowd-sourced cleanup)
+- Any authenticated user can update status (crowd-sourced corrections),
+  including on pre-populated (system-owned) pins
+- Pre-populated pins can be corrected but not deleted — a correction marks the
+  pin `user_modified`, so later imports leave it alone
 - Changes sync to cloud immediately
 
 **Technical Details**:
 - Edit triggers database update with new `last_modified` timestamp
-- Delete permitted for any authenticated user
+- Delete permitted for any authenticated user, except on pre-populated pins
 - RLS policy on backend enforces authentication (not ownership)
 
 ### 4. User Authentication
@@ -815,8 +818,11 @@ Background: SyncManager uploads to Supabase
 
 **Row Level Security (RLS)**:
 - Enforced at database level
-- Any authenticated user can delete any pin (crowd-sourced cleanup)
-- Any authenticated user can update any pin (crowd-sourced corrections)
+- Any authenticated user can delete any pin (crowd-sourced cleanup),
+  except pre-populated (system-owned) pins
+- Any authenticated user can update any pin (crowd-sourced corrections),
+  including pre-populated pins
+- A session logged in as the system user can read but never write
 - Anyone can read pins (public map data)
 
 ---
@@ -1530,6 +1536,13 @@ CREATE POLICY "Authenticated users can delete any pin"
   ON pins FOR DELETE
   USING (auth.role() = 'authenticated');
 ```
+
+Restrictive policies from `supabase/migrations/012_system_pins_user_correctable.sql`
+narrow these for the system user (`81775f8b-1a6a-47d6-b793-e9ab7e38634e`, owner of
+every pre-populated pin): a session logged in *as* the system user cannot insert,
+update, or delete; nobody can insert a row attributed to it; and system-owned pins
+cannot be deleted by any authenticated user (they can still be updated). The importer
+writes with `service_role`, which bypasses RLS.
 
 ---
 
