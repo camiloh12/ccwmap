@@ -18,45 +18,49 @@ Manual daily monitoring for the first production pre-populate import (TX/FL/PA,
 
 ---
 
-## Daily queries
+## Daily query
+
+One read-only statement — the SQL editor only renders the last statement's
+result, so the four checks are combined into a single result set (`chk`
+column says which check each row belongs to).
 
 ```sql
--- 1. System pins by source/status — compare to the import baseline below.
-SELECT source, status, count(*)
-FROM pins
-WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e'
-GROUP BY source, status
-ORDER BY source, status;
-
--- 2. Deletions in the last 24h (mass-delete / scripted-attack signal).
-SELECT count(*) AS deletions_24h
-FROM pin_deletions
-WHERE deleted_at > now() - interval '24 hours';
-
--- 3. Orphaned system pins (stays 0 until a re-import runs).
-SELECT count(*) AS orphaned
-FROM pins
-WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e'
-  AND source_orphaned_at IS NOT NULL;
-
--- 4. Clusters still resolve — regression guard for BUG-005 (geography/geometry).
---    Must return 'cluster' rows, never error 42883.
-SELECT kind, count(*)
-FROM get_pins_in_view(25.0, -107.0, 37.0, -93.0, 5)
-GROUP BY kind;
+-- 1_source_status / 1_total: system pins by source/status — compare to the import baseline below.
+-- 2_deletions_24h: deletions in the last 24h (mass-delete / scripted-attack signal).
+-- 3_orphaned: orphaned system pins (stays 0 until a re-import runs).
+-- 4_clusters: clusters still resolve — regression guard for BUG-005 (geography/geometry).
+--             Must return 'cluster' rows, never error 42883.
+SELECT '1_source_status' AS chk, coalesce(source,'?') || ' / ' || status AS key, count(*)::text AS value
+FROM pins WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e' GROUP BY source, status
+UNION ALL
+SELECT '1_total', 'all', count(*)::text FROM pins WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e'
+UNION ALL
+SELECT '2_deletions_24h', '-', count(*)::text FROM pin_deletions WHERE deleted_at > now() - interval '24 hours'
+UNION ALL
+SELECT '3_orphaned', '-', count(*)::text FROM pins WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e' AND source_orphaned_at IS NOT NULL
+UNION ALL
+SELECT '4_clusters', kind, count(*)::text FROM get_pins_in_view(25.0, -107.0, 37.0, -93.0, 5) GROUP BY kind
+ORDER BY 1, 2;
 ```
 
-### Import baseline (query 1) — total 23,813
+### Expected output (import baseline, 2026-07-06)
 
-| source   | status          | count  |
-|----------|-----------------|--------|
-| nces     | 2 (NO_GUN)      | 15,414 |
-| gsa      | 2 (NO_GUN)      | 4,216  |
-| osm      | **1 (UNCERTAIN)** | 3,287 |
-| courts   | 2 (NO_GUN)      | 469    |
-| ipeds    | 2 (NO_GUN)      | 290    |
-| military | 2 (NO_GUN)      | 77     |
-| faa      | 2 (NO_GUN)      | 60     |
+| chk             | key                | value  |
+|-----------------|--------------------|--------|
+| 1_source_status | faa / 2            | 60     |
+| 1_source_status | gsa / 2            | 4216   |
+| 1_source_status | hifld_courts / 2   | 469    |
+| 1_source_status | hifld_military / 2 | 77     |
+| 1_source_status | ipeds / 2          | 290    |
+| 1_source_status | nces / 2           | 15414  |
+| 1_source_status | **osm / 1**        | 3287   |
+| 1_total         | all                | 23813  |
+| 2_deletions_24h | -                  | 0      |
+| 3_orphaned      | -                  | 0      |
+| 4_clusters      | cluster            | 28     |
+
+Source keys are the literal `pins.source` values (`hifld_courts`,
+`hifld_military` — not `courts` / `military`).
 
 `osm` is intentionally **status 1 / UNCERTAIN** (yellow), not NO_GUN — OSM tags
 can't confirm the TX 51% / FL "primarily-devoted" bar test. Everything else is
@@ -68,10 +72,10 @@ status 2 / NO_GUN.
 
 | Signal | Clean | Investigate |
 |---|---|---|
-| Query 1 per-source counts | roughly stable; a handful of user edits/deletes is normal | any source **drops > 10%** day-over-day (mass-delete or mass-orphan) |
-| Query 2 deletions_24h | small / expected | **> ~1,000** (scripted-attack signal) |
-| Query 3 orphaned | `0` | `> 0` before any re-import ran (unexpected) |
-| Query 4 | returns `cluster` rows | any error, or `0` rows over populated area |
+| `1_source_status` / `1_total` | roughly stable; a handful of user edits/deletes is normal | any source **drops > 10%** day-over-day (mass-delete or mass-orphan), or `osm` not status 1 |
+| `2_deletions_24h` | small / expected | **> ~1,000** (scripted-attack signal) |
+| `3_orphaned` | `0` | `> 0` before any re-import ran (unexpected) |
+| `4_clusters` | `cluster` rows (28 at baseline) | the query errors (e.g. `42883`), or no `4_clusters` row over populated area |
 
 ### Also glance (prod dashboard)
 
@@ -99,7 +103,7 @@ status 2 / NO_GUN.
 ## Follow-up: automate this
 
 Replace this runbook with the spec's `pin-health-check` Edge Function — the four
-queries above on a daily `pg_cron` schedule, emailing `camilo@kyberneticlabs.com`
+checks in the daily query above on a daily `pg_cron` schedule, emailing `camilo@kyberneticlabs.com`
 via the existing Brevo / `send-moderation-email` pattern, alerting only on
 threshold breaches. Self-contained: function + cron migration + staging test.
 See the spec's § Observability for the original design.
