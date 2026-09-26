@@ -41,6 +41,11 @@ within a small tolerance.
 
 ## B0.2 — Apply migration 009 to prod (operator-gated)
 
+> **Historical — done 2026-07-05.** Since 2026-09-26 migrations reach prod only
+> through the `db-migrations.yml` pipeline (owner-approved). Don't repeat the
+> manual MCP / SQL-editor steps below for new migrations; see
+> `docs/dev/STAGING.md` → "Applying migrations".
+
 `009_pins_source_unique_index.sql` swaps 008's partial index for a non-partial
 `UNIQUE (source, source_external_id)` index. The importer's PostgREST upsert
 emits `ON CONFLICT (source, source_external_id)` with no predicate, which

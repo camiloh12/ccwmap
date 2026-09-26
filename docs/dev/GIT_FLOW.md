@@ -42,6 +42,10 @@ PR must pass all five checks before merging:
 
 Merge strategy: **Squash and merge** (keeps master history clean).
 
+PRs that touch `supabase/migrations/**` also run `DB Migrations` (applies
+to staging). After merge, the same workflow deploys to prod once you approve
+the `apply` job; see `docs/dev/STAGING.md` → "Applying migrations".
+
 ## Release Workflow (beta)
 
 ### 1. Cut the release branch

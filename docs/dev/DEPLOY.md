@@ -74,7 +74,7 @@ bundled Flutter asset (`pubspec.yaml` → `assets: - .env`).
 
 ## Migrations
 
-Migrations under `supabase/migrations/*.sql` are applied manually in SQL
-editor for v0.4.0 (or via `supabase db push` if the project is linked).
-Always apply in numeric order. Verify via the table / constraint checks
-in the plan for each migration.
+Migrations under `supabase/migrations/*.sql` are deployed by the
+`db-migrations.yml` GitHub Actions pipeline: staging on every PR, prod after
+merge once the owner approves the `apply` job. Never apply them by hand. See
+`docs/dev/STAGING.md` → "Applying migrations".

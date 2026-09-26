@@ -2,7 +2,7 @@
 
 CCW Map runs a permanent free-tier Supabase project (`ccwmap-staging`) that
 mirrors the prod schema. New migrations apply here first via the
-`.github/workflows/supabase-migration-validate.yml` workflow before they
+`.github/workflows/db-migrations.yml` pipeline (on every PR) before they
 ever touch prod. The same `kSystemUserId` UUID is provisioned in both
 projects so app code never branches on environment.
 
@@ -19,25 +19,54 @@ Same value in both projects' `auth.users`. Password stored only in 1Password
 
 ## Applying migrations
 
-- **Staging** — a new `supabase/migrations/NNN_*.sql` triggers
-  `.github/workflows/supabase-migration-validate.yml` on the PR. The
-  workflow applies via `psql` and reports pass/fail. The DB connection
-  string lives in the `STAGING_DB_URL` GitHub Actions secret.
-- **Prod** — apply manually via the Supabase MCP `apply_migration` tool
-  (or the dashboard SQL editor) after the PR merges. We will automate the
-  prod apply in a later phase once we have more confidence in the
-  PR-validate workflow.
+Migrations reach staging and prod **only** through GitHub Actions, using the
+pinned Supabase CLI (`supabase db push`). Design:
+`docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md`.
 
-The PR-validate workflow re-applies every migration in the PR on each
-push. This is safe because all migrations under `supabase/migrations/` use
-idempotent patterns (`IF NOT EXISTS`, `OR REPLACE`, `DROP ... IF EXISTS`
-before `CREATE`). Future migrations MUST follow that convention — the
-workflow will otherwise fail on the second push.
+| When | Workflow → job | Target |
+|---|---|---|
+| PR touching `supabase/migrations/**` | `db-migrations.yml` → `staging-pr` | staging (re-applies the PR's own new migrations on every push) |
+| Merge to `master`, or **Run workflow** | `db-migrations.yml` → `staging` → `plan` → `apply` | staging, then prod after **owner approval** |
+| Manual | `db-repair.yml` | the history table only (`list` / `applied` / `reverted`); never runs SQL |
 
-Note: `psql -f` does NOT register the migration in
-`supabase_migrations.schema_migrations`. The lenient migration-count drift
-check in the workflow accommodates that; a stricter check arrives in a
-later phase.
+**Approving a prod deploy.** The run pauses at `apply`. Open the run and read
+the `plan` job's summary ("Pending for prod"). Approve only if every listed
+migration is safe for the app version users currently run (rule 5 below).
+Reject to hold it: it stays pending, reappears in the next plan, and **Run
+workflow** on `db-migrations.yml` deploys it later. `apply` re-checks that
+prod's pending list still equals the approved one and refuses otherwise.
+
+**What's applied where:**
+- `supabase_migrations.schema_migrations` in each database (dashboard →
+  Database → Migrations);
+- the `production` environment's deployment log on GitHub (commit, run,
+  approver);
+- every run's summary (`supabase migration list`).
+
+### Rules
+
+1. Never apply repo migrations by hand or via MCP `apply_migration`: MCP
+   records timestamp versions that break the CLI's history. After an
+   emergency hand-fix in the dashboard, record it with `db-repair`
+   (`applied <version>`).
+2. Never edit an applied migration's SQL; fix forward with a new migration.
+3. Keep migrations idempotent (`IF NOT EXISTS`, `CREATE OR REPLACE`,
+   `DROP … IF EXISTS` before `CREATE`). The PR loop re-applies them on every push.
+4. No transaction-unsafe statements (`CREATE INDEX CONCURRENTLY`, `VACUUM`).
+   Each migration runs in one transaction.
+5. A migration the currently deployed app can't handle is **rejected at the
+   approval gate** until the new app version is adopted.
+
+### Troubleshooting
+
+- **"Remote migration versions not found in local migrations directory"**:
+  the database has a migration the checkout lacks.
+  - On a PR: merge `master` into the branch.
+  - Otherwise it's an abandoned PR's migration left on staging. Remove it with
+    `db-repair` (`staging` / `reverted` / `<version>`), and undo its schema by
+    hand if needed.
+- **Staging unreachable** (`Name or service not known`): the free-tier project
+  auto-paused; resume it from the dashboard. Prod deploys wait on staging.
 
 ## Bootstrap (one-time)
 
@@ -66,11 +95,11 @@ SELECT
   (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pins','user_agreements','pin_reports','blocked_users','pin_deletions','import_runs','recent_deletes')) AS expected_tables_present,
   (SELECT count(*) FROM pg_trigger WHERE tgrelid='public.pins'::regclass AND NOT tgisinternal) AS pin_trigger_count,
   (SELECT count(*) FROM pg_proc WHERE proname='get_pins_in_view') AS rpc_exists,
-  (SELECT count(*) FROM pg_policy WHERE polrelid='public.pins'::regclass AND polname='deny_system_user_writes') AS deny_policy_exists;
+  (SELECT count(*) FROM pg_policy WHERE polrelid='public.pins'::regclass AND polname IN ('deny_system_user_insert','deny_system_user_update','deny_system_user_delete')) AS deny_policies;
 ```
 
 Expected (post-008): postgis=1, enum=1, pins_column_count=25, tables=7,
-trigger_count=4, rpc=1, deny_policy=1.
+trigger_count=4, rpc=1, deny_policies=3.
 
 If the SQL Editor truncates a long paste (it has hiccupped on `import_runs`
 once before — symptom: `expected_tables_present = 6`), re-run just the
@@ -80,8 +109,8 @@ table definition for whichever piece is missing.
 
 | Secret | Purpose | Required for |
 |---|---|---|
-| `STAGING_DB_URL` | Postgres connection string via the **Session mode pooler** (port 5432, NOT the direct-connect host). Format: `postgresql://postgres.miihmfhnsfmwgrvgayns:<DB_PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres` | `supabase-migration-validate.yml` |
-| `PROD_DB_URL`    | Optional; enables migration-count drift check between staging and prod. Same pooler format as above. | Same workflow (skipped if unset) |
+| `STAGING_DB_URL` | **Repo** secret. Postgres connection string via the **Session mode pooler** (port 5432, NOT the direct-connect host), password percent-encoded. Format: `postgresql://postgres.miihmfhnsfmwgrvgayns:<DB_PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres` | `db-migrations.yml` (`staging-pr`, `staging`), `db-repair.yml` (`repair-staging`) |
+| `PROD_DB_URL` | **Environment** secret, set in **both** `production-plan` and `production` (both limited to `master`; `production` requires owner approval). Same pooler format with `postgres.gqbxloaqamokbolcvesg`. Never a repo secret. | `db-migrations.yml` (`plan`, `apply`), `db-repair.yml` (`repair-prod`) |
 
 **IMPORTANT: do not use the direct connection** (`db.<ref>.supabase.co:5432`)
 — it resolves to IPv6 only and GitHub Actions `ubuntu-latest` runners have
@@ -128,6 +157,10 @@ Provisioned in both prod and staging with id matching `kSystemUserId`
 runtime.
 
 ## Migration history
+
+> **Frozen 2026-09-26 at the pipeline cutover.** The authoritative record is now
+> `supabase_migrations.schema_migrations` in each database (`supabase migration
+> list`, or dashboard → Database → Migrations). This table is kept as history.
 
 | Migration | Applied to staging | Applied to prod | Notes |
 |---|---|---|---|
