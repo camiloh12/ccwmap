@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Android**: AGP 8.13.0, Gradle 8.14, Kotlin 2.3.20, Java 21 LTS, compileSdk 36, targetSdk 36
 - **iOS**: deployment target 14.0, UIScene lifecycle (AppDelegate implements `FlutterImplicitEngineDelegate`; `Info.plist` has `UIApplicationSceneManifest` pointing at `FlutterSceneDelegate`)
 - **Test count**: 266 (2026-09-26, BUG-006; previously 233)
+- **Supabase CLI** 2.118.0 (CI only; pinned in `db-migrations.yml` + `db-repair.yml`)
 
 #### Upgrades deferred (known blockers)
 
@@ -126,6 +127,36 @@ Play-compliance PR went red. CI must not change underneath us.
 **Upgrading Flutter is now one deliberate PR:** bump the pin *and* the
 "Toolchain versions" entry together, and let CI prove the new version builds
 Android and iOS before merging.
+
+### DB migrations pipeline
+
+Migrations reach staging and prod **only** through GitHub Actions: never the
+dashboard SQL editor, and never Supabase MCP `apply_migration` (it records
+timestamp versions that break the CLI's history). The MCP server stays bound
+to **staging**; Claude never needs prod access.
+
+- `.github/workflows/db-migrations.yml`:
+  - **PR:** `staging-pr` pushes to staging, re-applying the PR's own new
+    migrations on every push.
+  - **Merge to master** (or **Run workflow**): `staging` → `plan` (prod dry
+    run, listed in the run summary) → `apply`. `apply` waits for owner
+    approval in the master-only `production` environment and refuses if the
+    pending list changed since approval.
+- `.github/workflows/db-repair.yml`: manual; edits only
+  `supabase_migrations.schema_migrations` (`list` / `applied` / `reverted`).
+- The Supabase CLI is **pinned** (`SUPABASE_CLI_VERSION: '2.118.0'` in both
+  workflows; the `ci/tests` structure tests enforce that both match).
+  Upgrading it is one deliberate PR, like the Flutter pin.
+- `PROD_DB_URL` exists only as an environment secret of `production-plan` and
+  `production`. PR code can never read it.
+- Rules:
+  - migrations must be idempotent;
+  - never edit an applied migration;
+  - no transaction-unsafe statements;
+  - reject at the approval gate any migration the deployed app can't handle
+    yet ("schema after app release").
+- Operator guide: `docs/dev/STAGING.md` → "Applying migrations". Design:
+  `docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md`.
 
 ## Project Overview
 

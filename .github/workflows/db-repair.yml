@@ -1,0 +1,92 @@
+name: DB Repair (manual)
+
+# Edits supabase_migrations.schema_migrations only — never runs migration SQL.
+# For the one-time history baseline and for recording emergency hand-fixes.
+# target=prod runs in the `production` environment → waits for owner approval.
+# DB_URL is scoped to the check + Repair steps; setup-cli is SHA-pinned. The URL's
+# shape is checked first (never printed) and ci/db_repair.sh redacts all CLI output.
+# Operator guide: docs/dev/STAGING.md "Applying migrations".
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      action:
+        description: 'list = show history; applied / reverted = mark versions'
+        required: true
+        type: choice
+        options:
+          - list
+          - applied
+          - reverted
+      versions:
+        description: 'For applied/reverted: versions, space- or comma-separated (e.g. 000 004 005)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # = bash -eo pipefail
+
+env:
+  SUPABASE_CLI_VERSION: '2.118.0'
+
+jobs:
+  repair-staging:
+    name: Repair staging history
+    if: inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: db-staging
+      cancel-in-progress: false
+    env:
+      ACTION: ${{ inputs.action }}
+      VERSIONS: ${{ inputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: python3 ci/check_db_url.py STAGING_DB_URL
+      - name: Repair
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: bash ci/db_repair.sh "$ACTION" "$VERSIONS"
+
+  repair-prod:
+    name: Repair prod history
+    if: inputs.target == 'prod'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: db-prod
+      cancel-in-progress: false
+    env:
+      ACTION: ${{ inputs.action }}
+      VERSIONS: ${{ inputs.versions }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: python3 ci/check_db_url.py PROD_DB_URL
+      - name: Repair
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: bash ci/db_repair.sh "$ACTION" "$VERSIONS"
