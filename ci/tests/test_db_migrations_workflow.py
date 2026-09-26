@@ -136,15 +136,53 @@ def test_cli_version_pinned(wf, jobs):
         assert s["with"]["version"] == "${{ env.SUPABASE_CLI_VERSION }}"
 
 
+CLI_CALL = re.compile(r"\bsupabase (db|migration)\b")
+
+
+def _needs_db_url(step: dict) -> bool:
+    run = step.get("run", "")
+    return bool(CLI_CALL.search(run)) or "ci/check_db_url.py" in run
+
+
 def test_db_url_only_on_steps_that_run_supabase(jobs):
     # DB credentials must not reach checkout or the setup-cli composite action:
-    # no job-level env, and a step gets DB_URL only if its own script calls the CLI.
+    # no job-level env, and a step gets DB_URL only if its own script calls the
+    # CLI (or checks the URL's shape).
     for name, job in jobs.items():
         assert "DB_URL" not in json.dumps(job.get("env", {})), name
         for step in job.get("steps", []):
             has_url = "DB_URL" in json.dumps(step.get("env", {}))
-            calls_cli = "supabase " in step.get("run", "")
-            assert has_url == calls_cli, (name, step.get("name"))
+            assert has_url == _needs_db_url(step), (name, step.get("name"))
+
+
+def test_shell_uses_pipefail(wf):
+    # Default bash on Actions is `bash -e` (no pipefail): a failing CLI piped
+    # through ci/redact.py would otherwise pass.
+    assert wf["defaults"] == {"run": {"shell": "bash"}}
+
+
+def test_every_db_job_checks_the_url_before_the_cli(jobs):
+    for name, job in jobs.items():
+        db_steps = [s for s in job.get("steps", []) if "DB_URL" in json.dumps(s.get("env", {}))]
+        if not db_steps:
+            continue
+        assert "ci/check_db_url.py" in db_steps[0]["run"], name
+
+
+def test_cli_output_is_always_redacted(jobs):
+    # Never rely on GitHub masking (it failed in PR #56): every CLI call pipes
+    # through ci/redact.py, or captures stderr to a file that is redacted, with
+    # stdout going to a plan file parsed by ci/db_plan.py (which redacts too).
+    for name, job in jobs.items():
+        runs = _runs(job)
+        for line in runs.splitlines():
+            if CLI_CALL.search(line):
+                piped = "| python3 ci/redact.py" in line
+                captured = re.search(r"> (re)?plan\.json 2> (re)?plan\.err", line)
+                assert piped or captured, (name, line)
+                if captured:
+                    err_file = captured.group(0).split("2> ")[1]
+                    assert f"python3 ci/redact.py < {err_file}" in runs, (name, err_file)
 
 
 def test_plan_and_apply_surface_cli_errors(jobs):
@@ -152,7 +190,7 @@ def test_plan_and_apply_surface_cli_errors(jobs):
     # exits non-zero: keep going long enough for db_plan.py to print it.
     for n, plan_file in (("plan", "plan.json"), ("apply", "replan.json")):
         runs = _runs(jobs[n])
-        assert f"> {plan_file} || rc=$?" in runs
+        assert re.search(rf"> {plan_file} 2> \w+\.err \|\| rc=\$\?", runs), n
         assert runs.index("|| rc=$?") < runs.index(f"ci/db_plan.py {plan_file}")
     assert 'exit "$rc"' in _runs(jobs["plan"])
     apply_runs = _runs(jobs["apply"])

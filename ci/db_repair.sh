@@ -7,6 +7,10 @@
 # versions: space- and/or comma-separated digits (e.g. "000 004,005").
 set -euo pipefail
 
+# All CLI output goes through the redactor: CLI errors can echo the DB URL, and
+# GitHub masks only the exact stored secret (a mis-pasted one leaked in PR #56).
+redact=("${PYTHON:-python3}" "$(dirname "$0")/redact.py")
+
 action="${1:-}"
 versions="$(printf '%s' "${2:-}" | tr ',' ' ' | xargs)"
 
@@ -24,7 +28,7 @@ case "$action" in
       fi
     done
     # shellcheck disable=SC2086 # intentionally unquoted: one argument per version
-    supabase migration repair --status "$action" $versions --db-url "$DB_URL"
+    supabase migration repair --status "$action" $versions --db-url "$DB_URL" 2>&1 | "${redact[@]}"
     ;;
   *)
     echo "::error::unknown action '$action' (expected list, applied or reverted)"
@@ -32,7 +36,7 @@ case "$action" in
     ;;
 esac
 
-listing="$(supabase migration list --db-url "$DB_URL")"
+listing="$(supabase migration list --db-url "$DB_URL" 2>&1 | "${redact[@]}")"
 echo "$listing"
 {
   echo "### Migration history after \`$action\`"

@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ SCRIPT = ROOT / "ci" / "db_repair.sh"
 WORKFLOW = ROOT / ".github" / "workflows" / "db-repair.yml"
 MIGRATIONS_WORKFLOW = ROOT / ".github" / "workflows" / "db-migrations.yml"
 BASH = shutil.which("bash")
+STUB_URL = "postgresql://postgres.ref:s3cr%24tPass@aws-1-x.pooler.supabase.com:5432/postgres"
 
 
 def _on(wf: dict) -> dict:
@@ -27,7 +29,12 @@ def run_script(tmp_path):
         pytest.skip("bash not available")
     log = tmp_path / "calls.log"
     stub = tmp_path / "supabase"
-    stub.write_text('#!/usr/bin/env bash\necho "$*" >> "$STUB_LOG"\necho "LOCAL | REMOTE"\n', encoding="utf-8")
+    # The stub echoes the DB URL to stderr, like a real CLI connection error.
+    stub.write_text(
+        '#!/usr/bin/env bash\necho "$*" >> "$STUB_LOG"\necho "LOCAL | REMOTE"\n'
+        'echo "failed to connect: $DB_URL" >&2\n',
+        encoding="utf-8",
+    )
     stub.chmod(0o755)
     summary = tmp_path / "summary.md"
 
@@ -36,8 +43,9 @@ def run_script(tmp_path):
             **os.environ,
             "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
             "STUB_LOG": str(log),
-            "DB_URL": "postgresql://stub",
+            "DB_URL": STUB_URL,
             "GITHUB_STEP_SUMMARY": str(summary),
+            "PYTHON": sys.executable,
         }
         proc = subprocess.run(
             [BASH, str(SCRIPT), action, versions], env=env, capture_output=True, text=True
@@ -51,7 +59,7 @@ def run_script(tmp_path):
 def test_list_only_lists(run_script):
     proc, calls, summary = run_script("list")
     assert proc.returncode == 0, proc.stderr
-    assert calls == ["migration list --db-url postgresql://stub"]
+    assert calls == [f"migration list --db-url {STUB_URL}"]
     assert "LOCAL | REMOTE" in summary.read_text(encoding="utf-8")
 
 
@@ -59,8 +67,8 @@ def test_applied_marks_versions_then_lists(run_script):
     proc, calls, _ = run_script("applied", "000 004 005")
     assert proc.returncode == 0, proc.stderr
     assert calls == [
-        "migration repair --status applied 000 004 005 --db-url postgresql://stub",
-        "migration list --db-url postgresql://stub",
+        f"migration repair --status applied 000 004 005 --db-url {STUB_URL}",
+        f"migration list --db-url {STUB_URL}",
     ]
 
 
@@ -69,8 +77,19 @@ def test_commas_and_spaces_are_accepted(run_script):
     assert proc.returncode == 0, proc.stderr
     assert calls[0] == (
         "migration repair --status reverted 20260705144447 20260705144509 010 "
-        "--db-url postgresql://stub"
+        f"--db-url {STUB_URL}"
     )
+
+
+def test_cli_output_never_contains_the_db_url(run_script):
+    # The stub echoes DB_URL on stderr, like a real CLI error. The script must
+    # redact it from its own output and from the step summary.
+    for action, versions in (("list", ""), ("applied", "008")):
+        proc, _, summary = run_script(action, versions)
+        assert proc.returncode == 0, proc.stderr
+        published = proc.stdout + proc.stderr + summary.read_text(encoding="utf-8")
+        for leaked in (STUB_URL, "s3cr%24tPass", "s3cr$tPass", "postgresql://"):
+            assert leaked not in published, (action, leaked)
 
 
 def test_non_numeric_version_is_rejected(run_script):
@@ -149,9 +168,19 @@ def test_cli_pin_matches_migrations_workflow(wf):
         assert setup[0]["with"]["version"] == "${{ env.SUPABASE_CLI_VERSION }}"
 
 
-def test_db_url_only_on_repair_step(wf):
+def test_db_url_only_on_check_and_repair_steps(wf):
     for name, job in wf["jobs"].items():
         assert "DB_URL" not in json.dumps(job.get("env", {})), name
+        db_steps = []
         for step in job["steps"]:
+            run = step.get("run", "")
             has_url = "DB_URL" in json.dumps(step.get("env", {}))
-            assert has_url == ("ci/db_repair.sh" in step.get("run", "")), (name, step.get("name"))
+            assert has_url == ("ci/db_repair.sh" in run or "ci/check_db_url.py" in run), (name, step.get("name"))
+            if has_url:
+                db_steps.append(run)
+        # The URL's shape is checked before the CLI ever sees it.
+        assert "ci/check_db_url.py" in db_steps[0], name
+
+
+def test_repair_shell_uses_pipefail(wf):
+    assert wf["defaults"] == {"run": {"shell": "bash"}}

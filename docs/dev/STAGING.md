@@ -118,6 +118,15 @@ table definition for whichever piece is missing.
 | `STAGING_DB_URL` | **Repo** secret. Postgres connection string via the **Session mode pooler** (port 5432, NOT the direct-connect host), password percent-encoded. Format: `postgresql://postgres.miihmfhnsfmwgrvgayns:<DB_PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres` | `db-migrations.yml` (`staging-pr`, `staging`), `db-repair.yml` (`repair-staging`) |
 | `PROD_DB_URL` | **Environment** secret, set in **both** `production-plan` and `production` (both limited to `master`; `production` requires owner approval). Same pooler format with `postgres.gqbxloaqamokbolcvesg`. Never a repo secret. | `db-migrations.yml` (`plan`, `apply`), `db-repair.yml` (`repair-prod`) |
 
+**Set DB URL secrets from a file, never by retyping them.** A mis-pasted value (for
+example a trailing space) makes the Supabase CLI echo the whole URL in its error, and
+GitHub masks only the exact stored string, so it was published in PR #56's log. Put
+the URL on one line in a git-ignored file and run, for example,
+`gh secret set STAGING_DB_URL < .local/staging_db_url`, or for prod
+`gh secret set PROD_DB_URL --env production < .local/prod_db_url` (repeat with
+`--env production-plan`). Every DB job's first step (`ci/check_db_url.py`) rejects a
+malformed URL without printing it, and all CLI output goes through `ci/redact.py`.
+
 **IMPORTANT: do not use the direct connection** (`db.<ref>.supabase.co:5432`)
 — it resolves to IPv6 only and GitHub Actions `ubuntu-latest` runners have
 no IPv6 egress, so every workflow run will fail with `Network is unreachable`.

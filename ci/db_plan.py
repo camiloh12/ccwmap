@@ -15,12 +15,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 from dataclasses import dataclass
 
-_DB_URL = re.compile(r"postgres(?:ql)?://\S+")
-_PASSWORD_KV = re.compile(r"(password=)\S+", re.IGNORECASE)
+from redact import redact
 
 
 class PlanError(ValueError):
@@ -107,7 +105,7 @@ def _gh_error(message: str) -> None:
     masking, so a percent-encoded password could slip through: redact URLs and
     password= values, then escape the command data.
     """
-    message = _PASSWORD_KV.sub(r"\1<redacted>", _DB_URL.sub("<db-url>", message))
+    message = redact(message, os.environ.get("DB_URL"))
     message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
     print(f"::error::{message}")
 

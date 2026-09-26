@@ -8,6 +8,9 @@ name: DB Migrations
 # `production`, both limited to master — PR code can never read it.
 # DB URLs are passed only to the steps that run the CLI (never job-level env),
 # so checkout and the setup-cli action never see them; setup-cli is SHA-pinned.
+# GitHub masks only the exact stored secret, so nothing here relies on masking:
+# each job checks the URL's shape first (ci/check_db_url.py never prints it) and
+# every CLI call's output goes through ci/redact.py.
 # Design: docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md
 # Operator guide: docs/dev/STAGING.md "Applying migrations".
 
@@ -27,6 +30,10 @@ on:
 
 permissions:
   contents: read
+
+defaults:
+  run:
+    shell: bash # = bash -eo pipefail: a failing CLI piped through ci/redact.py still fails the step
 
 env:
   SUPABASE_CLI_VERSION: '2.118.0'
@@ -59,6 +66,11 @@ jobs:
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        id: check
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: python3 ci/check_db_url.py STAGING_DB_URL
       - name: Re-apply this PR's own new migrations
         # A migration added by this PR may already be recorded on staging from an
         # earlier push of the same PR. Clearing its history row makes db push run
@@ -73,23 +85,23 @@ jobs:
           if [ -n "$versions" ]; then
             echo "Clearing staging history rows for: $versions"
             # shellcheck disable=SC2086 # intentionally unquoted: one argument per version
-            supabase migration repair --status reverted $versions --db-url "$DB_URL"
+            supabase migration repair --status reverted $versions --db-url "$DB_URL" 2>&1 | python3 ci/redact.py
           else
             echo "This PR adds no migrations."
           fi
       - name: Push to staging
         env:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
-        run: supabase db push --include-all --yes --db-url "$DB_URL"
+        run: supabase db push --include-all --yes --db-url "$DB_URL" 2>&1 | python3 ci/redact.py
       - name: Summary
-        if: always()
+        if: always() && steps.check.outcome == 'success'
         env:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           {
             echo '### Staging migration history'
             echo '```'
-            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            supabase migration list --db-url "$DB_URL" 2>&1 | python3 ci/redact.py || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -108,19 +120,24 @@ jobs:
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        id: check
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+        run: python3 ci/check_db_url.py STAGING_DB_URL
       - name: Push to staging
         env:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
-        run: supabase db push --include-all --yes --db-url "$DB_URL"
+        run: supabase db push --include-all --yes --db-url "$DB_URL" 2>&1 | python3 ci/redact.py
       - name: Summary
-        if: always()
+        if: always() && steps.check.outcome == 'success'
         env:
           DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           {
             echo '### Staging migration history'
             echo '```'
-            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            supabase migration list --db-url "$DB_URL" 2>&1 | python3 ci/redact.py || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -138,6 +155,10 @@ jobs:
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: python3 ci/check_db_url.py PROD_DB_URL
       - name: Dry-run against prod
         id: plan
         env:
@@ -145,7 +166,8 @@ jobs:
         run: |
           set -euo pipefail
           rc=0
-          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > plan.json || rc=$?
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > plan.json 2> plan.err || rc=$?
+          python3 ci/redact.py < plan.err >&2
           # Always parse: on a CLI failure this prints its (redacted) error.
           python3 ci/db_plan.py plan.json
           exit "$rc"
@@ -166,6 +188,11 @@ jobs:
       - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Check DB URL
+        id: check
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
+        run: python3 ci/check_db_url.py PROD_DB_URL
       - name: Push the approved migrations to prod
         env:
           DB_URL: ${{ secrets.PROD_DB_URL }}
@@ -173,18 +200,19 @@ jobs:
           set -euo pipefail
           rc=0
           # Re-plan and refuse if prod's pending list is no longer what was approved.
-          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > replan.json || rc=$?
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > replan.json 2> replan.err || rc=$?
+          python3 ci/redact.py < replan.err >&2
           python3 ci/db_plan.py replan.json --expect "$APPROVED"
           if [ "$rc" -ne 0 ]; then exit "$rc"; fi
-          supabase db push --include-all --yes --db-url "$DB_URL"
+          supabase db push --include-all --yes --db-url "$DB_URL" 2>&1 | python3 ci/redact.py
       - name: Summary
-        if: always()
+        if: always() && steps.check.outcome == 'success'
         env:
           DB_URL: ${{ secrets.PROD_DB_URL }}
         run: |
           {
             echo '### Prod migration history'
             echo '```'
-            supabase migration list --db-url "$DB_URL" 2>&1 || true
+            supabase migration list --db-url "$DB_URL" 2>&1 | python3 ci/redact.py || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
