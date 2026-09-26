@@ -67,6 +67,12 @@ prod's pending list still equals the approved one and refuses otherwise.
     hand if needed.
 - **Staging unreachable** (`Name or service not known`): the free-tier project
   auto-paused; resume it from the dashboard. Prod deploys wait on staging.
+- **A master run shows `cancelled`**: GitHub keeps one *pending* job per
+  concurrency group, so a newer deploy run superseded it. The newer run applies
+  everything pending; if there is none, use **Run workflow**.
+- **Don't leave an `apply` waiting for approval indefinitely**: approve or
+  reject it. And don't run `db-repair` while a deploy is in flight; they aren't
+  serialized.
 
 ## Bootstrap (one-time)
 

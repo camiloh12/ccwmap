@@ -6,6 +6,8 @@ name: DB Migrations
 #            → apply (waits for owner approval in the `production` environment).
 # PROD_DB_URL exists only as an environment secret of `production-plan` and
 # `production`, both limited to master — PR code can never read it.
+# DB URLs are passed only to the steps that run the CLI (never job-level env),
+# so checkout and the setup-cli action never see them; setup-cli is SHA-pinned.
 # Design: docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md
 # Operator guide: docs/dev/STAGING.md "Applying migrations".
 
@@ -50,13 +52,11 @@ jobs:
     concurrency:
       group: db-staging
       cancel-in-progress: false
-    env:
-      DB_URL: ${{ secrets.STAGING_DB_URL }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # origin/master is needed to find this PR's added migrations
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Re-apply this PR's own new migrations
@@ -64,6 +64,8 @@ jobs:
         # earlier push of the same PR. Clearing its history row makes db push run
         # the (possibly edited) SQL again — safe because migrations are idempotent
         # by convention. Reverting a never-recorded version is a no-op DELETE.
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           set -euo pipefail
           versions=$(git diff --name-only --diff-filter=A origin/master...HEAD -- 'supabase/migrations/*.sql' \
@@ -76,9 +78,13 @@ jobs:
             echo "This PR adds no migrations."
           fi
       - name: Push to staging
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: supabase db push --include-all --yes --db-url "$DB_URL"
       - name: Summary
         if: always()
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           {
             echo '### Staging migration history'
@@ -91,20 +97,25 @@ jobs:
     name: Apply to staging
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # Deploy-chain groups are used by no other job: GitHub cancels a PENDING job
+    # when a newer one joins its group, so only a newer deploy run (a superset)
+    # can supersede this one — never a PR push or a manual repair.
     concurrency:
-      group: db-staging
+      group: db-staging-deploy
       cancel-in-progress: false
-    env:
-      DB_URL: ${{ secrets.STAGING_DB_URL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Push to staging
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: supabase db push --include-all --yes --db-url "$DB_URL"
       - name: Summary
         if: always()
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: |
           {
             echo '### Staging migration history'
@@ -122,19 +133,22 @@ jobs:
     outputs:
       pending: ${{ steps.plan.outputs.pending }}
       migrations: ${{ steps.plan.outputs.migrations }}
-    env:
-      DB_URL: ${{ secrets.PROD_DB_URL }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Dry-run against prod
         id: plan
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
         run: |
           set -euo pipefail
-          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > plan.json
+          rc=0
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > plan.json || rc=$?
+          # Always parse: on a CLI failure this prints its (redacted) error.
           python3 ci/db_plan.py plan.json
+          exit "$rc"
 
   apply:
     name: Apply to prod
@@ -143,25 +157,30 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     concurrency:
-      group: db-prod
+      group: db-prod-deploy
       cancel-in-progress: false
     env:
-      DB_URL: ${{ secrets.PROD_DB_URL }}
       APPROVED: ${{ needs.plan.outputs.migrations }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Push the approved migrations to prod
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
         run: |
           set -euo pipefail
+          rc=0
           # Re-plan and refuse if prod's pending list is no longer what was approved.
-          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > replan.json
+          supabase db push --dry-run --include-all --output-format json --db-url "$DB_URL" > replan.json || rc=$?
           python3 ci/db_plan.py replan.json --expect "$APPROVED"
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
           supabase db push --include-all --yes --db-url "$DB_URL"
       - name: Summary
         if: always()
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
         run: |
           {
             echo '### Prod migration history'

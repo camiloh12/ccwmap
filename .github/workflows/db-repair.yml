@@ -3,6 +3,7 @@ name: DB Repair (manual)
 # Edits supabase_migrations.schema_migrations only — never runs migration SQL.
 # For the one-time history baseline and for recording emergency hand-fixes.
 # target=prod runs in the `production` environment → waits for owner approval.
+# DB_URL is scoped to the Repair step only; setup-cli is SHA-pinned.
 # Operator guide: docs/dev/STAGING.md "Applying migrations".
 
 on:
@@ -44,15 +45,16 @@ jobs:
       group: db-staging
       cancel-in-progress: false
     env:
-      DB_URL: ${{ secrets.STAGING_DB_URL }}
       ACTION: ${{ inputs.action }}
       VERSIONS: ${{ inputs.versions }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Repair
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
         run: bash ci/db_repair.sh "$ACTION" "$VERSIONS"
 
   repair-prod:
@@ -64,13 +66,14 @@ jobs:
       group: db-prod
       cancel-in-progress: false
     env:
-      DB_URL: ${{ secrets.PROD_DB_URL }}
       ACTION: ${{ inputs.action }}
       VERSIONS: ${{ inputs.versions }}
     steps:
       - uses: actions/checkout@v4
-      - uses: supabase/setup-cli@v3
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - name: Repair
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
         run: bash ci/db_repair.sh "$ACTION" "$VERSIONS"

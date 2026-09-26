@@ -137,7 +137,21 @@ def test_inputs_reach_run_steps_only_via_env(wf):
 def test_cli_pin_matches_migrations_workflow(wf):
     migrations = yaml.safe_load(MIGRATIONS_WORKFLOW.read_text(encoding="utf-8"))
     assert wf["env"]["SUPABASE_CLI_VERSION"] == migrations["env"]["SUPABASE_CLI_VERSION"]
+    migrations_setup = next(
+        s["uses"]
+        for j in migrations["jobs"].values()
+        for s in j.get("steps", [])
+        if str(s.get("uses", "")).startswith("supabase/setup-cli")
+    )
     for job in wf["jobs"].values():
         setup = [s for s in job["steps"] if str(s.get("uses", "")).startswith("supabase/setup-cli")]
-        assert setup and setup[0]["uses"] == "supabase/setup-cli@v3"
+        assert setup and setup[0]["uses"] == migrations_setup  # same SHA pin
         assert setup[0]["with"]["version"] == "${{ env.SUPABASE_CLI_VERSION }}"
+
+
+def test_db_url_only_on_repair_step(wf):
+    for name, job in wf["jobs"].items():
+        assert "DB_URL" not in json.dumps(job.get("env", {})), name
+        for step in job["steps"]:
+            has_url = "DB_URL" in json.dumps(step.get("env", {}))
+            assert has_url == ("ci/db_repair.sh" in step.get("run", "")), (name, step.get("name"))

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -101,6 +102,45 @@ def test_main_error_output_exits_1(tmp_path, capsys):
     plan_file.write_text('{"_tag":"Error","error":{"code":"X","message":"boom"}}', encoding="utf-8")
     assert main([str(plan_file)]) == 1
     assert "::error::" in capsys.readouterr().out
+
+
+def _error_file(tmp_path, message: str) -> Path:
+    plan_file = tmp_path / "plan.json"
+    plan_file.write_text(
+        json.dumps({"_tag": "Error", "error": {"code": "DbConfigParseUrlError", "message": message}}),
+        encoding="utf-8",
+    )
+    return plan_file
+
+
+def test_error_output_redacts_db_url(tmp_path, capsys):
+    # The CLI echoes the whole connection string in some errors. The runner
+    # unescapes %25 in workflow commands BEFORE masking, so a percent-encoded
+    # password would slip past GitHub's secret masking — never print the URL.
+    url = "postgresql://postgres.ref:pa%25ss%40word@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+    plan_file = _error_file(tmp_path, f"failed to parse connection string: {url}")
+    assert main([str(plan_file)]) == 1
+    out = capsys.readouterr().out
+    assert "<db-url>" in out
+    for leaked in ("postgresql://", "pa%25ss", "pa%ss", "word@aws"):
+        assert leaked not in out
+
+
+def test_error_output_redacts_password_keyword(tmp_path, capsys):
+    plan_file = _error_file(tmp_path, "connect failed: host=db.x user=postgres password=hunter2 dbname=postgres")
+    assert main([str(plan_file)]) == 1
+    out = capsys.readouterr().out
+    assert "hunter2" not in out
+    assert "password=<redacted>" in out
+
+
+def test_error_output_is_one_escaped_workflow_command(tmp_path, capsys):
+    plan_file = _error_file(tmp_path, "100% broken\r\nsecond line")
+    assert main([str(plan_file)]) == 1
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert len(lines) == 1
+    assert lines[0].startswith("::error::")
+    assert "100%25 broken%0D%0Asecond line" in lines[0]
 
 
 def test_expect_match_passes(tmp_path):

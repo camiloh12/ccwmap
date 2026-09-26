@@ -7,7 +7,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "db-migrations.yml"
+REPAIR_WORKFLOW = ROOT / ".github" / "workflows" / "db-repair.yml"
 PROD_ENVIRONMENTS = {"production-plan", "production"}
+# Third-party action that receives no secrets but runs in prod-credentialed
+# jobs: pinned to an immutable commit (the `v3` tag moved on 2026-09-24).
+SETUP_CLI_PIN = re.compile(r"supabase/setup-cli@[0-9a-f]{40}")
+DEPLOY_GROUPS = {"db-staging-deploy", "db-prod-deploy"}
 
 
 def _on(wf: dict) -> dict:
@@ -94,10 +99,27 @@ def test_apply_is_gated(jobs):
 
 
 def test_concurrency_never_cancels(jobs):
-    for n, group in (("staging-pr", "db-staging"), ("staging", "db-staging"), ("apply", "db-prod")):
+    for n, group in (
+        ("staging-pr", "db-staging"),
+        ("staging", "db-staging-deploy"),
+        ("apply", "db-prod-deploy"),
+    ):
         c = jobs[n]["concurrency"]
         assert c["group"] == group
         assert c["cancel-in-progress"] is False
+
+
+def test_deploy_chain_groups_are_exclusive(jobs):
+    # GitHub cancels a PENDING job when a newer one enters the same group. The
+    # merge deploy chain gets groups no other job uses, so it can only be
+    # superseded by a newer deploy run — which applies a superset.
+    repair_jobs = yaml.safe_load(REPAIR_WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for name, job in {**jobs, **{f"repair:{k}": v for k, v in repair_jobs.items()}}.items():
+        group = (job.get("concurrency") or {}).get("group")
+        if name in ("staging", "apply"):
+            assert group in DEPLOY_GROUPS, name
+        else:
+            assert group not in DEPLOY_GROUPS, name
 
 
 def test_cli_version_pinned(wf, jobs):
@@ -110,8 +132,31 @@ def test_cli_version_pinned(wf, jobs):
     ]
     assert len(setups) == 4  # staging-pr, staging, plan, apply
     for s in setups:
-        assert s["uses"] == "supabase/setup-cli@v3"
+        assert SETUP_CLI_PIN.fullmatch(s["uses"]), s["uses"]
         assert s["with"]["version"] == "${{ env.SUPABASE_CLI_VERSION }}"
+
+
+def test_db_url_only_on_steps_that_run_supabase(jobs):
+    # DB credentials must not reach checkout or the setup-cli composite action:
+    # no job-level env, and a step gets DB_URL only if its own script calls the CLI.
+    for name, job in jobs.items():
+        assert "DB_URL" not in json.dumps(job.get("env", {})), name
+        for step in job.get("steps", []):
+            has_url = "DB_URL" in json.dumps(step.get("env", {}))
+            calls_cli = "supabase " in step.get("run", "")
+            assert has_url == calls_cli, (name, step.get("name"))
+
+
+def test_plan_and_apply_surface_cli_errors(jobs):
+    # The CLI writes its JSON error to stdout (captured into the plan file) and
+    # exits non-zero: keep going long enough for db_plan.py to print it.
+    for n, plan_file in (("plan", "plan.json"), ("apply", "replan.json")):
+        runs = _runs(jobs[n])
+        assert f"> {plan_file} || rc=$?" in runs
+        assert runs.index("|| rc=$?") < runs.index(f"ci/db_plan.py {plan_file}")
+    assert 'exit "$rc"' in _runs(jobs["plan"])
+    apply_runs = _runs(jobs["apply"])
+    assert apply_runs.index('exit "$rc"') < apply_runs.index("supabase db push --include-all --yes")
 
 
 def test_real_pushes_are_noninteractive_and_include_all(jobs):
