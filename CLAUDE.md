@@ -30,11 +30,12 @@ _No open bugs._
 - **Platform:** Android, iOS, web — server-side (RLS), all app versions.
 - **Original symptom:** Found 2026-09-26 while closing the Stage B stability check (82 days after the prod import, the data showed **0** user edits and **0** deletions). A signed-in user tapping an imported (system-owned) pin got the full edit dialog; saving appeared to succeed, then the change reverted on the next viewport fetch. Delete removed the pin on that device only; the server kept it for everyone else.
 - **Root cause:** Migration 008 §9's RESTRICTIVE `deny_system_user_update` / `deny_system_user_delete` policies tested the **row's** creator (`created_by IS DISTINCT FROM <system uuid>`) instead of the **session** (`auth.uid()`). The spec wanted to deny sessions logged in *as* the system user; the shipped policies instead denied *every* user's writes to system pins. Postgrest reports an RLS-filtered UPDATE as success with 0 rows (the BUG-002 pattern), and `SupabaseRemoteDataSource.updatePin` never checked, so the sync queue treated the edit as uploaded. This also made the spec's user-correction path dead code: `set_user_modified` could never fire on a system pin, so the importer's "skip `user_modified` rows" branch could never protect a correction.
-- **Fix (branch `fix/system-pins-user-editable`):** owner decision **"edit yes, delete no"**.
+- **Fix (PR #55):** owner decision **"edit yes, delete no"**.
   1. **`012_system_pins_user_correctable.sql`** re-creates the three restrictive policies. UPDATE denies only the system user's *session*, so any other signed-in user can correct a system pin (008 §8's column grants still keep provenance and `created_by` read-only). DELETE still blocks deleting system-owned pins and now also blocks the system session from deleting anything. INSERT additionally blocks the system session. Deletes stay blocked because the importer doesn't read `pin_deletions` and pin ids are random, so a deleted system pin would be re-inserted by the next import.
   2. **`SupabaseRemoteDataSource.updatePin`** now requests the updated ids back. On 0 rows it checks whether the row still exists: if it does, it throws (so the sync queue retries and surfaces the error); if the row is gone, it treats the pin as deleted remotely and succeeds.
   3. **`canDeletePin`** (`map_screen.dart`) hides the Delete button on system pins.
 - **Verification:** on staging, before 012, the same session and same statements gave user pin updated=1/deleted=1 vs system pin updated=0/deleted=0 with no error. After 012, in a rolled-back probe matrix: user edits a system pin → 1 row and `user_modified` flips to true; user deletes a system pin → 0; user edits/deletes a user pin → 1/1; the system session's update/delete/insert → all denied.
+- **Deployed:** 012 reached prod on 2026-09-26 as the DB pipeline's first deploy (run 36283922332, owner-approved). The same rolled-back probe on prod returned `locked_cols_updatable=0 location=geography user.update_sys=1 user_modified=true user.delete_sys=0 system.update=0`, identical to staging. The server-side fix is live for every app version. Parts 2 and 3 (the `updatePin` row check and hiding Delete) reach users with the next app release; until then, old apps still show Delete on system pins, and the server denies it as before.
 - **Lesson:** a RESTRICTIVE policy's `USING` clause decides *which rows* a session may touch, not *which sessions* may write. "Deny user X" belongs on `auth.uid()`, not on a row column. And any write path that can be RLS-filtered needs a row-count check, because Postgrest returns 0 rows instead of an error.
 
 ### BUG-005 (FIXED): Production showed no map clusters when zoomed out
@@ -149,13 +150,33 @@ to **staging**; Claude never needs prod access.
   Upgrading it is one deliberate PR, like the Flutter pin.
 - `PROD_DB_URL` exists only as an environment secret of `production-plan` and
   `production`. PR code can never read it.
+- **Never rely on GitHub's secret masking for DB URLs.** It replaces only the
+  exact stored string; a mis-pasted `STAGING_DB_URL` was echoed by the CLI
+  and published in PR #56's log. Every DB job checks the URL's shape first
+  (`ci/check_db_url.py`, which never prints it). All CLI output goes through
+  `ci/redact.py`. Secrets are set from a git-ignored file
+  (`gh secret set … < .local/<name>`), never retyped.
 - Rules:
   - migrations must be idempotent;
   - never edit an applied migration;
   - no transaction-unsafe statements;
   - reject at the approval gate any migration the deployed app can't handle
-    yet ("schema after app release").
-- Operator guide: `docs/dev/STAGING.md` → "Applying migrations". Design:
+    yet ("schema after app release");
+  - **break-glass:** after an emergency hand-fix in the dashboard, do both:
+    - commit the same SQL as a new migration file;
+    - record its version as applied on prod with `db-repair`
+      (`applied <version>`).
+
+    Without the file, every later deploy fails with "Remote migration
+    versions not found". Without the history row, the next deploy runs the
+    SQL again.
+- **Status:** live since 2026-09-26. Prod's history was converted from MCP
+  timestamp versions to the repo's versions that day, and both databases now
+  record `000`, `004`–`012` (details: `docs/dev/STAGING.md` → "Migration
+  history").
+- Operator guide: `docs/dev/STAGING.md` → "Applying migrations", including
+  troubleshooting (for example, the pooler rejecting a just-reset password with
+  `28P01` for a while). Design:
   `docs/superpowers/specs/2026-09-26-db-migrations-pipeline-design.md`.
 
 ## Project Overview
@@ -368,7 +389,7 @@ MAPTILER_API_KEY=your_key_here  # Optional - demo tiles work without
 ```
 
 ### Supabase Setup Steps
-1. Create project, run migrations (001, 002, 003)
+1. Create project, bootstrap the schema per `docs/dev/STAGING.md` → "Bootstrap"; after that, migrations arrive only through the DB migrations pipeline (see "DB migrations pipeline" above). The old 001–003 files were consolidated into `000_baseline.sql`.
 2. Enable PostGIS extension
 3. Configure Auth redirect URLs
 4. Optional: Enable Realtime for live updates (requires paid plan)
