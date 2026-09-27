@@ -280,7 +280,7 @@ Dependencies flow **inward only**. The Domain layer must remain pure Dart with z
 
 - Same schema as local with PostgreSQL types (UUID, DOUBLE PRECISION, TIMESTAMPTZ)
 - Additional: `location` column (PostGIS GEOGRAPHY for spatial queries)
-- RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy). Pre-populated (system-owned) pins can be **updated but not deleted** by users, and a session logged in as the system user can't write at all (migration 012, BUG-006).
+- RLS policies enforce: anyone read, authenticated users create/update/delete (any authenticated user can delete any pin — crowd-sourced cleanup, matches the update policy). Pre-populated (system-owned) pins can be **updated but not deleted** by users, and a session logged in as the system user can't write at all (migration 012, BUG-006). On **statutory** pre-populated pins (`confidence = 'high'`) a signed-in user's save keeps the existing status, restriction tag and location; name/signage/screening still save (migration 013 trigger; bar pins are `'medium'` and stay editable). `set_user_modified` only marks a pin when an editable column actually changed.
 - Automatic `last_modified` trigger on updates
 - Additional tables for SP-2 (v0.4.0):
   - `user_agreements` — versioned EULA acceptance

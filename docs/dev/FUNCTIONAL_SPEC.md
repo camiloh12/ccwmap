@@ -147,9 +147,15 @@ A mobile app with an interactive map where authenticated users can:
   - "Save", "Delete", and "Cancel" buttons (no "Delete" on pre-populated pins)
 - Any authenticated user can delete any user-created pin (crowd-sourced cleanup)
 - Any authenticated user can update status (crowd-sourced corrections),
-  including on pre-populated (system-owned) pins
+  including on pre-populated (system-owned) pins, except statutory ones (below)
 - Pre-populated pins can be corrected but not deleted — a correction marks the
   pin `user_modified`, so later imports leave it alone
+- Statutory pre-populated pins (`confidence = 'high'`: federal property,
+  courthouses, K-12, secure airports, FL colleges) keep their status,
+  restriction tag and location; users can still correct the name, signage and
+  screening. The server keeps the existing values if a save tries to change
+  them (migration 013). Pre-populated bar pins (`confidence = 'medium'`) stay
+  fully editable
 - Changes sync to cloud immediately
 
 **Technical Details**:
@@ -821,7 +827,8 @@ Background: SyncManager uploads to Supabase
 - Any authenticated user can delete any pin (crowd-sourced cleanup),
   except pre-populated (system-owned) pins
 - Any authenticated user can update any pin (crowd-sourced corrections),
-  including pre-populated pins
+  including pre-populated pins; on statutory pre-populated pins the status,
+  restriction tag and location stay fixed (migration 013 trigger)
 - A session logged in as the system user can read but never write
 - Anyone can read pins (public map data)
 
@@ -1543,6 +1550,14 @@ every pre-populated pin): a session logged in *as* the system user cannot insert
 update, or delete; nobody can insert a row attributed to it; and system-owned pins
 cannot be deleted by any authenticated user (they can still be updated). The importer
 writes with `service_role`, which bypasses RLS.
+
+`supabase/migrations/013_lock_statutory_system_pins.sql` adds a BEFORE UPDATE
+trigger, `lock_statutory_fields_trigger`: when an `authenticated` session updates a
+system-owned pin with `confidence = 'high'`, the row keeps its existing `status`,
+`restriction_tag`, `latitude` and `longitude`, and the rest of the update applies.
+It also changes `set_user_modified` to mark `user_modified` only when a
+user-editable column actually changed. Verification probe:
+`supabase/probes/013_lock_statutory_system_pins.sql`.
 
 ---
 
