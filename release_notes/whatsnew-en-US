@@ -1,2 +1,2 @@
-Updated for Android 16 compatibility.
-Internal maintenance and build improvements. No changes to existing features.
+You can now correct the details on pre-loaded pins, and your edits are saved for everyone.
+Pre-loaded pins no longer show a Delete option. If one is wrong, edit it instead.
