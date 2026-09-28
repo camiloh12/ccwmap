@@ -19,7 +19,7 @@ enough activity).
 | Where it runs | GitHub Actions scheduled workflow | CI already holds the DB secrets and has the redaction/URL-check helpers from the DB pipeline; nothing to deploy to Supabase (edge functions aren't deployed by CI and have drifted before) |
 | Alert channel | GitHub issue (one open issue, commented on repeat) + red run | Same pattern as `brevo-keepalive.yml` / `weekly-scans.yml`; GitHub emails the owner; no Brevo key in CI |
 | Imported-pin deletes | Tripwire (alert on any) | Users can't delete imported pins (012), so any delete means admin error, a leaked key, or a policy regression |
-| Statutory flips | Tripwire (alert on any) | 013 keeps users from changing status on `confidence = 'high'` imported pins, so a user-modified statutory pin that isn't red means a bypass, a regression, a flip made between 012 and 013, or a deliberate admin edit in the dashboard (admin edits also set `user_modified`) |
+| Statutory flips | Tripwire (alert on any) | The importer writes `confidence = 'high'` imported pins as NO_GUN and 013 keeps users from changing their status, so any statutory pin that isn't red means a bypass, a regression, a flip made between 012 and 013, a service-role write (importer bug or leaked key; these never set `user_modified`), or a deliberate admin edit in the dashboard |
 | State | Stateless | Every signal is a 24 h window or a current count read from the DB; no snapshot table or artifacts |
 
 ## Architecture
@@ -53,7 +53,7 @@ REST call. "Imported" = `created_by = kSystemUserId`
 | 3 | Imported pins total | `pins` | prod | = 0 |
 | 4 | Imported pins deleted, last 24 h | `pin_deletions.original_created_by` | prod | > 0 |
 | 5 | All pin deletions, last 24 h | `pin_deletions.deleted_at` | prod | > 50 |
-| 6 | Statutory pins flipped | imported, `confidence = 'high'`, `user_modified`, `status <> 2` | prod | > 0 (finding lists up to 20 ids + names) |
+| 6 | Statutory pins flipped | imported, `confidence = 'high'`, `status <> 2`, whoever wrote it (amended in review: the first draft also required `user_modified`, which service-role writes never set) | prod | > 0 (finding lists up to 20 ids + names) |
 | 7 | User edits of imported pins, last 24 h | imported, `user_modified`, `last_modified` in window | prod | > 50 |
 | 8 | Orphaned imported pins | `source_orphaned_at IS NOT NULL` | prod | > 100 |
 | 9 | Stale citations | imported, `legal_citation_verified_date < current_date − 12 months` | prod | > 0 (first possible 2027-05-31) |

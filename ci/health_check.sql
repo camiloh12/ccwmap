@@ -15,12 +15,14 @@ imported AS (
   FROM pins p, sys
   WHERE p.created_by = sys.id
 ),
--- Statutory pins (confidence 'high') are NO_GUN by law, and 013 keeps
--- signed-in users from changing their status.
+-- Statutory pins (confidence 'high') are NO_GUN by law: the importer
+-- writes them that way and 013 keeps signed-in users from changing it.
+-- Any other status is a finding whoever wrote it; service_role writes
+-- (the importer, or a leaked key) never set user_modified.
 flipped AS (
   SELECT id, name, source, status, last_modified
   FROM imported
-  WHERE confidence = 'high' AND user_modified AND status <> 2
+  WHERE confidence = 'high' AND status <> 2
 )
 SELECT json_build_object(
   'imported_total', (SELECT count(*) FROM imported),

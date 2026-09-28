@@ -103,7 +103,7 @@ def _flipped_message(n: int, m: dict) -> str:
     )
     more = f"; and {n - len(sample)} more" if n > len(sample) else ""
     return (
-        f"{n} statutory imported pin(s) are no longer NO_GUN, which 013 should prevent: "
+        f"{n} statutory imported pin(s) are no longer NO_GUN: "
         f"{pins}{more}. Restore steps: docs/importer/PROD_HEALTH_CHECK.md"
     )
 
@@ -210,7 +210,9 @@ def _unreachable(env: str, detail: str) -> Finding:
 
 
 def parse_metrics(stdout: str) -> dict:
-    lines = [line for line in stdout.splitlines() if line.strip()]
+    # Not splitlines(): pin names may hold U+2028/U+2029/U+0085, which
+    # Postgres's JSON leaves unescaped. psql ends rows with "\n" only.
+    lines = [line for line in stdout.split("\n") if line.strip()]
     if not lines:
         raise ValueError("psql printed nothing")
     metrics = json.loads(lines[-1])

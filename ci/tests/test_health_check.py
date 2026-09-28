@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import warnings
 from pathlib import Path
 
 import pytest
@@ -436,7 +437,7 @@ def test_unexpected_error_exits_1_with_a_redacted_traceback():
     # PATH is empty, so psql isn't found and the script crashes after the URL check.
     proc = subprocess.run(
         [sys.executable, str(ROOT / "ci" / "health_check.py"), "--env", "prod"],
-        env={"DB_URL": DB_URL, "SYSTEMROOT": "C:\Windows", "PATH": ""},
+        env={"DB_URL": DB_URL, "SYSTEMROOT": r"C:\Windows", "PATH": ""},
         capture_output=True,
         text=True,
     )
@@ -444,3 +445,30 @@ def test_unexpected_error_exits_1_with_a_redacted_traceback():
     assert "Traceback" in proc.stderr
     for leaked in LEAKS:
         assert leaked not in proc.stdout + proc.stderr
+
+
+# ── Final-review fixes ───────────────────────────────────────────────
+
+
+def test_line_separators_in_pin_names_do_not_break_parsing():
+    # Postgres's JSON output leaves U+2028/U+2029/U+0085 unescaped, and
+    # str.splitlines() splits on them; psql rows end only in "\n".
+    sample = [_flipped(i, f"Lincoln{sep}Elementary") for i, sep in enumerate((" ", " ", "\u0085"))]
+    m = metrics(statutory_flipped=3, statutory_flipped_sample=sample)
+    got, finding = check_db("prod", DB_URL, run=FakeRun(stdout=json.dumps(m, ensure_ascii=False) + "\n"))
+    assert finding is None and got == m
+
+
+def test_statutory_flip_rule_does_not_depend_on_who_wrote_it():
+    # service_role writes (the importer, or a leaked key) never set
+    # user_modified, so rule 6 must not require it.
+    flipped_cte = re.search(r"flipped AS \((.*?)\)\s*SELECT", _sql_code(), re.S).group(1)
+    assert "confidence = 'high'" in flipped_cte and "status <> 2" in flipped_cte
+    assert "user_modified" not in flipped_cte
+
+
+def test_test_module_compiles_without_warnings():
+    source = Path(__file__).read_text(encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        compile(source, __file__, "exec")

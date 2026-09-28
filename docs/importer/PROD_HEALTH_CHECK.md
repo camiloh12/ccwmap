@@ -33,7 +33,7 @@ everything is fine.
 | 3 | prod has no imported pins | a mass delete, or someone ran the rollback | check `pin_deletions` and `import_runs` |
 | 4 | imported pins deleted | users can't delete them (012), so: an admin delete, a leaked service key, or an RLS regression | `pin_deletions.deleted_by` for rows whose `original_created_by` is the system user says who |
 | 5 | more than 50 deletions in 24 h | a scripted mass delete | `pin_deletions.deleted_by`; Postgres logs show `P0001` if the rate limit fired |
-| 6 | statutory pins no longer NO_GUN | an edit made between 012 and 013, a 013 regression, or a dashboard edit | restore them (below), then find out how it happened |
+| 6 | statutory pins no longer NO_GUN | an edit made between 012 and 013, a 013 regression, a service-role write (importer bug or leaked key), or a dashboard edit | restore them (below), then find out how it happened |
 | 7 | more than 50 user edits of imported pins in 24 h | vandalism or a buggy client | look at those pins' names and `last_modified` |
 | 8 | more than 100 orphaned imported pins | a source dropped records in the last import | review the import report before the next apply |
 | 9 | stale citations | a `data/state_laws/states.yaml` cell's `last_verified_date` is over a year old | re-verify the law, bump the date, re-import |
@@ -43,9 +43,13 @@ everything is fine.
 
 Run in the **prod dashboard SQL editor** once per pin id from the issue. The
 dashboard runs as `postgres`, which 013's lock doesn't apply to. The tag
-comes from the pin's source (`data/state_laws/states.yaml`). `user_modified`
-stays true, so the next import still leaves the pin's other user
-corrections alone; the finding clears because the status is NO_GUN again.
+comes from the pin's source (`data/state_laws/states.yaml`). The finding
+clears because the status is NO_GUN again. Afterwards the pin is
+`user_modified` (a dashboard edit counts as a user edit), so imports leave
+it alone. If no user had edited it (a service-role flip), hand it back to
+the importer with
+`UPDATE pins SET user_modified = false WHERE id = '<pin id>';`
+(013 lets an update that only resets that flag stick).
 
 ```sql
 UPDATE pins
