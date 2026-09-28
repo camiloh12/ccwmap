@@ -17,9 +17,18 @@ Spec: docs/superpowers/specs/2026-09-27-daily-health-check-design.md
 
 from __future__ import annotations
 
+import http.client
+import json
+import os
+import subprocess
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from check_db_url import problems
+from redact import redact
 
 # Thresholds: a finding is raised when a value is past these.
 MAX_DELETIONS_24H = 50  # rule 5: all pin deletions, last 24 h
@@ -185,3 +194,105 @@ def evaluate(env: str, metrics: dict | None, rest: RestResult) -> list[Finding]:
             if rule.breached(n):
                 findings.append(Finding(rule.key, rule.message(n, metrics)))
     return findings
+
+
+# ── Rule 1: the database ─────────────────────────────────────────────
+
+
+def _unreachable(env: str, detail: str) -> Finding:
+    msg = f"database unreachable: {_code(detail, EXCERPT_CHARS)}"
+    if env == "staging":
+        msg += f"; {STAGING_PAUSED_HINT}"
+    return Finding("database", msg)
+
+
+def parse_metrics(stdout: str) -> dict:
+    lines = [line for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        raise ValueError("psql printed nothing")
+    metrics = json.loads(lines[-1])
+    if not isinstance(metrics, dict):
+        raise ValueError("expected a JSON object")
+    missing = METRIC_KEYS - metrics.keys()
+    if missing:
+        raise ValueError(f"missing keys: {', '.join(sorted(missing))}")
+    return metrics
+
+
+def check_db(env: str, db_url: str, run: Callable = subprocess.run) -> tuple[dict | None, Finding | None]:
+    """Rule 1: metrics from health_check.sql, or the finding that explains why there are none."""
+    found = problems(db_url)
+    if found:
+        return None, Finding("database", f"{DB_URL_NAMES[env]} is malformed: {'; '.join(found)}")
+    cmd = [
+        "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-d", db_url,
+        "-c", "SET default_transaction_read_only = on",
+        "-c", f"SET statement_timeout = '{STATEMENT_TIMEOUT}'",
+        "-f", str(SQL_PATH),
+    ]
+    env_vars = {
+        **os.environ,
+        "PGCONNECT_TIMEOUT": str(CONNECT_TIMEOUT_S),
+        "PGSSLMODE": "require",
+        "PGAPPNAME": "ccwmap-health-check",
+    }
+    try:
+        proc = run(cmd, capture_output=True, text=True, timeout=PSQL_TIMEOUT_S, env=env_vars)
+    except subprocess.TimeoutExpired:  # its message holds cmd, and cmd holds the URL
+        return None, _unreachable(env, f"psql did not finish within {PSQL_TIMEOUT_S}s")
+    if proc.returncode != 0:
+        detail = proc.stderr or proc.stdout or f"psql exited {proc.returncode}"
+        return None, _unreachable(env, redact(detail, db_url))
+    try:
+        return parse_metrics(proc.stdout), None
+    except ValueError as e:
+        return None, Finding(
+            "database", f"health_check.sql output wasn't the expected JSON: {_code(redact(str(e), db_url))}"
+        )
+
+
+# ── Rule 2: clusters over REST, signed out ───────────────────────────
+
+
+def rest_headers(anon_key: str) -> dict[str, str]:
+    headers = {"apikey": anon_key, "Content-Type": "application/json", "Accept": "application/json"}
+    if anon_key.startswith("eyJ"):
+        # Legacy anon keys are JWTs and also go in Authorization; new
+        # sb_publishable_ keys aren't JWTs and belong only in apikey.
+        headers["Authorization"] = f"Bearer {anon_key}"
+    return headers
+
+
+def _http_post(url: str, headers: dict[str, str], body: bytes) -> tuple[int, bytes]:
+    """(status, body). An HTTP error returns its status and an empty body; network errors raise."""
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as e:
+        e.close()  # never read an error body: it could echo request headers
+        return e.code, b""
+
+
+def count_clusters(body: bytes) -> int:
+    rows = json.loads(body)
+    if not isinstance(rows, list):
+        raise ValueError("expected a JSON array of rows")
+    return sum(1 for row in rows if isinstance(row, dict) and row.get("kind") == "cluster")
+
+
+def check_clusters(env: str, base_url: str, anon_key: str, post: Callable = _http_post) -> RestResult:
+    """Rule 2: get_pins_in_view over Texas at zoom 5, as a signed-out user."""
+    if not base_url or not anon_key:
+        return RestResult(problem=f"{' / '.join(REST_NAMES[env])} not set")
+    url = base_url.rstrip("/") + "/rest/v1/rpc/get_pins_in_view"
+    try:
+        status, body = post(url, rest_headers(anon_key), json.dumps(CLUSTER_QUERY).encode())
+    except (OSError, http.client.HTTPException) as e:
+        return RestResult(problem=f"no response ({type(e).__name__})")
+    if status != 200:
+        return RestResult(status=status)
+    try:
+        return RestResult(status=200, clusters=count_clusters(body))
+    except ValueError:
+        return RestResult(status=200, problem="HTTP 200 but the body wasn't a JSON array of rows")

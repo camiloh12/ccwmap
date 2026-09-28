@@ -1,10 +1,14 @@
+import io
+import json
 import re
+import subprocess
+import urllib.error
 from pathlib import Path
 
 import pytest
 
 import health_check as hc
-from health_check import Finding, RestResult, evaluate
+from health_check import Finding, RestResult, check_clusters, check_db, count_clusters, evaluate, rest_headers
 
 ROOT = Path(__file__).resolve().parents[2]
 SQL = (ROOT / "ci" / "health_check.sql").read_text(encoding="utf-8")
@@ -152,3 +156,177 @@ def test_sql_caps_the_flipped_sample():
 
 def test_sql_filters_on_the_system_user():
     assert "81775f8b-1a6a-47d6-b793-e9ab7e38634e" in SQL
+
+
+# ── Database collector (rule 1) ──────────────────────────────────────
+
+PW = "Pw9%24test"  # percent-encoded (decodes to Pw9$test)
+DB_URL = f"postgresql://postgres.testref:{PW}@aws-1-us-east-1.pooler.supabase.com:5432/postgres"
+LEAKS = ("postgresql://", PW, "Pw9$test", "Pw9")
+
+
+class FakeRun:
+    """Stands in for subprocess.run; records calls."""
+
+    def __init__(self, returncode=0, stdout="", stderr="", raises=None):
+        self.returncode, self.stdout, self.stderr, self.raises = returncode, stdout, stderr, raises
+        self.calls = []
+
+    def __call__(self, cmd, **kwargs):
+        self.calls.append((cmd, kwargs))
+        if self.raises:
+            raise self.raises
+        return subprocess.CompletedProcess(cmd, self.returncode, self.stdout, self.stderr)
+
+
+def test_check_db_parses_the_json_line():
+    m, finding = check_db("prod", DB_URL, run=FakeRun(stdout=json.dumps(HEALTHY) + "\n"))
+    assert finding is None and m == HEALTHY
+
+
+def test_check_db_runs_psql_read_only_with_timeouts():
+    run = FakeRun(stdout=json.dumps(HEALTHY))
+    check_db("prod", DB_URL, run=run)
+    ((cmd, kwargs),) = run.calls
+    assert cmd[0] == "psql"
+    assert "ON_ERROR_STOP=1" in cmd
+    ro = "SET default_transaction_read_only = on"
+    timeout = f"SET statement_timeout = '{hc.STATEMENT_TIMEOUT}'"
+    assert ro in cmd and timeout in cmd
+    # Session settings first, then the query file.
+    assert cmd.index(ro) < cmd.index("-f") and cmd.index(timeout) < cmd.index("-f")
+    assert cmd[-2:] == ["-f", str(hc.SQL_PATH)]
+    assert kwargs["timeout"] == hc.PSQL_TIMEOUT_S
+    assert kwargs["env"]["PGCONNECT_TIMEOUT"] == str(hc.CONNECT_TIMEOUT_S)
+    assert kwargs["env"]["PGSSLMODE"] == "require"
+
+
+def test_malformed_url_is_reported_without_running_psql_or_leaking_it():
+    run = FakeRun()
+    m, f = check_db("staging", DB_URL.replace(":5432/", ":6543/") + " ", run=run)
+    assert m is None and run.calls == []
+    assert f.check == "database" and f.message.startswith("STAGING_DB_URL is malformed:")
+    for leaked in LEAKS:
+        assert leaked not in f.message
+
+
+def test_unreachable_database_is_redacted_and_one_line():
+    stderr = (
+        f"psql: error: connection to server failed: {DB_URL}\n"
+        "FATAL:  password authentication failed password=Pw9$test\n"
+    )
+    m, f = check_db("prod", DB_URL, run=FakeRun(returncode=2, stderr=stderr))
+    assert m is None and f.check == "database"
+    assert f.message.startswith("database unreachable:")
+    assert "\n" not in f.message
+    for leaked in LEAKS:
+        assert leaked not in f.message
+    assert hc.STAGING_PAUSED_HINT not in f.message
+
+
+def test_unreachable_staging_mentions_the_pause():
+    _, f = check_db("staging", DB_URL, run=FakeRun(returncode=2, stderr="timeout expired"))
+    assert hc.STAGING_PAUSED_HINT in f.message
+
+
+def test_psql_timeout_is_a_finding():
+    # TimeoutExpired carries the command line, which holds the URL: never print it.
+    timeout = subprocess.TimeoutExpired(["psql", "-d", DB_URL], hc.PSQL_TIMEOUT_S)
+    _, f = check_db("prod", DB_URL, run=FakeRun(raises=timeout))
+    assert f.message.startswith("database unreachable:")
+    for leaked in LEAKS:
+        assert leaked not in f.message
+
+
+@pytest.mark.parametrize("stdout", ["", "not json", "[1, 2]", json.dumps({"imported_total": 1})])
+def test_unexpected_psql_output_is_a_finding(stdout):
+    m, f = check_db("prod", DB_URL, run=FakeRun(stdout=stdout))
+    assert m is None and f.check == "database"
+    assert "expected JSON" in f.message
+
+
+# ── REST collector (rule 2) ──────────────────────────────────────────
+
+ROWS = [{"kind": "cluster", "cluster_count": 40}, {"kind": "cluster", "cluster_count": 3}, {"kind": "pin"}]
+
+
+class FakePost:
+    """Stands in for _http_post; records calls."""
+
+    def __init__(self, status=200, body=b"[]", raises=None):
+        self.status, self.body, self.raises = status, body, raises
+        self.calls = []
+
+    def __call__(self, url, headers, body):
+        self.calls.append((url, headers, json.loads(body)))
+        if self.raises:
+            raise self.raises
+        return self.status, self.body
+
+
+def test_count_clusters_counts_only_cluster_rows():
+    assert count_clusters(json.dumps(ROWS).encode()) == 2
+
+
+@pytest.mark.parametrize("body", [b"{}", b"<html>paused</html>", b""])
+def test_count_clusters_rejects_non_row_bodies(body):
+    with pytest.raises(ValueError):
+        count_clusters(body)
+
+
+def test_check_clusters_posts_the_texas_query():
+    post = FakePost(body=json.dumps(ROWS).encode())
+    rest = check_clusters("prod", "https://ref.supabase.co/", "sb_publishable_test", post=post)
+    assert rest == RestResult(status=200, clusters=2)
+    ((url, _headers, payload),) = post.calls
+    assert url == "https://ref.supabase.co/rest/v1/rpc/get_pins_in_view"
+    assert payload == hc.CLUSTER_QUERY
+
+
+def test_publishable_key_goes_only_in_apikey():
+    headers = rest_headers("sb_publishable_test")
+    assert headers["apikey"] == "sb_publishable_test"
+    assert "Authorization" not in headers
+
+
+def test_legacy_jwt_anon_key_also_goes_in_authorization():
+    headers = rest_headers("eyJtest.anon.key")
+    assert headers["apikey"] == "eyJtest.anon.key"
+    assert headers["Authorization"] == "Bearer eyJtest.anon.key"
+
+
+@pytest.mark.parametrize(
+    "env, url, key, names",
+    [
+        ("staging", "", "k", "STAGING_SUPABASE_URL / STAGING_SUPABASE_ANON_KEY"),
+        ("prod", "https://x.supabase.co", "", "SUPABASE_URL / SUPABASE_ANON_KEY"),
+    ],
+)
+def test_missing_rest_config_is_named_and_not_called(env, url, key, names):
+    post = FakePost()
+    rest = check_clusters(env, url, key, post=post)
+    assert post.calls == []
+    assert rest.status is None and names in rest.problem
+
+
+def test_http_error_keeps_only_the_status():
+    rest = check_clusters("prod", "https://x.supabase.co", "k", post=FakePost(status=401, body=b"echo"))
+    assert rest == RestResult(status=401)
+
+
+def test_network_error_is_a_problem():
+    rest = check_clusters("prod", "https://x.supabase.co", "k", post=FakePost(raises=OSError("boom")))
+    assert rest.status is None and "no response" in rest.problem
+
+
+def test_non_json_200_is_a_problem():
+    rest = check_clusters("prod", "https://x.supabase.co", "k", post=FakePost(body=b"<html>"))
+    assert rest.status == 200 and "JSON" in rest.problem
+
+
+def test_http_post_returns_an_http_errors_status_without_its_body(monkeypatch):
+    def fake_urlopen(req, timeout):
+        raise urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b"echo"))
+
+    monkeypatch.setattr(hc.urllib.request, "urlopen", fake_urlopen)
+    assert hc._http_post("https://x.supabase.co/rest/v1/rpc/f", {}, b"{}") == (503, b"")
