@@ -1,0 +1,135 @@
+name: Daily Health Check
+
+# Checks prod and staging every day. Silent while healthy; when something is
+# wrong the run goes red and `alert` opens one issue (label health-check), or
+# comments on the one already open. Querying staging daily also keeps the
+# free-tier project from auto-pausing.
+#   staging → database reachable + clusters (its data is wiped during testing,
+#             so its other counts are shown in the run summary, never judged).
+#   prod    → every check. Runs in `production-plan` (master-only, no approval)
+#             for PROD_DB_URL; never in `production`.
+#   alert   → only after a failed check job; the only job that can write issues.
+# ci/health_check.py opens a read-only session with a statement_timeout, checks
+# the DB URL's shape without printing it, and redacts all tool output.
+# Findings carry user-editable pin names: they reach the alert script only
+# through env vars, never ${{ }} inside the script.
+# Spec: docs/superpowers/specs/2026-09-27-daily-health-check-design.md
+# Runbook: docs/importer/PROD_HEALTH_CHECK.md
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # daily, 11:00 UTC = 07:00 ET
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: 'Add a synthetic finding to test the alert issue (run from master)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  staging:
+    name: Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      findings: ${{ steps.check.outputs.findings }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check staging
+        id: check
+        continue-on-error: true # publish the findings output even when the check fails
+        env:
+          DB_URL: ${{ secrets.STAGING_DB_URL }}
+          SUPABASE_URL: ${{ vars.STAGING_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.STAGING_SUPABASE_ANON_KEY }}
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure && '1' || '' }}
+        run: python3 ci/health_check.py --env staging ${SIMULATE_FAILURE:+--simulate-failure}
+      - name: Fail if the check found problems
+        if: steps.check.outcome == 'failure'
+        run: exit 1
+
+  prod:
+    name: Prod
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-plan
+    outputs:
+      findings: ${{ steps.check.outputs.findings }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check prod
+        id: check
+        continue-on-error: true # publish the findings output even when the check fails
+        env:
+          DB_URL: ${{ secrets.PROD_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure && '1' || '' }}
+        run: python3 ci/health_check.py --env prod ${SIMULATE_FAILURE:+--simulate-failure}
+      - name: Fail if the check found problems
+        if: steps.check.outcome == 'failure'
+        run: exit 1
+
+  alert:
+    name: Open or update the alert issue
+    needs: [staging, prod]
+    if: always() && (needs.staging.result != 'success' || needs.prod.result != 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          STAGING_RESULT: ${{ needs.staging.result }}
+          STAGING_FINDINGS: ${{ needs.staging.outputs.findings }}
+          PROD_RESULT: ${{ needs.prod.result }}
+          PROD_FINDINGS: ${{ needs.prod.outputs.findings }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const envs = [
+              ['staging', process.env.STAGING_RESULT, process.env.STAGING_FINDINGS],
+              ['prod', process.env.PROD_RESULT, process.env.PROD_FINDINGS],
+            ];
+            const sections = [];
+            for (const [name, result, raw] of envs) {
+              if (result === 'success') continue;
+              let findings = [];
+              try { findings = JSON.parse(raw || '[]'); } catch (e) { findings = []; }
+              if (!Array.isArray(findings)) findings = [];
+              sections.push(`### ${name}`, '');
+              if (findings.length) {
+                for (const f of findings) sections.push(`- ${String(f)}`);
+              } else {
+                sections.push(`- The ${name} job ended (${result}) before reporting findings; see the run.`);
+              }
+              sections.push('');
+            }
+            const body = [
+              `Run: ${runUrl}`,
+              '',
+              ...sections,
+              'What each finding means and what to do: `docs/importer/PROD_HEALTH_CHECK.md` → "Automated daily check". Close this issue once the cause is fixed.',
+            ].join('\n');
+            const { data } = await github.rest.issues.listForRepo({
+              owner, repo, labels: 'health-check', state: 'open', per_page: 20,
+            });
+            const open = data.filter((i) => !i.pull_request);
+            if (open.length) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: open[0].number, body });
+              core.info(`Commented on #${open[0].number}`);
+            } else {
+              const { data: issue } = await github.rest.issues.create({
+                owner, repo, title: 'Daily health check failing', labels: ['health-check'], body,
+              });
+              core.info(`Opened #${issue.number}`);
+            }

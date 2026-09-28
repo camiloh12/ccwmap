@@ -183,10 +183,10 @@ the pooler to lag behind a reset; see Troubleshooting.
 
 Free-tier projects pause when idle. A weekly ping is **not** enough: staging
 paused between 2026-09-07 and 2026-09-14 despite the Monday
-`importer-dry-run.yml`. The daily `pin-health-check` Edge Function planned for
-a later phase will ping staging as a side effect. Until that ships, touch
-staging every few days: any MCP query (`SELECT 1`), or a `db-repair`
-`staging` / `list` run. A paused free project can be resumed from the
+`importer-dry-run.yml`. The daily `health-check.yml` (11:00 UTC) queries
+staging's database and REST API, which keeps it awake. If staging pauses
+anyway, that run fails with "staging may be paused" and opens a
+`health-check` issue. A paused free project can be resumed from the
 dashboard for 90 days; after that, only its backup can be downloaded.
 
 ## Refreshing staging data

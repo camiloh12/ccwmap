@@ -45,6 +45,7 @@ def test_triggers(wf):
         "supabase/migrations/**",
         ".github/workflows/db-migrations.yml",
         ".github/workflows/db-repair.yml",
+        ".github/workflows/health-check.yml",
         "ci/**",
     ):
         assert p in pr_paths
