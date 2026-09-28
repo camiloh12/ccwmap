@@ -17,10 +17,13 @@ Spec: docs/superpowers/specs/2026-09-27-daily-health-check-design.md
 
 from __future__ import annotations
 
+import argparse
 import http.client
 import json
 import os
 import subprocess
+import sys
+import traceback
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -296,3 +299,124 @@ def check_clusters(env: str, base_url: str, anon_key: str, post: Callable = _htt
         return RestResult(status=200, clusters=count_clusters(body))
     except ValueError:
         return RestResult(status=200, problem="HTTP 200 but the body wasn't a JSON array of rows")
+
+
+# ── Digest ───────────────────────────────────────────────────────────
+
+
+def _rest_value(rest: RestResult) -> str:
+    if rest.problem:
+        return f"— ({_one_line(rest.problem)})"
+    return f"{rest.clusters:,} clusters (HTTP {rest.status})"
+
+
+def render_digest(env: str, metrics: dict | None, rest: RestResult, findings: list[Finding]) -> str:
+    """Markdown for the job summary: every signal with its value and threshold, then the counts."""
+    judged = env == "prod"
+
+    def result(bad: bool) -> str:
+        return "🔴 alert" if bad else "✅ ok"
+
+    lines = [
+        f"## Daily health check: {env}",
+        "",
+        "| # | Signal | Value | Alert when | Result |",
+        "|---|---|---|---|---|",
+        f"| 1 | Database reachable | {'yes' if metrics is not None else 'no'} "
+        f"| connection or query fails | {result(metrics is None)} |",
+        f"| 2 | Clusters over TX at zoom 5, signed out | {_rest_value(rest)} "
+        f"| HTTP ≠ 200 or 0 clusters | {result(_rest_problem(rest) is not None)} |",
+    ]
+    for rule in METRIC_RULES:
+        if metrics is None:
+            value, res = "—", "no data"
+        else:
+            n = metrics[rule.key]
+            value = f"{n:,}"
+            res = result(rule.breached(n)) if judged else "not judged"
+        lines.append(f"| {rule.num} | {rule.label} | {value} | {rule.alert_when} | {res} |")
+    if not judged:
+        lines += ["", "Staging data is wiped and re-imported during testing, so only checks 1 and 2 are judged here."]
+    if metrics is not None:
+        lines += ["", "### Imported pins by source and status", "", "| Source | Status | Pins |", "|---|---|---|"]
+        for row in metrics["imported_by_source_status"]:
+            status = STATUS_NAMES.get(row["status"], row["status"])
+            lines.append(f"| {_one_line(row['source'])} | {status} | {row['count']:,} |")
+        lines += [
+            "",
+            f"- User pins: {metrics['user_pins_total']:,}",
+            f"- Imported pins users have corrected (all time): {metrics['imported_user_corrected']:,}",
+            f"- Reports filed on imported pins, last 7 days: {metrics['imported_reports_7d']:,}",
+        ]
+    lines += ["", "### Findings", ""]
+    lines += [f"- {f.message}" for f in findings] or ["None."]
+    return "\n".join(lines) + "\n"
+
+
+# ── Orchestration and CLI ────────────────────────────────────────────
+
+SIMULATED = Finding("simulated", "simulated failure (manual run with simulate_failure); nothing is wrong")
+
+
+def run_checks(
+    env: str,
+    db_url: str,
+    base_url: str,
+    anon_key: str,
+    simulate: bool = False,
+    *,
+    run: Callable = subprocess.run,
+    post: Callable = _http_post,
+) -> tuple[list[Finding], str]:
+    metrics, db_finding = check_db(env, db_url, run=run)
+    rest = check_clusters(env, base_url, anon_key, post=post)
+    findings = ([db_finding] if db_finding else []) + evaluate(env, metrics, rest)
+    if simulate:
+        findings.append(SIMULATED)
+    return findings, render_digest(env, metrics, rest, findings)
+
+
+def _append(path: str | None, text: str) -> None:
+    if path:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(text)
+
+
+def _annotation(message: str) -> str:
+    # Workflow-command escaping for the message part of ::error::
+    return message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Daily health check of prod or staging.")
+    parser.add_argument("--env", required=True, choices=sorted(DB_URL_NAMES))
+    parser.add_argument("--simulate-failure", action="store_true")
+    args = parser.parse_args(argv)
+    findings, digest = run_checks(
+        args.env,
+        os.environ.get("DB_URL", ""),
+        os.environ.get("SUPABASE_URL", ""),
+        os.environ.get("SUPABASE_ANON_KEY", ""),
+        args.simulate_failure,
+    )
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        _append(summary, digest)
+    else:
+        print(digest)
+    # One line of JSON: json.dumps escapes newlines, so no multi-line delimiter
+    # (which a crafted pin name could forge) is needed.
+    _append(os.environ.get("GITHUB_OUTPUT"), f"findings={json.dumps([f.message for f in findings])}\n")
+    for f in findings:
+        print(f"::error title=Health check ({args.env})::{_annotation(f.message)}")
+    if not findings:
+        print(f"{args.env}: all checks passed")
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:  # the alert job reports this as "ended before reporting"
+        sys.stderr.write(redact(traceback.format_exc(), os.environ.get("DB_URL")))
+        sys.exit(1)

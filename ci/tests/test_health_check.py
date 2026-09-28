@@ -2,6 +2,7 @@ import io
 import json
 import re
 import subprocess
+import sys
 import urllib.error
 from pathlib import Path
 
@@ -330,3 +331,116 @@ def test_http_post_returns_an_http_errors_status_without_its_body(monkeypatch):
 
     monkeypatch.setattr(hc.urllib.request, "urlopen", fake_urlopen)
     assert hc._http_post("https://x.supabase.co/rest/v1/rpc/f", {}, b"{}") == (503, b"")
+
+
+# ── Digest ───────────────────────────────────────────────────────────
+
+
+def test_digest_shows_every_signal_and_the_counts():
+    d = hc.render_digest("prod", HEALTHY, REST_OK, [])
+    assert "## Daily health check: prod" in d
+    for rule in hc.METRIC_RULES:
+        assert rule.label in d
+    assert "23,813" in d and "| nces | NO_GUN | 15,414 |" in d and "| osm | UNCERTAIN | 3,287 |" in d
+    assert "User pins: 199" in d
+    assert "Imported pins users have corrected (all time): 7" in d
+    assert "Reports filed on imported pins, last 7 days: 0" in d
+    assert "28 clusters (HTTP 200)" in d
+    assert "🔴" not in d
+    assert d.rstrip().endswith("None.")
+
+
+def test_digest_flags_breached_rules():
+    m = metrics(deletions_24h=51)
+    d = hc.render_digest("prod", m, REST_OK, evaluate("prod", m, REST_OK))
+    assert "| 5 | All pin deletions, last 24 h | 51 | > 50 | 🔴 alert |" in d
+    assert "- 51 pin deletions in the last 24 h" in d
+
+
+def test_staging_digest_shows_counts_without_judging():
+    d = hc.render_digest("staging", ALL_BREACHED, REST_OK, [])
+    assert "not judged" in d and "🔴" not in d
+    assert "999" in d
+
+
+def test_digest_without_a_database_marks_no_data():
+    f = Finding("database", "database unreachable: `x`")
+    d = hc.render_digest("prod", None, REST_OK, [f])
+    assert "| 1 | Database reachable | no |" in d and "no data" in d
+    assert "Imported pins by source" not in d
+    assert "- database unreachable: `x`" in d
+
+
+# ── Orchestration and CLI ────────────────────────────────────────────
+
+
+def test_simulate_failure_adds_exactly_one_finding():
+    run = FakeRun(stdout=json.dumps(HEALTHY))
+    post = FakePost(body=json.dumps(ROWS).encode())
+    base, _ = hc.run_checks("prod", DB_URL, "https://x.supabase.co", "k", False, run=run, post=post)
+    sim, digest = hc.run_checks("prod", DB_URL, "https://x.supabase.co", "k", True, run=run, post=post)
+    assert base == []
+    assert sim == [hc.SIMULATED]
+    assert hc.SIMULATED.message in digest
+
+
+def test_run_checks_reports_the_database_and_still_probes_rest():
+    post = FakePost(body=json.dumps(ROWS).encode())
+    findings, digest = hc.run_checks(
+        "staging", DB_URL, "https://x.supabase.co", "k", run=FakeRun(returncode=2, stderr="refused"), post=post
+    )
+    assert [f.check for f in findings] == ["database"]
+    assert len(post.calls) == 1
+    assert "2 clusters (HTTP 200)" in digest
+
+
+def _main(monkeypatch, tmp_path, findings, argv=("--env", "prod")):
+    out, summary = tmp_path / "out", tmp_path / "summary"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(out))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    monkeypatch.setattr(hc, "run_checks", lambda *a, **k: (findings, "## digest\n"))
+    rc = hc.main(list(argv))
+    return rc, out.read_text(encoding="utf-8"), summary.read_text(encoding="utf-8")
+
+
+def test_main_green(monkeypatch, tmp_path, capsys):
+    rc, out, summary = _main(monkeypatch, tmp_path, [])
+    assert rc == 0
+    assert out == "findings=[]\n"
+    assert summary == "## digest\n"
+    assert "prod: all checks passed" in capsys.readouterr().out
+
+
+def test_main_red_writes_one_line_of_findings(monkeypatch, tmp_path, capsys):
+    findings = [Finding("clusters", "get_pins_in_view returned HTTP 503"), Finding("x", "100% broken")]
+    rc, out, _ = _main(monkeypatch, tmp_path, findings)
+    assert rc == 1
+    assert out.count("\n") == 1 and out.startswith("findings=")
+    assert json.loads(out[len("findings="):]) == [f.message for f in findings]
+    assert "::error title=Health check (prod)::100%25 broken" in capsys.readouterr().out
+
+
+def test_main_passes_the_environment_and_flag(monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setenv("DB_URL", DB_URL)
+    monkeypatch.setenv("SUPABASE_URL", "https://x.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "k")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary"))
+    monkeypatch.setattr(hc, "run_checks", lambda *a, **k: seen.append(a) or ([], ""))
+    assert hc.main(["--env", "staging", "--simulate-failure"]) == 0
+    assert seen == [("staging", DB_URL, "https://x.supabase.co", "k", True)]
+
+
+def test_unexpected_error_exits_1_with_a_redacted_traceback():
+    # PATH is empty, so psql isn't found and the script crashes after the URL check.
+    proc = subprocess.run(
+        [sys.executable, str(ROOT / "ci" / "health_check.py"), "--env", "prod"],
+        env={"DB_URL": DB_URL, "SYSTEMROOT": "C:\Windows", "PATH": ""},
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 1
+    assert "Traceback" in proc.stderr
+    for leaked in LEAKS:
+        assert leaked not in proc.stdout + proc.stderr
