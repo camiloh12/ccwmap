@@ -109,6 +109,7 @@ _No open bugs._
   - `.github/workflows/release.yml` — fires on push to `release/v*` or `hotfix/v*`. **Includes** `--dart-define=SHOW_DEBUG_UI=true` for both iOS TestFlight and Android Play Internal.
   - `.github/workflows/production.yml` — fires on push of `v*.*.*` tag. **Omits** the flag entirely. Debug UI is tree-shaken out of every public-store build by construction.
   - `.github/workflows/weekly-scans.yml` — scheduled OSV dep scan + CodeQL Kotlin. Flag not applicable.
+  - `.github/workflows/health-check.yml` — daily 11:00 UTC read-only check of prod and staging (DB reachable, clusters for a signed-out user, imported-pin tripwires); opens or comments on one `health-check` issue when something is wrong. Flag not applicable. See `docs/importer/PROD_HEALTH_CHECK.md`.
 
 - **Production guarantee:** The only trigger for a public-store build is a `v*.*.*` tag push, which can only run `production.yml`, which does not pass `SHOW_DEBUG_UI`. There is no path from developer action to a public build that carries the debug UI. See `docs/dev/GIT_FLOW.md` for the full release playbook.
 

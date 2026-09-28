@@ -1,6 +1,6 @@
 # Daily health check — design
 
-**Date:** 2026-09-27 · **Status:** approved design, pending spec review
+**Date:** 2026-09-27 · **Status:** approved (owner, 2026-09-27)
 **Replaces:** the manual runbook `docs/importer/PROD_HEALTH_CHECK.md` (kept for ad-hoc use)
 **Supersedes:** the `pin-health-check` Edge Function in
 `2026-05-10-pre-populate-pins-design.md` §6 Observability (never built)

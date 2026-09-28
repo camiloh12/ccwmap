@@ -1,27 +1,87 @@
-# Production pre-populate — manual health check (Stage B / B5)
+# Production health check
 
-Manual daily monitoring for the first production pre-populate import (TX/FL/PA,
-7 sources, ~23,813 system pins imported 2026-07-06). Run this once a day; after
-**≥ 7 consecutive clean days**, declare the pilot stable.
+## Automated daily check
 
-> **Why manual:** the spec (`docs/superpowers/specs/2026-05-10-pre-populate-pins-design.md`
-> § Observability) designed an automated daily `pin-health-check` Edge Function
-> that emails a digest — **it was never built.** The only deployed Edge
-> Functions are `delete-account` and `send-moderation-email`. Until the
-> automated check exists, use this runbook. (`recent_deletes` does **not** need
-> pruning here — the `enforce_delete_rate_limit` trigger self-prunes per user on
-> each delete, so it stays bounded without a cron.)
+`.github/workflows/health-check.yml` (Actions → *Daily Health Check*) checks
+prod and staging every day at 11:00 UTC (07:00 ET). It stays silent while
+everything is fine.
+
+- **Digest:** open a run → *Summary*. Each environment lists every signal
+  with its value and threshold, imported pins by source and status, user
+  pins, imported pins users have corrected, and reports filed on imported
+  pins in the last 7 days.
+- **Alert:** when a check fails, the run goes red and the `alert` job opens
+  one issue, *Daily health check failing* (label `health-check`), listing the
+  findings per environment. While that issue is open, each failing run adds a
+  comment instead of opening another. Close it once the cause is fixed.
+- **Staging** is judged only on checks 1–2, because its data is wiped and
+  re-imported during testing. The daily query also keeps the free-tier
+  project from auto-pausing.
+- **Test the alert path:** *Run workflow* from `master` with
+  *simulate_failure* checked. From any other branch the `prod` job can't read
+  `PROD_DB_URL` (`production-plan` allows only `master`), so it fails.
+- Thresholds are at the top of `ci/health_check.py`; the query is
+  `ci/health_check.sql`. Both are read-only.
+
+### What each finding means
+
+| # | Finding | Likely cause | What to do |
+|---|---|---|---|
+| 1 | `database unreachable` | staging auto-paused; a password reset the pooler hasn't picked up yet | staging: resume it in the dashboard (90-day window). Otherwise see `docs/dev/STAGING.md` → Troubleshooting |
+| 1 | `<NAME> is malformed` | a mis-pasted secret | re-set it from its `.local/` file (`docs/dev/STAGING.md`); the value is never printed |
+| 2 | clusters: HTTP ≠ 200 or no clusters | `get_pins_in_view` broke (BUG-005 looked like this), or anon grants changed | run the manual query below in the dashboard; look at the last migration |
+| 3 | prod has no imported pins | a mass delete, or someone ran the rollback | check `pin_deletions` and `import_runs` |
+| 4 | imported pins deleted | users can't delete them (012), so: an admin delete, a leaked service key, or an RLS regression | `pin_deletions.deleted_by` for rows whose `original_created_by` is the system user says who |
+| 5 | more than 50 deletions in 24 h | a scripted mass delete | `pin_deletions.deleted_by`; Postgres logs show `P0001` if the rate limit fired |
+| 6 | statutory pins no longer NO_GUN | an edit made between 012 and 013, a 013 regression, or a dashboard edit | restore them (below), then find out how it happened |
+| 7 | more than 50 user edits of imported pins in 24 h | vandalism or a buggy client | look at those pins' names and `last_modified` |
+| 8 | more than 100 orphaned imported pins | a source dropped records in the last import | review the import report before the next apply |
+| 9 | stale citations | a `data/state_laws/states.yaml` cell's `last_verified_date` is over a year old | re-verify the law, bump the date, re-import |
+| — | a job *ended before reporting* | the script crashed or timed out | open the run log (tool output there is redacted) |
+
+### Restore a flipped statutory pin
+
+Run in the **prod dashboard SQL editor** once per pin id from the issue. The
+dashboard runs as `postgres`, which 013's lock doesn't apply to. The tag
+comes from the pin's source (`data/state_laws/states.yaml`). `user_modified`
+stays true, so the next import still leaves the pin's other user
+corrections alone; the finding clears because the status is NO_GUN again.
+
+```sql
+UPDATE pins
+SET status = 2,
+    restriction_tag = (CASE source
+      WHEN 'gsa'            THEN 'FEDERAL_PROPERTY'
+      WHEN 'hifld_military' THEN 'FEDERAL_PROPERTY'
+      WHEN 'faa'            THEN 'AIRPORT_SECURE'
+      WHEN 'hifld_courts'   THEN 'STATE_LOCAL_GOVT'
+      WHEN 'nces'           THEN 'SCHOOL_K12'
+      WHEN 'ipeds'          THEN 'COLLEGE_UNIVERSITY'
+    END)::restriction_tag_type
+WHERE id = '<pin id>'
+  AND created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e'
+  AND confidence = 'high'
+  AND source IN ('gsa', 'hifld_military', 'faa',
+                 'hifld_courts', 'nces', 'ipeds')
+RETURNING id, name, source, status, restriction_tag;
+```
+
+If it returns no row, the pin isn't a statutory imported pin: stop and look
+at it by hand.
+
+---
+
+## Manual query (ad hoc)
+
+For a look outside the daily run. The pilot's 7-day gate (Stage B / B5)
+closed on 2026-09-26.
 
 - **System user** (owns every imported pin): `81775f8b-1a6a-47d6-b793-e9ab7e38634e`
 - **Prod project ref:** `gqbxloaqamokbolcvesg`
 - Run all SQL in the **prod dashboard SQL editor** (read-only; no MCP repoint needed).
 
----
-
-## Daily query
-
-One read-only statement — the SQL editor only renders the last statement's
-result, so the four checks are combined into a single result set (`chk`
+One read-only statement. The SQL editor only renders the last statement's
+result, so the four checks are combined into a single result set (the `chk`
 column says which check each row belongs to).
 
 ```sql
@@ -87,9 +147,8 @@ status 2 / NO_GUN.
 
 ---
 
-## Gate + rollback
+## Rollback
 
-- **Gate:** 7 consecutive clean days → declare the pilot stable (Stage B done).
 - **Rollback** (bad data / instability / any go-back decision), once in the prod
   dashboard SQL editor — removes ONLY importer-written pins (real user pins have
   a different `created_by` and are never matched):
@@ -97,13 +156,3 @@ status 2 / NO_GUN.
   ```sql
   DELETE FROM pins WHERE created_by = '81775f8b-1a6a-47d6-b793-e9ab7e38634e';
   ```
-
----
-
-## Follow-up: automate this
-
-Replace this runbook with the spec's `pin-health-check` Edge Function — the four
-checks in the daily query above on a daily `pg_cron` schedule, emailing `camilo@kyberneticlabs.com`
-via the existing Brevo / `send-moderation-email` pattern, alerting only on
-threshold breaches. Self-contained: function + cron migration + staging test.
-See the spec's § Observability for the original design.
