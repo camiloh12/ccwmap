@@ -21,6 +21,7 @@ on:
       - 'supabase/migrations/**'
       - '.github/workflows/db-migrations.yml'
       - '.github/workflows/db-repair.yml'
+      - '.github/workflows/health-check.yml'
       - 'ci/**'
   push:
     branches: [master]
