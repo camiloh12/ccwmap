@@ -60,10 +60,6 @@ def apply_to_supabase(
     if rows:
         client.upsert_pins(rows)
 
-    orphan_eids = [
-        row.source_external_id
-        for row in diff.orphans
-        if row.source_external_id is not None
-    ]
-    if orphan_eids:
-        client.mark_orphans(source, orphan_eids)
+    orphan_ids = [row.id for row in diff.orphans]
+    if orphan_ids:
+        client.mark_orphans(orphan_ids)

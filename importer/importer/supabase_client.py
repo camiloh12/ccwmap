@@ -52,7 +52,7 @@ class SupabaseUpsertRow(BaseModel):
     legal_citation: str
     legal_citation_verified_date: str  # ISO 8601 date
     imported_at: str | None = None     # set by server default `now()` when null
-    source_orphaned_at: None = None    # always null on upsert; orphan-marking is a separate stage
+    source_orphaned_at: None = None    # sent as null on every upsert (see upsert_pins)
 
 
 class SupabaseClient:
@@ -69,6 +69,11 @@ class SupabaseClient:
     # past httpx's URL-component cap and the Supabase gateway's URL limit. 200
     # ids keeps each URL well under 8 KB.
     ID_CHUNK_SIZE = 200
+
+    # Pin UUIDs per `in.(...)` request: 36 chars plus an encoded comma each,
+    # so 100 ids keep a URL near 4 KB.
+    UUID_CHUNK_SIZE = 100
+    PAGE_SIZE = 1000
 
     def __init__(
         self,
@@ -133,6 +138,67 @@ class SupabaseClient:
         r.raise_for_status()
         return [ExistingPinRow.model_validate(row) for row in r.json()]
 
+    def select_system_pins(self, source: str) -> list[ExistingPinRow]:
+        """Every pin of `source` owned by the system user, i.e. every pin the
+        importer wrote for it. Paged with a Range header; ordered by id so
+        pages don't shift between requests."""
+        out: list[ExistingPinRow] = []
+        offset = 0
+        while True:
+            headers = dict(self._headers)
+            headers["Range-Unit"] = "items"
+            headers["Range"] = f"{offset}-{offset + self.PAGE_SIZE - 1}"
+            params = {
+                "select": self.SELECT_COLUMNS,
+                "source": f"eq.{source}",
+                "created_by": f"eq.{self._system_user_id}",
+                "order": "id",
+            }
+            r = self._client.get(f"{self._base}/pins", headers=headers, params=params)
+            r.raise_for_status()
+            rows = r.json()
+            out.extend(ExistingPinRow.model_validate(row) for row in rows)
+            if len(rows) < self.PAGE_SIZE:
+                return out
+            offset += self.PAGE_SIZE
+
+    def patch_external_id(self, pin_id: str, new_external_id: str) -> None:
+        """Re-key one pin in place: its UUID and any user edits survive. A
+        service-role write never sets user_modified (013)."""
+        r = self._client.patch(
+            f"{self._base}/pins",
+            headers=self._headers,  # return=representation: count the rows changed
+            params={"id": f"eq.{pin_id}", "select": "id"},
+            json={"source_external_id": new_external_id, "source_orphaned_at": None},
+        )
+        r.raise_for_status()
+        if not r.json():
+            raise RuntimeError(f"re-key of pin {pin_id} changed no row; was it deleted mid-run?")
+
+    def delete_pins(self, pin_ids: list[str]) -> list[str]:
+        """Delete system-owned pins no user corrected; return the ids deleted.
+
+        A pin a user corrected after the diff is left alone (the caller marks
+        it instead). The record_pin_deletion trigger writes the tombstones; the
+        delete rate limit skips service_role (008 §6c).
+        """
+        deleted: list[str] = []
+        for i in range(0, len(pin_ids), self.UUID_CHUNK_SIZE):
+            chunk = pin_ids[i : i + self.UUID_CHUNK_SIZE]
+            r = self._client.delete(
+                f"{self._base}/pins",
+                headers=self._headers,  # return=representation: the ids deleted
+                params={
+                    "id": f"in.({','.join(chunk)})",
+                    "user_modified": "eq.false",
+                    "created_by": f"eq.{self._system_user_id}",
+                    "select": "id",
+                },
+            )
+            r.raise_for_status()
+            deleted.extend(row["id"] for row in r.json())
+        return deleted
+
     def upsert_pins(
         self, rows: list[SupabaseUpsertRow], *, batch_size: int = 500
     ) -> None:
@@ -144,7 +210,13 @@ class SupabaseClient:
         headers["Prefer"] = "return=minimal,resolution=merge-duplicates"
         url = f"{self._base}/pins?on_conflict=source,source_external_id"
         for i in range(0, len(rows), batch_size):
-            batch = [r.model_dump(mode="json", exclude_none=True) for r in rows[i : i + batch_size]]
+            # exclude_none drops imported_at (server default on insert) but would
+            # also drop source_orphaned_at; send it explicitly so a record that
+            # comes back is no longer marked orphaned.
+            batch = [
+                {**r.model_dump(mode="json", exclude_none=True), "source_orphaned_at": None}
+                for r in rows[i : i + batch_size]
+            ]
             r = self._client.post(url, headers=headers, json=batch)
             r.raise_for_status()
 
@@ -187,18 +259,16 @@ class SupabaseClient:
         )
         r.raise_for_status()
 
-    def mark_orphans(self, source: str, external_ids: list[str]) -> None:
-        if not external_ids:
-            return
+    def mark_orphans(self, pin_ids: list[str]) -> None:
+        """Set source_orphaned_at = now() on these pins."""
         headers = dict(self._headers)
         headers["Prefer"] = "return=minimal"
-        for i in range(0, len(external_ids), self.ID_CHUNK_SIZE):
-            chunk = external_ids[i : i + self.ID_CHUNK_SIZE]
-            in_list = ",".join(f'"{eid}"' for eid in chunk)
+        for i in range(0, len(pin_ids), self.UUID_CHUNK_SIZE):
+            chunk = pin_ids[i : i + self.UUID_CHUNK_SIZE]
             r = self._client.patch(
-                f"{self._base}/pins?source=eq.{source}"
-                f"&source_external_id=in.({in_list})",
+                f"{self._base}/pins",
                 headers=headers,
+                params={"id": f"in.({','.join(chunk)})"},
                 json={"source_orphaned_at": "now()"},
             )
             r.raise_for_status()

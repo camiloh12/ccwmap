@@ -75,8 +75,8 @@ def test_apply_writes_inserts_and_updates_and_marks_orphans() -> None:
     assert all(isinstance(r, SupabaseUpsertRow) for r in rows)
     assert {r.source_external_id for r in rows} == {"A", "B", "C"}
 
-    # Orphan-marking called for "Z" only.
-    client.mark_orphans.assert_called_once_with("hifld_courts", ["Z"])
+    # Orphan-marking by pin id.
+    client.mark_orphans.assert_called_once_with(["00000000-0000-0000-0000-000000000099"])
 
 
 def test_apply_derives_status_from_cell() -> None:
