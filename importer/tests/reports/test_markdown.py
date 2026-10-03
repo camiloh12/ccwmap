@@ -1,8 +1,14 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
+from importer.candidate import Candidate, CoordQuality
 from importer.reports import DedupReport, PipelineResult, SourceResult
 from importer.reports.markdown import render_markdown
-from importer.stages.diff import DiffResult
+from importer.restriction_tag import RestrictionTag
+from importer.stages.apply_state_law import ClassifiedCandidate
+from importer.stages.diff import DiffResult, Rekey
+from importer.stages.orphans import OrphanPlan
+from importer.state_laws import StateLawCell
+from importer.supabase_client import ExistingPinRow
 
 
 def _empty_diff() -> DiffResult:
@@ -79,16 +85,6 @@ def test_markdown_renders_odbl_dump_url() -> None:
     assert "## ODbL dump" in md
     assert "dump-2026-06-16.csv.gz" in md
 
-
-from datetime import date
-
-from importer.candidate import Candidate, CoordQuality
-from importer.restriction_tag import RestrictionTag
-from importer.stages.apply_state_law import ClassifiedCandidate
-from importer.stages.diff import Rekey
-from importer.stages.orphans import OrphanPlan
-from importer.state_laws import StateLawCell
-from importer.supabase_client import ExistingPinRow
 
 CELL = StateLawCell(state="US", category=RestrictionTag.FEDERAL_PROPERTY, default_status="NO_GUN",
                     confidence="high", conditions=[], citation="18 USC §930(a)",
