@@ -479,6 +479,7 @@ def test_deletion_rules_skip_importer_apply_windows():
     code = _sql_code()
     cte = re.search(r"recent_deletions AS \((.*?)\n\),", code, re.S).group(1)
     assert "r.mode = 'apply'" in cte
+    assert "r.errors_json IS NULL" in cte
     assert "d.deleted_at BETWEEN r.started_at AND r.completed_at" in cte
     for key in ("imported_deleted_24h", "deletions_24h"):
         expr = re.search(rf"'{key}',\s*\((.*?)\),\n", code, re.S).group(1)

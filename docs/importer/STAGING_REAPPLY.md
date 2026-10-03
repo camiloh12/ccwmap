@@ -157,5 +157,7 @@ deleted by the importer itself.
    re-keys take a few minutes.
 3. **Dry-run again:** expect 0 inserts, 0 re-keys and 0 orphans (everything
    UPDATE or SKIP).
-4. Rules 4 and 5 of the daily health check ignore deletions made during an
-   apply; they show up as "Pins deleted during importer applies".
+4. Rules 4 and 5 of the daily health check ignore deletions made during a
+   *successful* apply (one with no `errors_json`); they show up as "Pins
+   deleted during importer applies". A failed or killed apply's deletions are
+   not covered by its window, so they still alert.

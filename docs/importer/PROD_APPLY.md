@@ -235,6 +235,7 @@ apply re-keys them in place (same UUIDs) instead of duplicating them.
    every deleted pin (`orphans[]` with `action: "delete"`). B4's rollback
    doesn't bring them back; if a deletion was wrong, fix the cause and re-apply,
    and the record returns as a new pin.
-5. The health check's rules 4 and 5 skip deletions inside the apply's
-   `import_runs` window; the digest shows them as "Pins deleted during importer
-   applies".
+5. The health check's rules 4 and 5 skip deletions inside a *successful*
+   apply's `import_runs` window (one with no `errors_json`); the digest shows
+   them as "Pins deleted during importer applies". A failed or killed apply's
+   own deletions still alert, since its window doesn't cover them.
