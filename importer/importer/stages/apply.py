@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.stages.diff import DiffResult
+from importer.stages.orphans import OrphanPlan, plan_orphans
 from importer.supabase_client import SupabaseClient, SupabaseUpsertRow
 
 
@@ -51,15 +52,31 @@ def apply_to_supabase(
     *,
     client: SupabaseClient,
     system_user_id: str,
-    source: str,
+    orphan_plan: OrphanPlan | None = None,
 ) -> None:
-    rows = [
-        _to_upsert_row(cc, system_user_id=system_user_id)
-        for cc in diff.inserts + diff.updates
+    """Write one source's diff.
+
+    Re-keys go first, so the upsert (keyed on source + source_external_id)
+    refreshes re-keyed pins instead of inserting duplicates. A user-corrected
+    pin is re-keyed but not refreshed: its edits stay. Orphans follow
+    `orphan_plan` (default: mark them all).
+    """
+    for rk in diff.rekeys:
+        client.patch_external_id(rk.pin_id, rk.new_external_id)
+
+    refreshed = diff.inserts + diff.updates + [
+        rk.classified for rk in diff.rekeys if not rk.user_modified
     ]
+    rows = [_to_upsert_row(cc, system_user_id=system_user_id) for cc in refreshed]
     if rows:
         client.upsert_pins(rows)
 
-    orphan_ids = [row.id for row in diff.orphans]
-    if orphan_ids:
-        client.mark_orphans(orphan_ids)
+    plan = orphan_plan or plan_orphans(diff.orphans, in_scope_count=0, delete=False)
+    to_mark = [row.id for row in plan.keep + plan.mark]
+    if plan.delete:
+        wanted = [row.id for row in plan.delete]
+        deleted = set(client.delete_pins(wanted))
+        # Corrected by a user after the diff, so the delete skipped it: mark it.
+        to_mark += [pid for pid in wanted if pid not in deleted]
+    if to_mark:
+        client.mark_orphans(to_mark)

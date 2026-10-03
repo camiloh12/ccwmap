@@ -69,7 +69,7 @@ def run_pipeline(
         existing = client.select_pins_by_keys(name, eids)
         diff_result = diff_candidates(survivors, existing=existing, stats=diff_stats)
         if mode == "apply":
-            apply_to_supabase(diff_result, client=client, system_user_id=system_user_id, source=name)
+            apply_to_supabase(diff_result, client=client, system_user_id=system_user_id)
         asl: ApplyStateLawStats = ps["asl"]
         geocode_matched = None
         if name == "gsa":
