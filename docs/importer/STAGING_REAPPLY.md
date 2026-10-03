@@ -135,3 +135,27 @@ drops to 0). The idempotency signal is therefore **INSERT 0** with unchanged
 per-source counts (Step 5), not `UPDATE 0`. What settles after this first
 title-case wave is the *stored data*: the second and later runs report the same
 `UPDATE` count but no longer change any name.
+
+## 8. Re-keys and orphan deletion (2026-10)
+
+The clear-and-reinsert flow above is no longer needed when only ids or
+positions changed: the diff re-keys existing pins in place, and orphans can be
+deleted by the importer itself.
+
+1. **Dry-run** (Step 1, with all 7 sources and `--refetch` so it sees what the
+   workflow will fetch). Read per source:
+   - `Re-key: N`: pins that will take a new id. `Re-key too far` should be 0;
+     anything else means an old pin is more than 50 m from every new record
+     carrying its old id. Investigate before applying.
+   - `Orphan: N`: an apply with `--delete-orphans` would delete D and keep K
+     user-corrected. A breach shows as **Orphan delete cap breached** and under
+     **Errors**; an apply with deletion would stop.
+   - `Skipped at source`: e.g. `disposed` (GSA), `closed` (military).
+2. **Apply** through Actions → *Importer Apply (manual)* → `target: staging`,
+   confirm phrase, and check **delete_orphans** to remove orphans (leave it
+   unchecked to only mark them). Re-keys are one PATCH per pin: ≈4,200 GSA
+   re-keys take a few minutes.
+3. **Dry-run again:** expect 0 inserts, 0 re-keys and 0 orphans (everything
+   UPDATE or SKIP).
+4. Rules 4 and 5 of the daily health check ignore deletions made during an
+   apply; they show up as "Pins deleted during importer applies".

@@ -150,6 +150,7 @@ Single **combined apply**, all 7 sources, via the GitHub Actions workflow.
    - `confirm`: **`I-KNOW-THIS-WRITES-TO-PROD`** (exact)
    - `sources`: `hifld_courts,gsa,hifld_military,nces,ipeds,faa,osm` (default)
    - `states`: `TX,FL,PA` (default)
+   - `delete_orphans`: unchecked for a plain re-apply (orphans are only marked); checked to remove orphans. See "Re-applying prod" below.
 3. The workflow injects `PROD_SUPABASE_SERVICE_ROLE_KEY`, validates the
    confirmation phrase, applies, and uploads `importer-report.md/.json` as a
    90-day artifact.
@@ -211,3 +212,29 @@ is acceptable despite its larger one-shot footprint.
 The daily health-check already pings prod + staging. Declare the pilot stable
 only after **≥7 days clean**. Watch for delete-rate-limit trigger fires and any
 RLS-denied write anomalies.
+
+---
+
+## Re-applying prod (after the 2026-10 identity changes)
+
+Prod's GSA and military pins were written under the old ids. The next prod
+apply re-keys them in place (same UUIDs) instead of duplicating them.
+
+1. **B1 dry-run** against prod. Per source, check: `Re-key` ≈ the staging
+   numbers; `Re-key too far` = 0; no **Orphan delete cap breached** and no
+   **Errors**; orphan counts close to staging's (mostly Disposed buildings,
+   closed bases, and pins displaced by a higher-priority source).
+2. **B2** with `delete_orphans` checked. A cap breach stops the run before any
+   write. That means stop and investigate (a truncated download, an upstream
+   change), never re-run with a bigger cap from the workflow; if the deletion
+   is intended, raise it in a PR.
+3. **B3:** the second dry-run shows 0 inserts / 0 re-keys / 0 orphans.
+   `SELECT source, source_external_id, count(*) FROM pins GROUP BY 1, 2 HAVING count(*) > 1;`
+   returns no rows.
+4. **Deletions are permanent.** `importer-report.json` (90-day artifact) lists
+   every deleted pin (`orphans[]` with `action: "delete"`). B4's rollback
+   doesn't bring them back; if a deletion was wrong, fix the cause and re-apply,
+   and the record returns as a new pin.
+5. The health check's rules 4 and 5 skip deletions inside the apply's
+   `import_runs` window; the digest shows them as "Pins deleted during importer
+   applies".
