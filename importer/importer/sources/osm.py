@@ -192,6 +192,16 @@ class OsmSource(Source):
                 self.last_skip_counts["missing_cache"] += 1
                 continue
             data = json.loads(path.read_text(encoding="utf-8"))
+            remark = data.get("remark")
+            if isinstance(remark, str) and "error" in remark.lower():
+                # Overpass answers a server-side timeout/OOM with HTTP 200, a
+                # `remark` describing the failure, and empty or partial
+                # elements. fetch() caches the response regardless of
+                # content, so this check must run here at parse time: a
+                # cached bad response must never be read as "zero matches".
+                raise RuntimeError(
+                    f"osm: Overpass error for state {state} (cached response {path}): {remark}"
+                )
             for el in data.get("elements", []):
                 el_type = el.get("type")
                 el_id = el.get("id")

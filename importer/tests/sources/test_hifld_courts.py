@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,34 @@ def test_iter_candidates_skipped_count_is_recorded(
     assert source.last_skip_counts["state_pip_miss"] >= 1
     # The fixture has one row with geometry: null.
     assert source.last_skip_counts["missing_geometry"] >= 1
+
+
+def test_iter_candidates_raises_on_arcgis_error_body(tmp_path) -> None:
+    # An ArcGIS error (e.g. an expired signed-blob URL) comes back as HTTP 200
+    # with an {"error": {...}} body, not a FeatureCollection. That must not be
+    # read as "zero candidates".
+    cache_path = tmp_path / "courts.geojson"
+    cache_path.write_text(
+        json.dumps({"error": {"code": 400, "message": "Invalid or missing input parameters"}}),
+        encoding="utf-8",
+    )
+    locator = load_state_locator(FIXTURE_DIR / "states_sample.geojson")
+    source = HifldCourthousesSource(
+        cache_path=cache_path, state_locator=locator, dataset_version="HIFLD-FIXTURE",
+    )
+    with pytest.raises(RuntimeError, match="hifld_courts"):
+        list(source.iter_candidates(state_filter=None))
+
+
+def test_iter_candidates_raises_on_empty_features(tmp_path) -> None:
+    cache_path = tmp_path / "courts.geojson"
+    cache_path.write_text(
+        json.dumps({"type": "FeatureCollection", "features": []}),
+        encoding="utf-8",
+    )
+    locator = load_state_locator(FIXTURE_DIR / "states_sample.geojson")
+    source = HifldCourthousesSource(
+        cache_path=cache_path, state_locator=locator, dataset_version="HIFLD-FIXTURE",
+    )
+    with pytest.raises(RuntimeError, match="hifld_courts"):
+        list(source.iter_candidates(state_filter=None))
