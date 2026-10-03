@@ -144,9 +144,14 @@ deleted by the importer itself.
 
 1. **Dry-run** (Step 1, with all 7 sources and `--refetch` so it sees what the
    workflow will fetch). Read per source:
-   - `Re-key: N`: pins that will take a new id. `Re-key too far` should be 0;
-     anything else means an old pin is more than 50 m from every new record
-     carrying its old id. Investigate before applying.
+   - `Re-key: N`: pins that will take a new id. Every `Re-key too far` pin
+     must be explained before applying — look it up in the JSON report's
+     `orphans[]` (and `rekeys[]`). The expected cause is that the row the old
+     code kept is now Disposed (or the site closed) and its old id survives
+     on another row far away. Known pilot case: GSA `83490` ("Amistad
+     National Recreation Area", Interior 14-17) is Disposed and orphans; the
+     only other row with bare id `83490` is FAA `69-05-83490` ("FSDO SPACE"),
+     551 km away, which is inserted as a new pin.
    - `Orphan: N`: an apply with `--delete-orphans` would delete D and keep K
      user-corrected. A breach shows as **Orphan delete cap breached** and under
      **Errors**; an apply with deletion would stop.

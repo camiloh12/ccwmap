@@ -221,9 +221,14 @@ Prod's GSA and military pins were written under the old ids. The next prod
 apply re-keys them in place (same UUIDs) instead of duplicating them.
 
 1. **B1 dry-run** against prod. Per source, check: `Re-key` ≈ the staging
-   numbers; `Re-key too far` = 0; no **Orphan delete cap breached** and no
-   **Errors**; orphan counts close to staging's (mostly Disposed buildings,
-   closed bases, and pins displaced by a higher-priority source).
+   numbers; every `Re-key too far` pin must be explained before applying —
+   look it up in the JSON report's `orphans[]` (and `rekeys[]`). The expected
+   cause is that the row the old code kept is now Disposed (or the site
+   closed) and its old id survives on another row far away (known pilot case:
+   GSA `83490`, Amistad NRA → orphan; FAA `69-05-83490` inserted). Also check:
+   no **Orphan delete cap breached** and no **Errors**; orphan counts close to
+   staging's (mostly Disposed buildings, closed bases, and pins displaced by a
+   higher-priority source).
 2. **B2** with `delete_orphans` checked. A cap breach stops the run before any
    write. That means stop and investigate (a truncated download, an upstream
    change), never re-run with a bigger cap from the workflow; if the deletion
@@ -239,3 +244,13 @@ apply re-keys them in place (same UUIDs) instead of duplicating them.
    apply's `import_runs` window (one with no `errors_json`); the digest shows
    them as "Pins deleted during importer applies". A failed or killed apply's
    own deletions still alert, since its window doesn't cover them.
+6. A failed apply writes no report (reports render only after the pipeline
+   returns). The `pin_deletions` tombstones are then the record of what was
+   deleted.
+7. The report's delete list is the planned list. A pin a user corrected
+   mid-run is marked instead of deleted, because the DELETE filters on
+   `user_modified = false`.
+8. A plain apply (`delete_orphans` unchecked) marks every orphan. Enough of
+   them can trip the health check's imported-orphaned rule (rule 8 in
+   `docs/importer/PROD_HEALTH_CHECK.md`; threshold `MAX_ORPHANED` in
+   `ci/health_check.py`, currently 100) until a deleting run clears them.
