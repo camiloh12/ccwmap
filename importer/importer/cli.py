@@ -138,7 +138,9 @@ def _build_source(name, *, config, locator, repo_root, state_laws=None, states=N
     if name == "hifld_military":
         return HifldMilitarySource(
             cache_path=cache_dir / "military.geojson",
-            state_locator=locator, dataset_version=version, url=url,
+            points_cache_path=cache_dir / "military_points.geojson",
+            state_locator=locator, dataset_version=version,
+            url=url, points_url=cfg.get("points_url", ""),
         )
     if name == "gsa":
         return GsaSource(

@@ -168,3 +168,29 @@ def test_main_errors_on_placeholder_project_url(monkeypatch):
         "--sources", "hifld_courts", "--project-ref", "prod",
     ])
     assert rc == 2
+
+
+def test_build_source_wires_military_site_points(tmp_path):
+    from pathlib import Path
+    from importer.cli import _build_source
+    from importer.geo.states import load_state_locator
+
+    locator = load_state_locator(Path(__file__).parent / "fixtures" / "states_sample.geojson")
+    config = {"sources": {"hifld_military": {
+        "cache_dir": "data/sources/hifld_military", "dataset_version": "v",
+        "url": "u", "points_url": "p",
+    }}}
+    src = _build_source("hifld_military", config=config, locator=locator, repo_root=tmp_path)
+    assert src._points_url == "p"
+    assert src._points_cache_path == tmp_path / "data/sources/hifld_military" / "military_points.geojson"
+
+
+def test_config_pins_the_mirta_site_points_layer():
+    import yaml
+    from pathlib import Path
+    from importer.cli import CONFIG_PATH
+
+    cfg = yaml.safe_load(Path(CONFIG_PATH).read_text(encoding="utf-8"))["sources"]["hifld_military"]
+    assert cfg["points_url"].endswith(
+        "/mirta/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
+    )

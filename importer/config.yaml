@@ -24,13 +24,16 @@ sources:
     dataset_version: "FRPP-FY24"
     url: "https://inventory.data.gov/dataset/5752ee7f-9e8b-467a-aa5a-274b4bd1bc29/resource/1a94a302-b3c9-433d-ac97-43db73fa6d04/download/frpp_public_dataset_fy24_07022025.xlsx"
   hifld_military:
-    # MIRTA DoD Sites — Boundaries (layer 1), USACE-owned feature service
-    # (owner usace_crrel_als); the legacy HIFLD Open hub was deactivated
-    # 2025-08-26. The /query endpoint returns GeoJSON; maxRecordCount (1000)
-    # exceeds the feature count (825) so a single GET pulls the whole layer.
+    # MIRTA DoD Sites, USACE-owned feature service (owner usace_crrel_als); the
+    # legacy HIFLD Open hub was deactivated 2025-08-26. Each /query endpoint
+    # returns GeoJSON in one GET (maxRecordCount 1000 > 825 boundaries / 737 points).
+    #   url        = layer 1, "DoD Sites - Boundaries" (polygons)
+    #   points_url = layer 0, "DoD Sites - Point" (the DoD-placed point per site;
+    #                the pin goes there when it lies on the base)
     cache_dir: "data/sources/hifld_military"
     dataset_version: "MIRTA-2026-06"
     url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/mirta/FeatureServer/1/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
+    points_url: "https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/mirta/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
   nces:
     # NCES public K-12, SY 2024-25. Two files joined on NCESSCH: EDGE geocode
     # (.zip of .xlsx -> coords) + CCD nonfiscal preliminary directory bundle

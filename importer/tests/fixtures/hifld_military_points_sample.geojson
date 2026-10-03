@@ -1,0 +1,95 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": "MIL-TX-1",
+    "SITENAME": "Fort Cavazos",
+    "STATENAMECODE": "tx"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -97.775,
+     31.145
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": "MIL-FL-1",
+    "SITENAME": "NAS Jacksonville",
+    "STATENAMECODE": "fl"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -81.65969,
+     30.23
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": null,
+    "SITENAME": "NG  Camp Mabry",
+    "STATENAMECODE": "TX"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -97.755,
+     30.325
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": "MIL-TX-JBSA",
+    "SITENAME": "Joint Base San Antonio",
+    "STATENAMECODE": "tx"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -98.62,
+     29.38
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": "MIL-FL-JAX",
+    "SITENAME": "Jacksonville IAP (ANG)",
+    "STATENAMECODE": "fl"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -81.6,
+     30.49
+    ]
+   }
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "SDSID": "MIL-CA-9",
+    "SITENAME": "Unrelated Site",
+    "STATENAMECODE": "ca"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     -117.0,
+     33.0
+    ]
+   }
+  }
+ ]
+}
