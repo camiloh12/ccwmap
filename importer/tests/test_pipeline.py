@@ -286,15 +286,15 @@ def test_cap_breach_stops_the_apply_before_any_write():
     client, run = _over_cap_run(delete_orphans=True)
     with pytest.raises(OrphanCapExceeded, match="hifld_military: 51 orphan deletions exceed the cap of 50"):
         run("apply")
-    for write in ("upsert_pins", "patch_external_id", "delete_pins", "mark_orphans"):
-        getattr(client, write).assert_not_called()
+    # Only the read-side calls (Phase A/B/C1) happened; no write method ran.
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
 
 
 def test_dry_run_reports_a_cap_breach_as_an_error():
     client, run = _over_cap_run()
     result = run("dry-run")
     assert any("hifld_military: 51 orphan deletions exceed the cap of 50" in e for e in result.errors)
-    client.delete_pins.assert_not_called()
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
 
 
 def test_cap_override_lets_a_large_deletion_through():

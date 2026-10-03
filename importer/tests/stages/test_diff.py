@@ -2,6 +2,7 @@ from datetime import date
 from uuid import uuid4
 
 from importer.candidate import Candidate, CoordQuality
+from importer.geo.distance import DEG_LAT_M
 from importer.restriction_tag import RestrictionTag
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.stages.diff import REKEY_MAX_M, DiffResult, DiffStats, diff_candidates
@@ -213,6 +214,46 @@ def test_partial_apply_rerun_resolves_without_duplicates() -> None:
     assert [cc.candidate.source_external_id for cc in result.updates] == ["13-14-140"]
     assert [r.new_external_id for r in result.rekeys] == ["47-00-200"]
     assert result.inserts == [] and result.orphans == []
+
+
+def test_closest_candidate_wins_regardless_of_yield_order() -> None:
+    # Two candidates share legacy id "140", both within REKEY_MAX_M of the
+    # pin. The farther one (~30 m) is yielded first and must not steal the
+    # pin from the nearer one (~5 m) that comes second.
+    farther = (SA[0] + 30 / DEG_LAT_M, SA[1])
+    nearer = (SA[0] + 5 / DEG_LAT_M, SA[1])
+    far_cand = _gsa("14-10-140", legacy="140", legacy_point=farther)
+    near_cand = _gsa("13-14-140", legacy="140", legacy_point=nearer)
+    stats = DiffStats()
+    result = diff_candidates([far_cand, near_cand], existing=[_pin("140", SA)], stats=stats)
+    assert [r.new_external_id for r in result.rekeys] == ["13-14-140"]
+    assert [cc.candidate.source_external_id for cc in result.inserts] == ["14-10-140"]
+    assert result.rekey_too_far == 0 and stats.rekey_too_far == 0
+
+
+def test_rekey_boundary_at_rekey_max_m() -> None:
+    # Offset latitude by a precise number of metres via DEG_LAT_M, with a
+    # margin either side of REKEY_MAX_M so float error can't flip the result.
+    just_inside = (SA[0] + (REKEY_MAX_M - 0.1) / DEG_LAT_M, SA[1])
+    inside_stats = DiffStats()
+    inside = diff_candidates(
+        [_gsa("13-14-140", legacy="140", legacy_point=just_inside)],
+        existing=[_pin("140", SA)], stats=inside_stats,
+    )
+    assert [r.new_external_id for r in inside.rekeys] == ["13-14-140"]
+    assert inside.inserts == [] and inside.orphans == []
+    assert inside.rekey_too_far == 0 and inside_stats.rekey_too_far == 0
+
+    just_outside = (SA[0] + (REKEY_MAX_M + 0.1) / DEG_LAT_M, SA[1])
+    outside_stats = DiffStats()
+    outside = diff_candidates(
+        [_gsa("13-14-140", legacy="140", legacy_point=just_outside)],
+        existing=[_pin("140", SA)], stats=outside_stats,
+    )
+    assert outside.rekeys == []
+    assert [cc.candidate.source_external_id for cc in outside.inserts] == ["13-14-140"]
+    assert [row.source_external_id for row in outside.orphans] == ["140"]
+    assert outside.rekey_too_far == 1 and outside_stats.rekey_too_far == 1
 
 
 def test_orphans_come_only_from_in_scope_pins() -> None:
