@@ -64,12 +64,6 @@ class SupabaseClient:
         "status,restriction_tag,user_modified,source_dataset_version"
     )
 
-    # Max external-ids per `in.(...)` request. A single request inlines every id
-    # into the URL query, so large sources (GSA emits ~10k) would otherwise blow
-    # past httpx's URL-component cap and the Supabase gateway's URL limit. 200
-    # ids keeps each URL well under 8 KB.
-    ID_CHUNK_SIZE = 200
-
     # Pin UUIDs per `in.(...)` request: 36 chars plus an encoded comma each,
     # so 100 ids keep a URL near 4 KB.
     UUID_CHUNK_SIZE = 100
@@ -103,28 +97,6 @@ class SupabaseClient:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
-
-    def select_pins_by_keys(
-        self, source: str, external_ids: list[str]
-    ) -> list[ExistingPinRow]:
-        if not external_ids:
-            return []
-        out: list[ExistingPinRow] = []
-        for i in range(0, len(external_ids), self.ID_CHUNK_SIZE):
-            chunk = external_ids[i : i + self.ID_CHUNK_SIZE]
-            # Postgrest `in.(...)` requires quoted strings for text columns.
-            in_list = ",".join(f'"{eid}"' for eid in chunk)
-            params = {
-                "select": self.SELECT_COLUMNS,
-                "source": f"eq.{source}",
-                "source_external_id": f"in.({in_list})",
-            }
-            r = self._client.get(
-                f"{self._base}/pins", headers=self._headers, params=params
-            )
-            r.raise_for_status()
-            out.extend(ExistingPinRow.model_validate(row) for row in r.json())
-        return out
 
     def select_user_pins(self) -> list[ExistingPinRow]:
         """All user-created pins — dedup must never clobber these.

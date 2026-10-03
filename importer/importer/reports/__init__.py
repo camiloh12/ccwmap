@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from importer.stages.diff import DiffResult
+from importer.stages.orphans import OrphanPlan
 
 
 @dataclass
@@ -29,6 +30,10 @@ class SourceResult:
     # on purpose — misses never reach dedup.
     geocode_matched: int | None = None
     geocode_missed: int | None = None
+    # How this run treats the source's orphans (a dry-run plans deletes the
+    # way --delete-orphans would), and its skip counts by reason.
+    orphan_plan: OrphanPlan = field(default_factory=OrphanPlan)
+    skip_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
