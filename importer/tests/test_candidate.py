@@ -66,3 +66,34 @@ def test_candidate_rejects_non_two_letter_state() -> None:
             category=RestrictionTag.STATE_LOCAL_GOVT,
             state="Texas",
         )
+
+
+def _military(**kw) -> Candidate:
+    fields = dict(
+        source="hifld_military",
+        source_external_id="TX:NG CAMP MABRY",
+        source_dataset_version="v1",
+        name="NG Camp Mabry",
+        latitude=30.325,
+        longitude=-97.755,
+        coord_quality=CoordQuality.BUILDING_POLYGON,
+        category=RestrictionTag.FEDERAL_PROPERTY,
+        state="TX",
+    )
+    fields.update(kw)
+    return Candidate(**fields)
+
+
+def test_legacy_identity_defaults_to_none() -> None:
+    c = _military()
+    assert c.legacy_external_id is None
+    assert c.legacy_point is None
+
+
+def test_normalize_keeps_legacy_identity() -> None:
+    from importer.stages.normalize import NormalizeStats, normalize
+
+    c = _military(legacy_external_id=" ", legacy_point=(30.32, -97.76))
+    out = next(normalize([c], stats=NormalizeStats()))
+    assert out.legacy_external_id == " "
+    assert out.legacy_point == (30.32, -97.76)

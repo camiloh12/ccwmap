@@ -37,3 +37,9 @@ class Candidate(BaseModel):
     category: RestrictionTag
     state: str = Field(pattern=r"^[A-Z]{2}$")
     extra: dict = Field(default_factory=dict)
+
+    # Identity hints for the diff stage, set only by sources whose id scheme
+    # changed and only when the old id differs from the new one. Never written
+    # to the database. legacy_point is the (lat, lng) the old code wrote.
+    legacy_external_id: str | None = None
+    legacy_point: tuple[float, float] | None = None
