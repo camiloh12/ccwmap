@@ -56,3 +56,17 @@ def test_no_run_step_relies_on_importer_cwd_before_checkout():
             f"Step {step.get('name')!r} runs before checkout but uses "
             f"working-directory {step_wd!r}, which does not exist yet."
         )
+
+
+def test_delete_orphans_is_an_opt_in_checkbox():
+    raw = WORKFLOW.read_text(encoding="utf-8")
+    wf = yaml.safe_load(raw)
+    inputs = wf[True]["workflow_dispatch"]["inputs"]  # PyYAML reads the `on:` key as True
+    assert inputs["delete_orphans"]["type"] == "boolean"
+    assert inputs["delete_orphans"]["default"] is False
+    step = next(s for s in wf["jobs"]["apply"]["steps"] if "importer.cli" in s.get("run", ""))
+    assert step["env"]["DELETE_ORPHANS"] == "${{ inputs.delete_orphans }}"
+    assert '[ "$DELETE_ORPHANS" = "true" ]' in step["run"]
+    assert "--delete-orphans" in step["run"]
+    # The cap override stays local-only: a prod breach means stop and investigate.
+    assert "--orphan-delete-cap" not in raw

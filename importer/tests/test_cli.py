@@ -194,3 +194,99 @@ def test_config_pins_the_mirta_site_points_layer():
     assert cfg["points_url"].endswith(
         "/mirta/FeatureServer/0/query?where=1%3D1&outFields=*&outSR=4326&f=geojson"
     )
+
+
+APPLY_STAGING = ["--apply", "--states", "TX", "--sources", "gsa",
+                 "--project-ref", "staging", "--i-know-this-writes-to-staging"]
+
+
+def test_parser_accepts_orphan_flags_with_apply() -> None:
+    args = build_parser().parse_args(APPLY_STAGING + ["--delete-orphans", "--orphan-delete-cap", "7"])
+    assert args.delete_orphans is True
+    assert args.orphan_delete_cap == 7
+
+
+def test_parser_rejects_delete_orphans_with_dry_run() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([
+            "--dry-run", "--states", "TX", "--sources", "gsa",
+            "--project-ref", "staging", "--delete-orphans",
+        ])
+
+
+def test_parser_rejects_a_negative_cap() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(APPLY_STAGING + ["--orphan-delete-cap", "-1"])
+
+
+class _FakeClient:
+    def __init__(self):
+        self.updates = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return None
+
+    def insert_import_run(self, **kw):
+        return "run-1"
+
+    def update_import_run(self, **kw):
+        self.updates.append(kw)
+
+
+def _fake_main(monkeypatch, run_pipeline):
+    import importer.cli as cli
+
+    monkeypatch.setenv("IMPORTER_SUPABASE_SERVICE_ROLE_KEY", "dummy")
+    fake = _FakeClient()
+    monkeypatch.setattr(cli, "SupabaseClient", lambda **kw: fake)
+    monkeypatch.setattr(cli, "_build_source", lambda name, **kw: object())
+    monkeypatch.setattr(cli, "run_pipeline", run_pipeline)
+    return cli, fake
+
+
+def test_main_passes_orphan_flags_and_records_counts(monkeypatch, tmp_path) -> None:
+    from datetime import datetime, timezone
+    from importer.reports import DedupReport, PipelineResult, SourceResult
+    from importer.stages.diff import DiffResult
+    from importer.stages.orphans import OrphanPlan
+    from importer.supabase_client import ExistingPinRow
+
+    kept = ExistingPinRow(id="k", source="gsa", source_external_id="E", name="N", latitude=30.0,
+                          longitude=-97.0, status=2, restriction_tag="FEDERAL_PROPERTY",
+                          user_modified=True, source_dataset_version="v")
+    captured = {}
+
+    def fake_run(**kw):
+        captured.update(kw)
+        return PipelineResult(
+            mode="apply", started_at=datetime.now(timezone.utc), completed_at=None,
+            states=["TX"], dedup=DedupReport(),
+            sources=[SourceResult(source="gsa", candidates_fetched=1, candidates_after_state_filter=1,
+                                  classified=1, dropped_no_cell=0, missing_cells=[], name_truncations=0,
+                                  diff=DiffResult(inserts=[], updates=[], skips=[], orphans=[kept]),
+                                  orphan_plan=OrphanPlan(keep=[kept]))],
+        )
+
+    cli, fake = _fake_main(monkeypatch, fake_run)
+    rc = cli.main(APPLY_STAGING + ["--delete-orphans", "--orphan-delete-cap", "7",
+                                   "--report-out", str(tmp_path / "r.md")])
+    assert rc == 0
+    assert captured["delete_orphans"] is True
+    assert captured["orphan_delete_cap"] == 7
+    assert captured["state_locator"] is not None
+    assert fake.updates[-1]["orphans_marked"] == 1
+
+
+def test_main_exits_1_and_records_a_cap_breach(monkeypatch, tmp_path) -> None:
+    from importer.stages.orphans import OrphanCapExceeded
+
+    def breach(**kw):
+        raise OrphanCapExceeded("gsa: 300 orphan deletions exceed the cap of 211; nothing was written")
+
+    cli, fake = _fake_main(monkeypatch, breach)
+    rc = cli.main(APPLY_STAGING + ["--delete-orphans", "--report-out", str(tmp_path / "r.md")])
+    assert rc == 1
+    assert "exceed the cap" in fake.updates[-1]["errors_json"]["message"]

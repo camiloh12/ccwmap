@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: 'TX,FL,PA'
+      delete_orphans:
+        description: 'Delete pins whose source record is gone (capped per source; user-corrected pins are kept)'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: importer-${{ inputs.target }}
@@ -66,13 +71,20 @@ jobs:
         run: uv sync --frozen
 
       - name: Apply to ${{ inputs.target }}
+        env:
+          DELETE_ORPHANS: ${{ inputs.delete_orphans }}
         run: |
+          # --delete-orphans is opt-in. The cap override is deliberately not
+          # exposed here: a breach means stop and investigate.
+          orphan_flags=()
+          if [ "$DELETE_ORPHANS" = "true" ]; then orphan_flags+=(--delete-orphans); fi
           uv run --no-sync python -m importer.cli \
             --apply \
             --states "${{ inputs.states }}" \
             --sources "${{ inputs.sources }}" \
             --project-ref ${{ inputs.target }} \
             --i-know-this-writes-to-${{ inputs.target }} \
+            "${orphan_flags[@]}" \
             --report-out "$GITHUB_WORKSPACE/importer-report.md"
 
       - name: Upload report artifacts
