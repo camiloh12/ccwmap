@@ -234,8 +234,9 @@ apply re-keys them in place (same UUIDs) instead of duplicating them.
    change), never re-run with a bigger cap from the workflow; if the deletion
    is intended, raise it in a PR.
 3. **B3:** the second dry-run shows 0 inserts / 0 re-keys / 0 orphans.
-   `SELECT source, source_external_id, count(*) FROM pins GROUP BY 1, 2 HAVING count(*) > 1;`
-   returns no rows.
+   `SELECT source, source_external_id, count(*) FROM pins WHERE source_external_id IS NOT NULL GROUP BY 1, 2 HAVING count(*) > 1;`
+   returns no rows. (Without the `WHERE`, user pins, whose external id is
+   NULL, group together and show up as one false "duplicate".)
 4. **Deletions are permanent.** `importer-report.json` (90-day artifact) lists
    every deleted pin (`orphans[]` with `action: "delete"`). B4's rollback
    doesn't bring them back; if a deletion was wrong, fix the cause and re-apply,
