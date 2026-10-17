@@ -214,3 +214,35 @@ def test_osm_categories_for_state_uses_us_fallback():
     ])
     # No state-specific cell -> US fallback applies (matches lookup() semantics).
     assert table.osm_categories_for_state("TX") == {RestrictionTag.BAR_ALCOHOL}
+
+
+def test_no_us_cell_claims_courthouses():
+    # HIFLD courthouses are state and county courts (4 federal-looking names in
+    # 3,713). 18 USC 930 covers federal courthouses, which come from GSA. Each
+    # state needs its own court cell; there is no federal fallback.
+    table = load_state_laws(PROD_TABLE)
+    for row in table.rows:
+        if row.state == "US":
+            assert "hifld_courts" not in (row.source_filter or []), row
+
+
+def test_tx_courthouse_resolves_to_the_tx_cell():
+    stats = ApplyStateLawStats()
+    out = list(apply_state_law(
+        [_candidate("hifld_courts", "TX", RestrictionTag.STATE_LOCAL_GOVT)],
+        table=load_state_laws(PROD_TABLE), stats=stats,
+    ))
+    assert len(out) == 1
+    assert out[0].cell.state == "TX"
+    assert out[0].cell.citation == "TX Penal Code §46.03(a)(3)"
+
+
+def test_courthouse_in_a_state_without_a_cell_drops_and_is_reported():
+    stats = ApplyStateLawStats()
+    out = list(apply_state_law(
+        [_candidate("hifld_courts", "GA", RestrictionTag.STATE_LOCAL_GOVT)],
+        table=load_state_laws(PROD_TABLE), stats=stats,
+    ))
+    assert out == []
+    assert stats.dropped_no_cell == 1
+    assert ("GA", "STATE_LOCAL_GOVT") in stats.missing_cells

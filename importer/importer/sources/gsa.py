@@ -17,6 +17,13 @@ NOT a CSV. Column headers and a few semantic facts that drove this module:
     dropped (see _INCLUDED_TYPES).
   - `Latitude`/`Longitude` are populated on ~97% of rows, so the Census geocoder
     is a rare fallback for the address-only remainder.
+
+Identity (2026-10): `Real Property Unique Identifier` is unique only within a
+reporting agency and bureau (it repeats across agencies), so a building's
+external id is "{Reporting Agency Code}-{Reporting Bureau Code}-{Real Property
+Unique Identifier}". Candidates also carry the bare id and their own coordinate
+as legacy identity, so the diff stage re-keys pins written under the old id.
+`Asset Status == Disposed` rows are no longer federal property and are skipped.
 """
 
 from __future__ import annotations
@@ -46,11 +53,14 @@ _COL_LAT = "Latitude"
 _COL_LNG = "Longitude"
 _COL_NAME = "Installation Name"
 _COL_USE = "Real Property Use"
+_COL_AGENCY = "Reporting Agency Code"
+_COL_BUREAU = "Reporting Bureau Code"
+_COL_STATUS = "Asset Status"
 
 # Only the columns this module reads — keeps the per-row dict small over ~308k rows.
 _NEEDED_COLS = (
     _COL_ID, _COL_TYPE, _COL_STREET, _COL_CITY, _COL_STATE, _COL_ZIP,
-    _COL_LAT, _COL_LNG, _COL_NAME, _COL_USE,
+    _COL_LAT, _COL_LNG, _COL_NAME, _COL_USE, _COL_AGENCY, _COL_BUREAU, _COL_STATUS,
 )
 
 # 18 USC 930 attaches to federal *facilities* (buildings), not Structures or Land.
@@ -172,10 +182,17 @@ class GsaSource(Source):
             if (row.get(_COL_TYPE) or "").strip().lower() not in _INCLUDED_TYPES:
                 self.last_skip_counts["not_federal_facility"] += 1
                 continue
-            eid = (row.get(_COL_ID) or "").strip()
-            if not eid:
+            rpuid = (row.get(_COL_ID) or "").strip()
+            agency = (row.get(_COL_AGENCY) or "").strip()
+            bureau = (row.get(_COL_BUREAU) or "").strip()
+            if not (rpuid and agency and bureau):
                 self.last_skip_counts["missing_external_id"] += 1
                 continue
+            if (row.get(_COL_STATUS) or "").strip().lower() == "disposed":
+                # No longer federal property: no legal basis for a pin.
+                self.last_skip_counts["disposed"] += 1
+                continue
+            eid = f"{agency}-{bureau}-{rpuid}"
             name = (row.get(_COL_NAME) or "").strip()
             if not name:
                 self.last_skip_counts["missing_name"] += 1
@@ -187,6 +204,7 @@ class GsaSource(Source):
                 continue
             row["_usps"] = usps
             row["_eid"] = eid
+            row["_rpuid"] = rpuid
             row["_name"] = name
             row["_lat"] = lat
             row["_lng"] = lng
@@ -230,6 +248,10 @@ class GsaSource(Source):
                 category=RestrictionTag.FEDERAL_PROPERTY,
                 state=row["_usps"],
                 extra={},
+                # Before 2026-10 the id was the bare property id, which repeats
+                # across agencies; the diff stage re-keys those pins by position.
+                legacy_external_id=row["_rpuid"],
+                legacy_point=(lat, lng),
             )
 
     @staticmethod

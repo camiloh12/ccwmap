@@ -2,6 +2,8 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 from importer.candidate import Candidate, CoordQuality
 from importer.geo.states import load_state_locator
 from importer.pipeline import run_pipeline
@@ -9,10 +11,15 @@ from importer.reports import PipelineResult
 from importer.restriction_tag import RestrictionTag
 from importer.sources.base import Source
 from importer.sources.hifld_courts import HifldCourthousesSource
+from importer.stages.orphans import OrphanCapExceeded
 from importer.state_laws import StateLawCell, StateLawTable
+from importer.supabase_client import ExistingPinRow
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures"
+LOCATOR = load_state_locator(FIXTURE_DIR / "states_sample.geojson")
+SYS = "81775f8b-1a6a-47d6-b793-e9ab7e38634e"
+AUSTIN, MIAMI = (30.27, -97.74), (25.77, -80.19)
 
 
 def _table() -> StateLawTable:
@@ -32,7 +39,7 @@ def _table() -> StateLawTable:
 
 def _mock_client():
     client = MagicMock()
-    client.select_pins_by_keys.return_value = []
+    client.select_system_pins.return_value = []
     client.select_user_pins.return_value = []
     return client
 
@@ -82,10 +89,10 @@ def test_pipeline_apply_mode_calls_client() -> None:
 
 
 class _FakeSource(Source):
-    def __init__(self, name, candidates):
+    def __init__(self, name, candidates, skips=None):
         self.SOURCE_NAME = name
         self._candidates = candidates
-        self.last_skip_counts = {}
+        self.last_skip_counts = dict(skips or {})
 
     def fetch(self, *, refetch=False):
         pass
@@ -222,3 +229,101 @@ def test_pipeline_surfaces_ipeds_missing_cells() -> None:
     assert ("TX", "COLLEGE_UNIVERSITY") in src.missing_cells
     assert ("PA", "COLLEGE_UNIVERSITY") in src.missing_cells
     assert len(src.diff.inserts) == 1     # only the FL college is written
+
+
+def _pin(pid, at=AUSTIN, *, source="gsa", eid=None, user_modified=False):
+    return ExistingPinRow(
+        id=pid, source=source, source_external_id=eid or f"E-{pid}", name=f"Pin {pid}",
+        latitude=at[0], longitude=at[1], status=2, restriction_tag="FEDERAL_PROPERTY",
+        user_modified=user_modified, source_dataset_version="v",
+    )
+
+
+def _client_with(pins_by_source):
+    client = _mock_client()
+    client.select_system_pins.side_effect = lambda name: pins_by_source.get(name, [])
+    return client
+
+
+def _run(sources, client, *, mode="apply", states=("TX",), **kw):
+    return run_pipeline(
+        sources=sources, state_laws=_table(), client=client, states=list(states),
+        mode=mode, system_user_id=SYS, state_locator=LOCATOR, **kw,
+    )
+
+
+def test_orphans_are_scoped_to_the_run_states():
+    tx, fl = _pin("tx", AUSTIN), _pin("fl", MIAMI)
+    result = _run([_FakeSource("gsa", [])], _client_with({"gsa": [tx, fl]}), mode="dry-run")
+    assert result.sources[0].diff.orphans == [tx]
+
+
+def test_default_apply_marks_orphans_and_deletes_nothing():
+    client = _client_with({"gsa": [_pin("tx")]})
+    _run([_FakeSource("gsa", [])], client)
+    client.mark_orphans.assert_called_once_with(["tx"])
+    client.delete_pins.assert_not_called()
+
+
+def test_delete_orphans_deletes_uncorrected_and_marks_corrected():
+    gone, fixed = _pin("gone"), _pin("fixed", user_modified=True)
+    client = _client_with({"gsa": [gone, fixed]})
+    client.delete_pins.return_value = ["gone"]
+    _run([_FakeSource("gsa", [])], client, delete_orphans=True)
+    client.delete_pins.assert_called_once_with(["gone"])
+    client.mark_orphans.assert_called_once_with(["fixed"])
+
+
+def _over_cap_run(**kw):
+    # gsa would insert one pin; military would delete 51 of its 51 in-scope pins (cap 50).
+    gsa = _FakeSource("gsa", [_cand("gsa", "g1", "Federal Building Austin", 30.2672, -97.7431)])
+    mil = _FakeSource("hifld_military", [])
+    client = _client_with({"hifld_military": [_pin(f"m{i}", source="hifld_military") for i in range(51)]})
+    return client, (lambda mode: _run([gsa, mil], client, mode=mode, **kw))
+
+
+def test_cap_breach_stops_the_apply_before_any_write():
+    client, run = _over_cap_run(delete_orphans=True)
+    with pytest.raises(OrphanCapExceeded, match="hifld_military: 51 orphan deletions exceed the cap of 50"):
+        run("apply")
+    # Only the read-side calls (Phase A/B/C1) happened; no write method ran.
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
+
+
+def test_dry_run_reports_a_cap_breach_as_an_error():
+    client, run = _over_cap_run()
+    result = run("dry-run")
+    assert any("hifld_military: 51 orphan deletions exceed the cap of 50" in e for e in result.errors)
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
+
+
+def test_cap_override_lets_a_large_deletion_through():
+    client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap=100)
+    client.delete_pins.return_value = [f"m{i}" for i in range(51)]
+    run("apply")
+    assert len(client.delete_pins.call_args.args[0]) == 51
+
+
+def test_rekey_flows_from_source_to_writes():
+    cand = Candidate(
+        source="gsa", source_external_id="13-14-140", source_dataset_version="v",
+        name="San Antonio Federal Center", latitude=29.4241, longitude=-98.4936,
+        coord_quality=CoordQuality.PRECISE, category=RestrictionTag.FEDERAL_PROPERTY,
+        state="TX", legacy_external_id="140", legacy_point=(29.4241, -98.4936),
+    )
+    client = _client_with({"gsa": [_pin("pin-140", (29.4241, -98.4936), eid="140")]})
+    result = _run([_FakeSource("gsa", [cand])], client)
+    assert [r.pin_id for r in result.sources[0].diff.rekeys] == ["pin-140"]
+    client.patch_external_id.assert_called_once_with("pin-140", "13-14-140")
+    assert [r.source_external_id for r in client.upsert_pins.call_args.args[0]] == ["13-14-140"]
+    client.mark_orphans.assert_not_called()
+
+
+def test_delete_orphans_is_rejected_outside_apply():
+    with pytest.raises(ValueError, match="apply-only"):
+        _run([_FakeSource("gsa", [])], _mock_client(), mode="dry-run", delete_orphans=True)
+
+
+def test_skip_counts_reach_the_result():
+    result = _run([_FakeSource("gsa", [], skips={"disposed": 3})], _mock_client(), mode="dry-run")
+    assert result.sources[0].skip_counts == {"disposed": 3}

@@ -18,6 +18,6 @@ Schema and confidence definitions: see
 
 | Phase | Cells covered |
 |---|---|
-| 2 (this) | `(US, STATE_LOCAL_GOVT)` only — proves the loader and one HIFLD source end-to-end. |
+| 2 (this) | `(US, STATE_LOCAL_GOVT)` only — proves the loader and one HIFLD source end-to-end. Removed 2026-10: there is no federal courthouse fallback (see `docs/importer/OMISSIONS.md`). |
 | 3 | TX + FL + PA × 10 categories + 3 federal-uniform US cells (33 cells). |
 | 8+ | National rollout: all 50 states × 10 categories. |

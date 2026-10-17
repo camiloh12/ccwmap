@@ -151,3 +151,20 @@ def test_iter_candidates_parses_nodes_and_way_centers(tmp_path):
 def test_iter_candidates_skips_states_with_no_plan(tmp_path):
     src = _make_source(tmp_path, ["PA"])
     assert list(src.iter_candidates(state_filter={"PA"})) == []
+
+
+def test_iter_candidates_raises_on_overpass_error_remark(tmp_path):
+    # Overpass answers a server-side timeout/OOM with HTTP 200, a `remark`
+    # describing the error, and empty or partial elements. fetch() caches the
+    # response regardless of content, so the check must happen here, at parse
+    # time, so a cached bad response can't be re-read as valid.
+    (tmp_path / "TX.json").write_text(
+        json.dumps({
+            "remark": 'runtime error: Query timed out in "query" at line 3 after 181 seconds.',
+            "elements": [],
+        }),
+        encoding="utf-8",
+    )
+    src = _make_source(tmp_path, ["TX"])
+    with pytest.raises(RuntimeError, match="osm"):
+        list(src.iter_candidates(state_filter={"TX"}))

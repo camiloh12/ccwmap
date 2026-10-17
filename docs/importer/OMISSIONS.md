@@ -43,3 +43,13 @@ likewise never generated, because PA has no `BAR_ALCOHOL` cell. When a future st
 with a categorical worship/sports/healthcare prohibition is added to `states.yaml`,
 that category is auto-queried with no importer code change — add its Overpass tag
 map under `sources.osm.categories` in `config.yaml`.
+
+## No federal courthouse fallback (2026-10)
+
+There is no `state: US` `STATE_LOCAL_GOVT` cell. It used to cite 18 USC §930
+for every `hifld_courts` courthouse in a state without its own cell, but HIFLD
+Courthouses lists state and county courts: only 4 of 3,713 names look federal,
+and 3 of those are in territories. Federal courthouses already come from GSA
+(`FEDERAL_PROPERTY`). Outside TX/FL/PA, courthouse candidates drop at
+`apply_state_law` and appear in the dry-run "needs research" list until that
+state gets its own court cell. That list entry is expected, not a gap.

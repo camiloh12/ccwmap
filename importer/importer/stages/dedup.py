@@ -8,13 +8,14 @@ never dropped; a candidate matching a user pin is dropped.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
 
 from rapidfuzz import fuzz
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 
+from importer.geo.distance import DEG_LAT_M as _DEG_LAT_M
+from importer.geo.distance import meters_between as _meters_between
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.supabase_client import ExistingPinRow
 
@@ -33,19 +34,10 @@ SOURCE_PRIORITY: dict[str, int] = {
 
 MATCH_RADIUS_M = 100.0
 NAME_RATIO_THRESHOLD = 70.0
-_DEG_LAT_M = 111_320.0  # meters per degree of latitude
 
 
 def _priority(source: str) -> int:
     return SOURCE_PRIORITY.get(source, 99)
-
-
-def _meters_between(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    """Equirectangular approximation — adequate at the 100 m scale in CONUS."""
-    mean_lat = math.radians((lat1 + lat2) / 2.0)
-    dx = (lng2 - lng1) * _DEG_LAT_M * math.cos(mean_lat)
-    dy = (lat2 - lat1) * _DEG_LAT_M
-    return math.hypot(dx, dy)
 
 
 def _matches(

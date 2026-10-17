@@ -15,6 +15,21 @@ imported AS (
   FROM pins p, sys
   WHERE p.created_by = sys.id
 ),
+-- Pin deletions in the last 24 h. by_importer: made while an importer apply
+-- ran successfully (between its started_at and completed_at, with no
+-- errors_json), e.g. by --delete-orphans. Rules 4 and 5 skip those;
+-- importer_deleted_24h counts them. A run that failed (errors_json set) or
+-- never recorded completed_at (killed mid-run) covers nothing, so its
+-- deletions still alert.
+recent_deletions AS (
+  SELECT d.original_created_by,
+         EXISTS (SELECT 1 FROM import_runs r
+                 WHERE r.mode = 'apply'
+                   AND r.errors_json IS NULL
+                   AND d.deleted_at BETWEEN r.started_at AND r.completed_at) AS by_importer
+  FROM pin_deletions d
+  WHERE d.deleted_at > now() - interval '24 hours'
+),
 -- Statutory pins (confidence 'high') are NO_GUN by law: the importer
 -- writes them that way and 013 keeps signed-in users from changing it.
 -- Any other status is a finding whoever wrote it; service_role writes
@@ -26,11 +41,11 @@ flipped AS (
 )
 SELECT json_build_object(
   'imported_total', (SELECT count(*) FROM imported),
-  'imported_deleted_24h', (SELECT count(*) FROM pin_deletions d, sys
+  'imported_deleted_24h', (SELECT count(*) FROM recent_deletions d, sys
                            WHERE d.original_created_by = sys.id
-                             AND d.deleted_at > now() - interval '24 hours'),
-  'deletions_24h', (SELECT count(*) FROM pin_deletions
-                    WHERE deleted_at > now() - interval '24 hours'),
+                             AND NOT by_importer),
+  'deletions_24h', (SELECT count(*) FROM recent_deletions WHERE NOT by_importer),
+  'importer_deleted_24h', (SELECT count(*) FROM recent_deletions WHERE by_importer),
   'statutory_flipped', (SELECT count(*) FROM flipped),
   'statutory_flipped_sample', (SELECT coalesce(json_agg(json_build_object(
                                    'id', f.id, 'name', f.name,

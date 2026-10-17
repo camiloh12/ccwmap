@@ -49,6 +49,13 @@ STATES_BOUNDARY_FIXTURE = (
 )
 
 
+def _non_negative_int(value: str) -> int:
+    n = int(value)
+    if n < 0:
+        raise argparse.ArgumentTypeError("must be >= 0")
+    return n
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="importer",
@@ -98,6 +105,21 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force per-source fetch() to re-download even if cached.",
     )
+    p.add_argument(
+        "--delete-orphans",
+        action="store_true",
+        help="Apply only: delete system pins whose source record is gone (capped "
+             "per source; user-corrected pins are marked instead). A dry-run "
+             "already reports what this would do.",
+    )
+    p.add_argument(
+        "--orphan-delete-cap",
+        type=_non_negative_int,
+        default=None,
+        metavar="N",
+        help="Override the per-source orphan delete cap "
+             "(default: max(50, 5%% of the source's in-scope pins)). Local runs only.",
+    )
 
     # Manual choice validation for friendlier errors than argparse's default.
     orig_parse_args = p.parse_args
@@ -114,6 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
                     f"--apply with --project-ref {args.project_ref} requires "
                     f"--i-know-this-writes-to-{args.project_ref}"
                 )
+        if args.delete_orphans and args.dry_run:
+            p.error("--delete-orphans is apply-only; a dry-run already reports what it would delete")
         return args
 
     p.parse_args = _parse_args  # type: ignore[assignment]
@@ -138,7 +162,9 @@ def _build_source(name, *, config, locator, repo_root, state_laws=None, states=N
     if name == "hifld_military":
         return HifldMilitarySource(
             cache_path=cache_dir / "military.geojson",
-            state_locator=locator, dataset_version=version, url=url,
+            points_cache_path=cache_dir / "military_points.geojson",
+            state_locator=locator, dataset_version=version,
+            url=url, points_url=cfg.get("points_url", ""),
         )
     if name == "gsa":
         return GsaSource(
@@ -237,6 +263,9 @@ def main(argv: list[str] | None = None) -> int:
                 mode=mode,
                 system_user_id=system_user_id,
                 refetch=args.refetch,
+                state_locator=locator,
+                delete_orphans=args.delete_orphans,
+                orphan_delete_cap=args.orphan_delete_cap,
             )
 
             report_md = render_markdown(result)
@@ -251,9 +280,10 @@ def main(argv: list[str] | None = None) -> int:
                 run_id=run_id,
                 candidates_processed=sum(s.candidates_fetched for s in result.sources),
                 inserts=sum(len(s.diff.inserts) for s in result.sources),
-                updates=sum(len(s.diff.updates) for s in result.sources),
+                # A re-key is an update of an existing row (no column of its own).
+                updates=sum(len(s.diff.updates) + len(s.diff.rekeys) for s in result.sources),
                 skips=sum(len(s.diff.skips) for s in result.sources),
-                orphans_marked=sum(len(s.diff.orphans) for s in result.sources),
+                orphans_marked=sum(s.orphan_plan.marked_count for s in result.sources),
                 errors_json=None,
                 report_artifact_url=None,
             )

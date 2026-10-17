@@ -1,8 +1,14 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
+from importer.candidate import Candidate, CoordQuality
 from importer.reports import DedupReport, PipelineResult, SourceResult
 from importer.reports.markdown import render_markdown
-from importer.stages.diff import DiffResult
+from importer.restriction_tag import RestrictionTag
+from importer.stages.apply_state_law import ClassifiedCandidate
+from importer.stages.diff import DiffResult, Rekey
+from importer.stages.orphans import OrphanPlan
+from importer.state_laws import StateLawCell
+from importer.supabase_client import ExistingPinRow
 
 
 def _empty_diff() -> DiffResult:
@@ -78,3 +84,61 @@ def test_markdown_renders_odbl_dump_url() -> None:
     md = render_markdown(result)
     assert "## ODbL dump" in md
     assert "dump-2026-06-16.csv.gz" in md
+
+
+CELL = StateLawCell(state="US", category=RestrictionTag.FEDERAL_PROPERTY, default_status="NO_GUN",
+                    confidence="high", conditions=[], citation="18 USC §930(a)",
+                    last_verified_date=date(2026, 5, 31))
+
+
+def _row(pid, eid, *, user_modified=False):
+    return ExistingPinRow(id=pid, source="gsa", source_external_id=eid, name=f"Pin {eid}",
+                          latitude=30.0, longitude=-97.0, status=2, restriction_tag="FEDERAL_PROPERTY",
+                          user_modified=user_modified, source_dataset_version="v")
+
+
+def _rekey(new):
+    cc = ClassifiedCandidate(candidate=Candidate(
+        source="gsa", source_external_id=new, source_dataset_version="v", name="B",
+        latitude=30.0, longitude=-97.0, coord_quality=CoordQuality.PRECISE,
+        category=RestrictionTag.FEDERAL_PROPERTY, state="TX"), cell=CELL)
+    return Rekey(pin_id=f"pin-{new}", old_external_id="140", new_external_id=new,
+                 user_modified=False, classified=cc)
+
+
+def _cleanup_result(mode, *, too_far=0, plan=None):
+    a, b, c = _row("a", "GONE-A"), _row("b", "GONE-B"), _row("c", "FIXED", user_modified=True)
+    diff = DiffResult(inserts=[], updates=[], skips=[], orphans=[a, b, c],
+                      rekeys=[_rekey("13-14-140")], rekey_too_far=too_far)
+    return PipelineResult(
+        mode=mode, started_at=datetime(2026, 10, 2, tzinfo=timezone.utc), completed_at=None,
+        states=["TX"], dedup=DedupReport(),
+        sources=[_source(diff=diff, orphan_plan=plan or OrphanPlan(delete=[a, b], keep=[c]),
+                         skip_counts={"disposed": 103, "filtered_out": 7})],
+    )
+
+
+def test_markdown_apply_shows_rekeys_and_the_orphan_split() -> None:
+    md = render_markdown(_cleanup_result("apply"))
+    assert "Re-key: **1**" in md
+    assert "Orphan: **3** (deleted **2**, kept, user-corrected **1**, marked **0**)" in md
+    assert "- `GONE-A` — Pin GONE-A (delete)" in md
+    assert "- `FIXED` — Pin FIXED (keep)" in md
+    assert "too far" not in md
+
+
+def test_markdown_dry_run_previews_what_delete_orphans_would_do() -> None:
+    md = render_markdown(_cleanup_result("dry-run"))
+    assert "an apply with `--delete-orphans` would delete **2** and keep **1** user-corrected" in md
+
+
+def test_markdown_shows_rekey_too_far_and_a_cap_breach() -> None:
+    a = _row("a", "GONE-A")
+    md = render_markdown(_cleanup_result("dry-run", too_far=2, plan=OrphanPlan(delete=[a], cap=0)))
+    assert "Re-key too far (inserted; old pin left as an orphan): **2**" in md
+    assert "Orphan delete cap breached: 1 deletions > cap 0" in md
+
+
+def test_markdown_lists_skip_counts() -> None:
+    md = render_markdown(_cleanup_result("apply"))
+    assert "Skipped at source: `disposed` 103, `filtered_out` 7" in md

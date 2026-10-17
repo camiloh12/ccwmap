@@ -26,6 +26,32 @@ uv run ccwmap-importer --dry-run --states TX,FL,PA --sources hifld_courts --proj
 Apply mode (`--apply`) writes to the project named by `--project-ref`. It is
 locked behind `--i-know-this-writes-to-<ref>` to prevent fat-fingering prod.
 
+## Re-keys and orphans
+
+- **Stable ids.** A pin is identified by `(source, source_external_id)`. GSA
+  uses `{Reporting Agency Code}-{Reporting Bureau Code}-{Real Property Unique
+  Identifier}`; military uses the MIRTA `SDSID`, or `{STATE}:{SITENAME}` when
+  the SDSID is blank or all zeros. When a source's id scheme changes, its
+  candidates carry the old id and old position, and the diff **re-keys** the
+  existing pin in place (UUID and any user correction survive) if it is within
+  50 m of where the old code put the record. The report shows `Re-key: N`, and
+  `Re-key too far` when an old pin was more than 50 m away (that pin is
+  reported as an orphan instead).
+- **Orphans** are a source's system pins inside the run's `--states` that no
+  record claimed: the record left the dataset (a Disposed building, a closed
+  base) or lost cross-source dedup. A plain `--apply` marks them
+  (`source_orphaned_at`). `--apply --delete-orphans` deletes them, except pins
+  a user corrected, which are marked and listed as "kept, user-corrected".
+  Deletions are permanent; the JSON report lists every one.
+- **Delete cap.** Before anything is written, each source's deletions are
+  checked against `max(50, 5% of its in-scope pins)`. One breach stops the
+  whole apply with nothing written. A dry-run plans orphans the way
+  `--delete-orphans` would and lists a breach under **Errors**.
+  `--orphan-delete-cap N` overrides the cap for a local run; the Actions
+  workflow doesn't expose it. `--delete-orphans` is rejected with `--dry-run`.
+- **Run the full source set** (the workflow default). Dedup decides between
+  sources, so a partial run can re-insert a pin another source won.
+
 ## Data Sources & Licenses
 
 Available `--sources` values and their upstream licenses:

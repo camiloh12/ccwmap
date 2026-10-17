@@ -81,7 +81,14 @@ class HifldCourthousesSource(Source):
         # HIFLD courthouses is ~3 MB; loaded whole intentionally. If this pattern is
         # copy-pasted for larger sources (NCES schools ~20 MB), consider streaming.
         raw = json.loads(self._cache_path.read_text(encoding="utf-8"))
-        for feature in raw.get("features", []):
+        features = raw.get("features") if isinstance(raw, dict) else None
+        if not features:
+            # An ArcGIS error body (e.g. an expired signed-blob URL) comes back
+            # as HTTP 200 with {"error": {...}}, not a FeatureCollection; an
+            # empty layer is equally suspicious. Either must not read as
+            # "zero candidates" — mirrors _load_features in hifld_military.py.
+            raise RuntimeError(f"hifld_courts file has no features: {self._cache_path}")
+        for feature in features:
             geom = feature.get("geometry") or {}
             props = feature.get("properties") or {}
 

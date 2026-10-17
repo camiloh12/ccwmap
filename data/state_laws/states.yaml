@@ -38,20 +38,10 @@
     Federal-uniform. The FAA NPIAS reference point marks the airport; the
     prohibition legally attaches to the sterile/secured area past screening.
 
-- state: US
-  category: STATE_LOCAL_GOVT
-  default_status: NO_GUN
-  confidence: high
-  conditions:
-    - "Federal courthouses: carry by non-officers prohibited."
-  citation: "18 USC §930(a)"
-  last_verified_date: 2026-05-31
-  source_filter:
-    - hifld_courts
-  notes: |
-    Federal-uniform fallback for courthouses not matched by a state-specific
-    STATE_LOCAL_GOVT row (e.g. outside the pilot states). State rows (TX/FL/PA)
-    take precedence via lookup ordering.
+# No US STATE_LOCAL_GOVT cell (removed 2026-10). HIFLD courthouses are state
+# and county courts; 18 USC §930 covers only federal courthouses, which come
+# from GSA. A courthouse in a state without its own STATE_LOCAL_GOVT cell drops
+# and is listed under "needs research". See docs/importer/OMISSIONS.md.
 
 # ── Texas ────────────────────────────────────────────────────────────
 - state: TX

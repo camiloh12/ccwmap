@@ -115,17 +115,20 @@ METRIC_RULES: tuple[Rule, ...] = (
         lambda n, m: "prod has no imported pins (about 23,800 expected): a mass delete or a failed import",
     ),
     Rule(
-        4, "imported_deleted_24h", "Imported pins deleted, last 24 h", "> 0",
+        4, "imported_deleted_24h", "Imported pins deleted outside importer applies, last 24 h", "> 0",
         lambda n: n > 0,
         lambda n, m: (
-            f"{n} imported pin(s) deleted in the last 24 h; users can't delete them (012), "
-            "so this is an admin error, a leaked key or a policy regression"
+            f"{n} imported pin(s) deleted in the last 24 h outside an importer apply; users can't "
+            "delete them (012), so this is an admin error, a leaked key or a policy regression"
         ),
     ),
     Rule(
-        5, "deletions_24h", "All pin deletions, last 24 h", f"> {MAX_DELETIONS_24H}",
+        5, "deletions_24h", "Pin deletions outside importer applies, last 24 h", f"> {MAX_DELETIONS_24H}",
         lambda n: n > MAX_DELETIONS_24H,
-        lambda n, m: f"{n} pin deletions in the last 24 h (threshold {MAX_DELETIONS_24H}): possible scripted mass delete",
+        lambda n, m: (
+            f"{n} pin deletions in the last 24 h outside importer applies "
+            f"(threshold {MAX_DELETIONS_24H}): possible scripted mass delete"
+        ),
     ),
     Rule(
         6, "statutory_flipped", "Statutory imported pins no longer NO_GUN", "> 0",
@@ -162,6 +165,7 @@ METRIC_RULES: tuple[Rule, ...] = (
 METRIC_KEYS = frozenset(
     {r.key for r in METRIC_RULES}
     | {
+        "importer_deleted_24h",
         "statutory_flipped_sample",
         "imported_by_source_status",
         "user_pins_total",
@@ -346,6 +350,7 @@ def render_digest(env: str, metrics: dict | None, rest: RestResult, findings: li
             lines.append(f"| {_one_line(row['source'])} | {status} | {row['count']:,} |")
         lines += [
             "",
+            f"- Pins deleted during importer applies, last 24 h (not judged): {metrics['importer_deleted_24h']:,}",
             f"- User pins: {metrics['user_pins_total']:,}",
             f"- Imported pins users have corrected (all time): {metrics['imported_user_corrected']:,}",
             f"- Reports filed on imported pins, last 7 days: {metrics['imported_reports_7d']:,}",

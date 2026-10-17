@@ -19,6 +19,7 @@ HEALTHY = {
     "imported_total": 23813,
     "imported_deleted_24h": 0,
     "deletions_24h": 3,
+    "importer_deleted_24h": 0,
     "statutory_flipped": 0,
     "statutory_flipped_sample": [],
     "imported_user_edits_24h": 2,
@@ -354,7 +355,7 @@ def test_digest_shows_every_signal_and_the_counts():
 def test_digest_flags_breached_rules():
     m = metrics(deletions_24h=51)
     d = hc.render_digest("prod", m, REST_OK, evaluate("prod", m, REST_OK))
-    assert "| 5 | All pin deletions, last 24 h | 51 | > 50 | 🔴 alert |" in d
+    assert "| 5 | Pin deletions outside importer applies, last 24 h | 51 | > 50 | 🔴 alert |" in d
     assert "- 51 pin deletions in the last 24 h" in d
 
 
@@ -472,3 +473,22 @@ def test_test_module_compiles_without_warnings():
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         compile(source, __file__, "exec")
+
+
+def test_deletion_rules_skip_importer_apply_windows():
+    code = _sql_code()
+    cte = re.search(r"recent_deletions AS \((.*?)\n\),", code, re.S).group(1)
+    assert "r.mode = 'apply'" in cte
+    assert "r.errors_json IS NULL" in cte
+    assert "d.deleted_at BETWEEN r.started_at AND r.completed_at" in cte
+    for key in ("imported_deleted_24h", "deletions_24h"):
+        expr = re.search(rf"'{key}',\s*\((.*?)\),\n", code, re.S).group(1)
+        assert "NOT by_importer" in expr, key
+    expr = re.search(r"'importer_deleted_24h',\s*\((.*?)\),\n", code, re.S).group(1)
+    assert "by_importer" in expr and "NOT" not in expr
+
+
+def test_importer_deletions_are_shown_but_never_judged():
+    m = metrics(importer_deleted_24h=4321)
+    assert evaluate("prod", m, REST_OK) == []
+    assert "Pins deleted during importer applies, last 24 h (not judged): 4,321" in hc.render_digest("prod", m, REST_OK, [])
