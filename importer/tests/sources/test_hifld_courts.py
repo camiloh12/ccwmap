@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+from pytest_httpx import HTTPXMock
 
 from importer.geo.states import load_state_locator
 from importer.restriction_tag import RestrictionTag
@@ -96,3 +97,84 @@ def test_iter_candidates_raises_on_empty_features(tmp_path) -> None:
     )
     with pytest.raises(RuntimeError, match="hifld_courts"):
         list(source.iter_candidates(state_filter=None))
+
+
+HUB_URL = "https://hub.example/api/download/v1/items/x/geojson?redirect=true&layers=3"
+BLOB_URL = "https://blob.example/courthouses.geojson"
+# What the Hub answered on 2026-10-19 while it rebuilt the export.
+PENDING_BODY = {
+    "message": "Up to date download file is being generated. Please check back again later.",
+    "status": "Pending",
+    "created": "2026-10-19T00:28:54.633Z",
+    "modified": "2026-10-19T00:28:54.633Z",
+}
+GOOD_BODY = (FIXTURE_DIR / "hifld_courts_sample.geojson").read_bytes()
+OLD_CACHE = b'{"type": "FeatureCollection", "features": [{"old": true}]}'
+
+
+def _fetch_source(cache_path: Path) -> HifldCourthousesSource:
+    return HifldCourthousesSource(
+        cache_path=cache_path,
+        state_locator=load_state_locator(FIXTURE_DIR / "states_sample.geojson"),
+        dataset_version="HIFLD-FIXTURE",
+        url=HUB_URL,
+    )
+
+
+def _add_pending(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url=HUB_URL, status_code=202, json=PENDING_BODY)
+
+
+def _add_ready(httpx_mock: HTTPXMock, content: bytes = GOOD_BODY) -> None:
+    # A ready export redirects to a signed blob holding the GeoJSON.
+    httpx_mock.add_response(url=HUB_URL, status_code=302, headers={"Location": BLOB_URL})
+    httpx_mock.add_response(url=BLOB_URL, content=content)
+
+
+def test_fetch_waits_out_a_pending_export(tmp_path, httpx_mock: HTTPXMock, monkeypatch):
+    # The Hub rebuilds the export on demand and answers 202 Pending meanwhile.
+    # fetch() used to cache that status body and fail the whole run.
+    sleeps: list[float] = []
+    monkeypatch.setattr("time.sleep", sleeps.append)
+    _add_pending(httpx_mock)
+    _add_ready(httpx_mock)
+    cache = tmp_path / "courts.geojson"
+    _fetch_source(cache).fetch()
+    assert cache.read_bytes() == GOOD_BODY
+    assert len(sleeps) == 1 and sleeps[0] > 0      # waited before asking again
+
+
+def test_fetch_gives_up_on_an_export_that_stays_pending(
+    tmp_path, httpx_mock: HTTPXMock, monkeypatch
+):
+    # Bounded: a Hub stuck on Pending fails the run, and the copy already on
+    # disk survives.
+    monkeypatch.setattr("time.sleep", lambda *a, **k: None)
+    for _ in range(HifldCourthousesSource._MAX_ATTEMPTS):
+        _add_pending(httpx_mock)
+    cache = tmp_path / "courts.geojson"
+    cache.write_bytes(OLD_CACHE)
+    with pytest.raises(RuntimeError, match="still pending"):
+        _fetch_source(cache).fetch(refetch=True)
+    assert len(httpx_mock.get_requests()) == HifldCourthousesSource._MAX_ATTEMPTS
+    assert cache.read_bytes() == OLD_CACHE
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"error": {"code": 400, "message": "Invalid or missing input parameters"}}',
+        b'{"type": "FeatureCollection", "features": []}',
+        b"<html><body>Service Unavailable</body></html>",
+    ],
+    ids=["arcgis-error", "no-features", "html"],
+)
+def test_fetch_keeps_the_cache_when_the_download_has_no_features(
+    tmp_path, httpx_mock: HTTPXMock, body: bytes
+):
+    _add_ready(httpx_mock, content=body)
+    cache = tmp_path / "courts.geojson"
+    cache.write_bytes(OLD_CACHE)
+    with pytest.raises(RuntimeError, match="hifld_courts"):
+        _fetch_source(cache).fetch(refetch=True)
+    assert cache.read_bytes() == OLD_CACHE
