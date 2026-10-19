@@ -16,6 +16,7 @@ state/local split cannot rely on LOEMINS for this dataset version.
 from __future__ import annotations
 
 import json
+import time
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
@@ -33,7 +34,7 @@ from importer.sources.base import Source
 # layer 3). redirect=true is REQUIRED: the endpoint 302-redirects to a freshly
 # generated, time-limited (SAS-signed) blob, which our follow_redirects client
 # then streams. With redirect=false the endpoint returns a tiny JSON status
-# object instead of the GeoJSON, so fetch() would cache garbage. The signed blob
+# object instead of the GeoJSON, which fetch() rejects. The signed blob
 # URLs expire (~1h) and must never be hard-pinned — only this stable hub URL is.
 # If HIFLD republishes under a new item/layer, update this constant in the same
 # PR that refreshes the fixture. Also recorded in data/sources/.hifld_courts_url.txt.
@@ -44,8 +45,22 @@ HIFLD_COURTHOUSES_URL = (
 )
 
 
+def _features(data: bytes | str) -> list | None:
+    """The FeatureCollection's features, or None for any other body."""
+    try:
+        raw = json.loads(data)
+    except ValueError:
+        return None
+    return (raw.get("features") or None) if isinstance(raw, dict) else None
+
+
 class HifldCourthousesSource(Source):
     SOURCE_NAME: ClassVar[str] = "hifld_courts"
+    # The Hub builds the export on demand. While it rebuilds, it answers
+    # 202 with {"status": "Pending", ...} instead of redirecting to the file
+    # (on 2026-10-19 that lasted under a minute). Poll; give up after ~4.5 min.
+    _MAX_ATTEMPTS: ClassVar[int] = 10
+    _PENDING_POLL_SECONDS: ClassVar[float] = 30.0
 
     def __init__(
         self,
@@ -67,8 +82,20 @@ class HifldCourthousesSource(Source):
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)
         with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             r = client.get(self._url)
+            attempts = 1
+            while r.status_code == 202:
+                if attempts == self._MAX_ATTEMPTS:
+                    raise RuntimeError(
+                        f"hifld_courts export still pending after {attempts} attempts: {self._url}"
+                    )
+                time.sleep(self._PENDING_POLL_SECONDS)
+                r = client.get(self._url)
+                attempts += 1
             r.raise_for_status()
-            self._cache_path.write_bytes(r.content)
+        # Check before writing: a bad body must not replace a good cache.
+        if not _features(r.content):
+            raise RuntimeError(f"hifld_courts download has no features: {self._url}")
+        self._cache_path.write_bytes(r.content)
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         """Yield one Candidate per upstream record; respect state_filter when set.
@@ -80,8 +107,7 @@ class HifldCourthousesSource(Source):
         self.last_skip_counts = Counter()
         # HIFLD courthouses is ~3 MB; loaded whole intentionally. If this pattern is
         # copy-pasted for larger sources (NCES schools ~20 MB), consider streaming.
-        raw = json.loads(self._cache_path.read_text(encoding="utf-8"))
-        features = raw.get("features") if isinstance(raw, dict) else None
+        features = _features(self._cache_path.read_text(encoding="utf-8"))
         if not features:
             # An ArcGIS error body (e.g. an expired signed-blob URL) comes back
             # as HTTP 200 with {"error": {...}}, not a FeatureCollection; an
