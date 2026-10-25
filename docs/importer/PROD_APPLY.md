@@ -220,8 +220,20 @@ RLS-denied write anomalies.
 Prod's GSA and military pins were written under the old ids. The next prod
 apply re-keys them in place (same UUIDs) instead of duplicating them.
 
-1. **B1 dry-run** against prod. Per source, check: `Re-key` ≈ the staging
-   numbers; every `Re-key too far` pin must be explained before applying —
+> **Done 2026-10-19** (run 39183871400): 4,143 re-keys, 192 inserts, 101
+> deletes, no errors; prod has 23,904 system pins, and the second dry-run was
+> all zeros. Later re-applies follow the same steps.
+
+An Overpass `502`/`504` that outlasts the retries fails the run while it is
+still fetching, before any write. Wait a few minutes and re-run. A local
+dry-run can skip the download instead: without `--refetch` it reads every
+source from `data/sources/`. That is only current if a run downloaded those
+files minutes ago (check their timestamps).
+
+1. **B1 dry-run** against prod, with `--refetch` added so it compares against
+   today's upstream data rather than an old cached download. Per source,
+   check: `Re-key` ≈ the staging numbers; every `Re-key too far` pin must be
+   explained before applying —
    look it up in the JSON report's `orphans[]` (and `rekeys[]`). The expected
    cause is that the row the old code kept is now Disposed (or the site
    closed) and its old id survives on another row far away (known pilot case:
