@@ -113,21 +113,26 @@ SELECT '4_clusters', kind, count(*)::text FROM get_pins_in_view(25.0, -107.0, 37
 ORDER BY 1, 2;
 ```
 
-### Expected output (import baseline, 2026-07-06)
+### Expected output (baseline after the 2026-10-19 re-apply)
 
 | chk             | key                | value  |
 |-----------------|--------------------|--------|
 | 1_source_status | faa / 2            | 60     |
-| 1_source_status | gsa / 2            | 4216   |
+| 1_source_status | gsa / 2            | 4184   |
 | 1_source_status | hifld_courts / 2   | 469    |
-| 1_source_status | hifld_military / 2 | 77     |
+| 1_source_status | hifld_military / 2 | 101    |
 | 1_source_status | ipeds / 2          | 290    |
 | 1_source_status | nces / 2           | 15414  |
-| 1_source_status | **osm / 1**        | 3287   |
-| 1_total         | all                | 23813  |
+| 1_source_status | **osm / 1**        | 3386   |
+| 1_total         | all                | 23904  |
 | 2_deletions_24h | -                  | 0      |
 | 3_orphaned      | -                  | 0      |
 | 4_clusters      | cluster            | 28     |
+
+The first import (2026-07-06) had 23,813: gsa 4,216, military 77, osm 3,287,
+the rest as above. The re-apply (run 39183871400) re-keyed GSA and military
+pins in place, added 192 and deleted 101 orphans. Within 24 h of an apply,
+`2_deletions_24h` counts its deletions (101 on 2026-10-19).
 
 Source keys are the literal `pins.source` values (`hifld_courts`,
 `hifld_military` — not `courts` / `military`).
