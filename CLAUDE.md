@@ -210,7 +210,7 @@ CCW Map is a mobile application that enables users to collaboratively map and sh
 - ✅ Pre-populate importer skeleton (`importer/`): HIFLD courthouses end-to-end, dry-run/apply modes, staging-accepted (Phase 2)
 - ✅ State-law table seeded (Phase 3): 12 web-verified `NO_GUN` cells in `data/state_laws/states.yaml` (3 US federal-uniform + TX/FL/PA), 12 intentional omissions in `docs/importer/OMISSIONS.md`, structural tests in `importer/tests/test_state_laws.py`
 - ✅ Federal-floor sources (Phase 4, code complete): `importer/importer/sources/gsa.py` (FRPP, Census-geocoded) + `hifld_military.py` (polygon centroids), real cross-source dedup (`stages/dedup.py`: shapely STRtree + rapidfuzz, 100 m / token_set_ratio ≥ 70, user-pin-protected), multi-source `run_pipeline` + per-source reports. Staging apply is the operator-run next step; no prod write yet.
-- ✅ Tests passing (run `flutter test` for the app; `cd importer && uv run pytest` for the importer — 246 after importer identity & cleanup)
+- ✅ Tests passing (run `flutter test` for the app; `cd importer && uv run pytest` for the importer — 251 after the courthouse 202 Pending fix)
 
 ## Architecture
 
