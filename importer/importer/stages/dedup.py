@@ -8,6 +8,7 @@ never dropped; a candidate matching a user pin is dropped.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
 
 from rapidfuzz import fuzz
@@ -16,7 +17,7 @@ from shapely.strtree import STRtree
 
 from importer.geo.distance import DEG_LAT_M as _DEG_LAT_M
 from importer.geo.distance import meters_between as _meters_between
-from importer.stages.apply_state_law import ClassifiedCandidate
+from importer.stages.apply_state_law import CONFIDENCE_RANK, ClassifiedCandidate
 from importer.supabase_client import ExistingPinRow
 
 # Highest priority = lowest number = wins a match. HIFLD sub-sources share a tier.
@@ -80,6 +81,7 @@ def dedup(
     classified: list[ClassifiedCandidate],
     *,
     existing_user_pins: list[ExistingPinRow],
+    existing_keys: Collection[tuple[str, str]] = frozenset(),
 ) -> DedupResult:
     result = DedupResult(survivors=[])
 
@@ -127,6 +129,16 @@ def dedup(
     tree = STRtree(geoms)
     radius_deg = (MATCH_RADIUS_M / _DEG_LAT_M) * 2.0  # generous bbox pre-filter (safe past 49 N in lng)
     dropped = [False] * len(survivors_stage2)
+    # absorbed[w] = every row that lost to w, directly or through a chain.
+    absorbed: list[list[ClassifiedCandidate]] = [[] for _ in survivors_stage2]
+
+    def _absorb(winner: int, loser: int) -> None:
+        absorbed[winner] += [survivors_stage2[loser], *absorbed[loser]]
+
+    def _rank(c) -> tuple[bool, str, str]:
+        # Same tier: the key already in the database wins, then (source, eid).
+        return ((c.source, c.source_external_id) not in existing_keys,
+                c.source, c.source_external_id)
 
     for i, cc in enumerate(survivors_stage2):
         if dropped[i]:
@@ -140,23 +152,27 @@ def dedup(
             if not _matches(a.name, a.latitude, a.longitude, b.name, b.latitude, b.longitude):
                 continue
             pi, pj = _priority(a.source), _priority(b.source)
-            if pi < pj:        # a wins
+            if pi < pj or (pi == pj and _rank(a) <= _rank(b)):   # a wins
                 dropped[j] = True
+                _absorb(i, j)
                 _record_drop(result, a.source, b.source)
-            elif pj < pi:      # b wins
+            else:              # b wins
                 dropped[i] = True
+                _absorb(j, i)
                 _record_drop(result, b.source, a.source)
                 break
-            else:              # same tier — deterministic tiebreak on (source, eid)
-                key_a = (a.source, a.source_external_id)
-                key_b = (b.source, b.source_external_id)
-                if key_a <= key_b:
-                    dropped[j] = True
-                    _record_drop(result, a.source, b.source)
-                else:
-                    dropped[i] = True
-                    _record_drop(result, b.source, a.source)
-                    break
 
-    result.survivors = [cc for k, cc in enumerate(survivors_stage2) if not dropped[k]]
+    for k, cc in enumerate(survivors_stage2):
+        if dropped[k]:
+            continue
+        source = cc.candidate.source
+        members = [cc] + [m for m in absorbed[k] if m.candidate.source == source]
+        best = min(max(CONFIDENCE_RANK[m.confidence] for m in members),
+                   CONFIDENCE_RANK[cc.cell.confidence])
+        if best != CONFIDENCE_RANK[cc.confidence]:
+            override = (None if best == CONFIDENCE_RANK[cc.cell.confidence]
+                        else next(n for n, r in CONFIDENCE_RANK.items() if r == best))
+            cc = cc.model_copy(update={"candidate": cc.candidate.model_copy(
+                update={"confidence_override": override})})
+        result.survivors.append(cc)
     return result
