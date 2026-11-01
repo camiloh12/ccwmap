@@ -4,6 +4,7 @@ import pytest
 
 from importer.geo.states import load_state_locator
 from importer.stages.orphans import (
+    cap_for,
     OrphanPlan,
     default_cap,
     plan_orphans,
@@ -102,3 +103,11 @@ def test_a_user_correction_wins_over_unusable():
     fixed = _pin("fixed", user_modified=True)
     plan = plan_orphans([fixed], in_scope_count=10, delete=True, unusable_keys={"E-fixed"})
     assert plan.keep == [fixed] and plan.unusable == []
+
+
+@pytest.mark.parametrize("override, source, expected", [
+    (None, "gsa", None), (7, "gsa", 7), (7, "faa", 7),
+    ({"gsa": 2700}, "gsa", 2700), ({"gsa": 2700}, "faa", None),
+])
+def test_cap_for(override, source, expected):
+    assert cap_for(source, override) == expected

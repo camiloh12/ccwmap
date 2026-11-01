@@ -9,7 +9,7 @@ capped so a truncated download can't wipe a layer.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 
 from importer.geo.states import StateLocator
@@ -26,6 +26,14 @@ class OrphanCapExceeded(RuntimeError):
 def default_cap(in_scope_count: int) -> int:
     """max(50, 5% of the source's in-scope pins)."""
     return max(MIN_DELETE_CAP, in_scope_count * DELETE_CAP_PCT // 100)
+
+
+def cap_for(source: str, override: int | Mapping[str, int] | None) -> int | None:
+    """The cap override for one source: an int applies to all, a mapping to the
+    sources it names, None means the default cap."""
+    if isinstance(override, Mapping):
+        return override.get(source)
+    return override
 
 
 def scope_to_states(

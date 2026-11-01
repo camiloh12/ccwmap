@@ -305,6 +305,16 @@ def test_dry_run_reports_a_cap_breach_as_an_error():
     assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
 
 
+def test_a_per_source_cap_lifts_only_that_source():
+    client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap={"gsa": 100})
+    with pytest.raises(OrphanCapExceeded, match="hifld_military"):
+        run("apply")
+    client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap={"hifld_military": 100})
+    client.delete_pins.return_value = [f"m{i}" for i in range(51)]
+    run("apply")
+    assert len(client.delete_pins.call_args.args[0]) == 51
+
+
 def test_cap_override_lets_a_large_deletion_through():
     client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap=100)
     client.delete_pins.return_value = [f"m{i}" for i in range(51)]

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from importer.stages.dedup import dedup
 from importer.stages.diff import DiffStats, diff_candidates
 from importer.stages.normalize import NormalizeStats, normalize
 from importer.stages.odbl_dump import generate_and_upload
-from importer.stages.orphans import OrphanCapExceeded, plan_orphans, scope_to_states
+from importer.stages.orphans import OrphanCapExceeded, cap_for, plan_orphans, scope_to_states
 from importer.stages.refine_coords import refine_coords
 from importer.state_laws import StateLawTable
 from importer.supabase_client import SupabaseClient
@@ -32,7 +33,7 @@ def run_pipeline(
     refetch: bool = False,
     state_locator: StateLocator | None = None,
     delete_orphans: bool = False,
-    orphan_delete_cap: int | None = None,
+    orphan_delete_cap: int | Mapping[str, int] | None = None,
 ) -> PipelineResult:
     """Fetch, classify and dedup every source, diff each against its system
     pins, then (apply mode) write.
@@ -106,7 +107,7 @@ def run_pipeline(
         )
         orphan_plan = plan_orphans(
             diff_result.orphans, in_scope_count=len(in_scope),
-            delete=plan_deletes, cap=orphan_delete_cap,
+            delete=plan_deletes, cap=cap_for(name, orphan_delete_cap),
             unusable_keys=ps["unusable_keys"],
         )
         asl: ApplyStateLawStats = ps["asl"]

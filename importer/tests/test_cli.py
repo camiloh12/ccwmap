@@ -310,3 +310,20 @@ def test_main_loads_the_locator_from_the_configured_file(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "load_state_locator", lambda path: seen.append(path) or object())
     cli.main(APPLY_STAGING + ["--report-out", str(tmp_path / "r.md")])
     assert seen == [cli.REPO_ROOT / "data" / "geo" / "us_states_500k.geojson"]
+
+
+APPLY_TWO = ["--apply", "--states", "TX", "--sources", "gsa,faa", "--project-ref", "staging",
+             "--i-know-this-writes-to-staging", "--delete-orphans"]
+
+
+def test_cap_accepts_per_source_pairs_with_spaces():
+    args = build_parser().parse_args(APPLY_TWO + ["--orphan-delete-cap", " gsa=2700 , faa=10 "])
+    assert args.orphan_delete_cap == {"gsa": 2700, "faa": 10}
+
+
+@pytest.mark.parametrize("value", [
+    "gas=2700", "hifld_military=5", "gsa=", "gsa=-1", "=5", "gsa=10,gsa=20", "gsa=2700;faa=10", "",
+])
+def test_cap_rejects_bad_values(value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(APPLY_TWO + ["--orphan-delete-cap", value])

@@ -40,11 +40,28 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 STATES_YAML = REPO_ROOT / "data" / "state_laws" / "states.yaml"
 
 
-def _non_negative_int(value: str) -> int:
-    n = int(value)
-    if n < 0:
-        raise argparse.ArgumentTypeError("must be >= 0")
-    return n
+def _cap_number(text: str) -> int:
+    if not text.isascii() or not text.isdigit():
+        raise argparse.ArgumentTypeError(f"{text!r} is not a non-negative integer")
+    return int(text)
+
+
+def _orphan_cap(value: str) -> int | dict[str, int]:
+    """A bare non-negative int (every source) or comma-separated name=N pairs."""
+    text = value.strip()
+    if text.isascii() and text.isdigit():
+        return int(text)
+    caps: dict[str, int] = {}
+    for pair in text.split(","):
+        name, sep, number = (part.strip() for part in pair.partition("="))
+        if not sep or name not in SUPPORTED_SOURCES:
+            raise argparse.ArgumentTypeError(
+                f"{pair.strip()!r}: expected N or name=N pairs; names: {','.join(SUPPORTED_SOURCES)}"
+            )
+        if name in caps:
+            raise argparse.ArgumentTypeError(f"{name!r} is given twice")
+        caps[name] = _cap_number(number)
+    return caps
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,11 +122,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--orphan-delete-cap",
-        type=_non_negative_int,
+        type=_orphan_cap,
         default=None,
-        metavar="N",
-        help="Override the per-source orphan delete cap "
-             "(default: max(50, 5%% of the source's in-scope pins)). Local runs only.",
+        metavar="N|name=N,...",
+        help="One-time override of the orphan delete cap: N for every source, or "
+             "name=N pairs such as gsa=2700,faa=10 "
+             "(default: max(50, 5%% of the source's in-scope pins)).",
     )
 
     # Manual choice validation for friendlier errors than argparse's default.
@@ -127,6 +145,10 @@ def build_parser() -> argparse.ArgumentParser:
                     f"--apply with --project-ref {args.project_ref} requires "
                     f"--i-know-this-writes-to-{args.project_ref}"
                 )
+        if isinstance(args.orphan_delete_cap, dict):
+            missing = sorted(set(args.orphan_delete_cap) - set(args.sources))
+            if missing:
+                p.error(f"--orphan-delete-cap names sources not in --sources: {','.join(missing)}")
         if args.delete_orphans and args.dry_run:
             p.error("--delete-orphans is apply-only; a dry-run already reports what it would delete")
         return args
