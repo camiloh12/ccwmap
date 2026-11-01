@@ -182,3 +182,15 @@ def test_fetch_requires_a_points_url(tmp_path):
     )
     with pytest.raises(RuntimeError, match="points_url"):
         src.fetch()
+
+
+def test_guard_sites_are_medium_confidence(run):
+    cands, _ = run
+    assert cands["TX:NG CAMP MABRY"].confidence_override == "medium"
+    assert cands["MIL-FL-JAX"].confidence_override == "medium"
+
+
+def test_other_components_keep_the_cell_confidence(run):
+    cands, _ = run
+    assert cands["MIL-TX-1"].confidence_override is None
+    assert cands["MIL-PA-CARE"].confidence_override is None

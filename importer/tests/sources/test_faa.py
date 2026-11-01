@@ -45,3 +45,8 @@ def test_drops_missing_and_mislocated_coords(source):
     assert "AUS" not in cands  # NASR coords in WI, claims TX
     assert source.last_skip_counts["missing_coords"] >= 1
     assert source.last_skip_counts["coord_state_mismatch"] >= 1
+
+
+def test_airports_carry_no_confidence_override(source):
+    cands = source.iter_candidates(state_filter={"TX", "FL", "PA"})
+    assert all(c.confidence_override is None for c in cands)

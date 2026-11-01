@@ -56,6 +56,11 @@ SITE_POINT_MAX_M = 50.0
 
 _CLOSED = "clsd"
 
+# National Guard sites are not federal property in the way active-duty bases
+# are, so they never rank above medium confidence.
+GUARD_COMPONENTS: frozenset[str] = frozenset({"armyNationalGuard", "airNationalGuard"})
+_GUARD_LOWER = frozenset(c.lower() for c in GUARD_COMPONENTS)
+
 
 def _real_sdsid(props: dict) -> str | None:
     """The SDSID when it is a real GUID: not blank and not all zeros."""
@@ -236,6 +241,7 @@ class HifldMilitarySource(Source):
                     "legacy_external_id": old_id,
                     "legacy_point": (float(old.y), float(old.x)),
                 }
+            component = first.get("SITEREPORTINGCOMPONENT") or first.get("component")
             yield Candidate(
                 source=self.SOURCE_NAME,
                 source_external_id=key,
@@ -246,6 +252,9 @@ class HifldMilitarySource(Source):
                 coord_quality=CoordQuality.BUILDING_POLYGON,
                 category=RestrictionTag.FEDERAL_PROPERTY,
                 state=state,
-                extra={"component": first.get("SITEREPORTINGCOMPONENT") or first.get("component")},
+                extra={"component": component},
+                confidence_override=(
+                    "medium" if str(component or "").lower() in _GUARD_LOWER else None
+                ),
                 **legacy,
             )
