@@ -97,3 +97,28 @@ def test_normalize_keeps_legacy_identity() -> None:
     out = next(normalize([c], stats=NormalizeStats()))
     assert out.legacy_external_id == " "
     assert out.legacy_point == (30.32, -97.76)
+
+
+def _minimal(**kw) -> Candidate:
+    base = dict(
+        source="hifld_courts",
+        source_external_id="C-123",
+        source_dataset_version="HIFLD-2026-05",
+        name="Harris County Courthouse",
+        latitude=29.7604,
+        longitude=-95.3698,
+        coord_quality=CoordQuality.PRECISE,
+        category=RestrictionTag.STATE_LOCAL_GOVT,
+        state="TX",
+    )
+    base.update(kw)
+    return Candidate(**base)
+
+
+def test_confidence_override_defaults_to_none() -> None:
+    assert _minimal().confidence_override is None
+
+
+def test_confidence_override_rejects_low() -> None:
+    with pytest.raises(ValidationError):
+        _minimal(confidence_override="low")

@@ -1,9 +1,11 @@
 from datetime import date
 from unittest.mock import MagicMock
 
+import pytest
+
 from importer.candidate import Candidate, CoordQuality
 from importer.restriction_tag import RestrictionTag
-from importer.stages.apply import apply_to_supabase
+from importer.stages.apply import _to_upsert_row, apply_to_supabase
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.stages.diff import DiffResult, Rekey
 from importer.stages.orphans import OrphanPlan
@@ -157,3 +159,22 @@ def test_mark_plan_never_deletes() -> None:
                       orphan_plan=OrphanPlan(mark=[o]))
     client.delete_pins.assert_not_called()
     client.mark_orphans.assert_called_once_with(["z"])
+
+
+def _with_override(cc, override):
+    return cc.model_copy(update={"candidate": cc.candidate.model_copy(
+        update={"confidence_override": override})})
+
+
+def test_upsert_row_writes_the_override_and_the_cell_citation():
+    row = _to_upsert_row(_with_override(_classified("e1"), "medium"), system_user_id=SYS)
+    assert row.confidence == "medium"
+    assert (row.status, row.legal_citation) == (2, "18 USC 930(a)")
+
+
+def test_upsert_row_refuses_an_override_above_the_cell():
+    medium = ClassifiedCandidate(candidate=_classified("e1").candidate,
+                                 cell=CELL.model_copy(update={"confidence": "medium"}))
+    bad = _with_override(medium, "high")  # model_copy skips validation
+    with pytest.raises(ValueError, match="may only lower"):
+        _to_upsert_row(bad, system_user_id=SYS)
