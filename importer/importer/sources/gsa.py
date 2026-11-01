@@ -56,15 +56,70 @@ _COL_USE = "Real Property Use"
 _COL_AGENCY = "Reporting Agency Code"
 _COL_BUREAU = "Reporting Bureau Code"
 _COL_STATUS = "Asset Status"
+_COL_EMPLOYEES = "Number of Federal Employees"
+_COL_LEGAL = "Legal Interest Indicator"
 
 # Only the columns this module reads — keeps the per-row dict small over ~308k rows.
 _NEEDED_COLS = (
     _COL_ID, _COL_TYPE, _COL_STREET, _COL_CITY, _COL_STATE, _COL_ZIP,
     _COL_LAT, _COL_LNG, _COL_NAME, _COL_USE, _COL_AGENCY, _COL_BUREAU, _COL_STATUS,
+    _COL_EMPLOYEES, _COL_LEGAL,
 )
 
 # 18 USC 930 attaches to federal *facilities* (buildings), not Structures or Land.
 _INCLUDED_TYPES = {"building"}
+
+# Which buildings have people working in them (docs/importer/LEGAL_FEDERAL_CARRY_2026-10.md,
+# Phase 8a spec section 4.2). The 2026 federal carry reading leaves 18 USC 930
+# standing only where federal employees regularly work, so housing, restrooms,
+# barracks and unmanned systems are out, and post offices are handled separately.
+# Spellings are the exact FY24 FRPP "Real Property Use" values.
+UNSTAFFED_USES = frozenset({
+    "Family Housing", "Comfort Station/Restrooms", "Dormitories/Barracks",
+    "Communications Systems", "Navigation and Traffic Aids",
+})
+POST_OFFICE_USE = "Post Office"
+STAFFED_USES = frozenset({
+    "Office", "Courthouse", "Laboratories", "Hospital", "Outpatient Healthcare Facility",
+    "Prisons and Detention Centers", "Land Port of Entry", "Border/Inspection Station",
+    "Aviation Security Related", "Facility Security", "Public Facing Facility", "School",
+    "Museum", "Child Care Center", "Data Centers",
+})
+# Kept only when the row reports at least one employee.
+GRAY_USES = frozenset({
+    "Warehouses", "Service", "Industrial", "All Other", "Other Institutional Uses",
+})
+_CANONICAL_USE: dict[str, str] = {
+    u.lower(): u
+    for u in (*UNSTAFFED_USES, POST_OFFICE_USE, *STAFFED_USES, *GRAY_USES)
+}
+
+
+def _parse_employees(raw: str) -> int | None:
+    """FRPP stores the count as text ("1,951"). Blank or unparseable is None."""
+    text = raw.strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def _use_skip_reason(use: str, employees: int | None) -> str | None:
+    canonical = _CANONICAL_USE.get(use.strip().lower())
+    if canonical in UNSTAFFED_USES:
+        return "use_unstaffed"
+    if canonical == POST_OFFICE_USE:
+        return "use_post_office"
+    if canonical is None:
+        return "use_unknown"
+    if employees == 0:
+        return "zero_employees"
+    if canonical in STAFFED_USES:
+        return None
+    return None if employees is not None and employees > 0 else "use_unverified"
+
 
 # FRPP's only name column, Installation Name, is occasionally just a city
 # ("TAMPA, FL") or a street address ("9450 Koger Boulevard"). Detect those and
@@ -124,6 +179,8 @@ class GsaSource(Source):
         self._locator = state_locator
         self._url = url
         self.last_skip_counts: Counter[str] = Counter()
+        self.last_kept_by_use: Counter[str] = Counter()
+        self.last_unknown_uses: Counter[str] = Counter()
 
     def fetch(self, *, refetch: bool = False) -> None:
         if self._cache_path.exists() and not refetch:
@@ -161,6 +218,8 @@ class GsaSource(Source):
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         self.last_skip_counts = Counter()
+        self.last_kept_by_use = Counter()
+        self.last_unknown_uses = Counter()
         wanted_names = (
             {_USPS_TO_STATE_NAME[c] for c in state_filter if c in _USPS_TO_STATE_NAME}
             if state_filter is not None
@@ -191,6 +250,13 @@ class GsaSource(Source):
             if (row.get(_COL_STATUS) or "").strip().lower() == "disposed":
                 # No longer federal property: no legal basis for a pin.
                 self.last_skip_counts["disposed"] += 1
+                continue
+            use = (row.get(_COL_USE) or "").strip()
+            reason = _use_skip_reason(use, _parse_employees(row.get(_COL_EMPLOYEES) or ""))
+            if reason is not None:
+                self.last_skip_counts[reason] += 1
+                if reason == "use_unknown":
+                    self.last_unknown_uses[use] += 1
                 continue
             eid = f"{agency}-{bureau}-{rpuid}"
             name = (row.get(_COL_NAME) or "").strip()
@@ -235,6 +301,7 @@ class GsaSource(Source):
             if self._locator.state_for(lat, lng) != row["_usps"]:
                 self.last_skip_counts["coord_state_mismatch"] += 1
                 continue
+            self.last_kept_by_use[_CANONICAL_USE[row[_COL_USE].strip().lower()]] += 1
             yield Candidate(
                 source=self.SOURCE_NAME,
                 source_external_id=row["_eid"],
