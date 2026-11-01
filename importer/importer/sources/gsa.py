@@ -32,7 +32,7 @@ import re
 from collections import Counter
 from collections.abc import Iterator
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import ClassVar, Literal, Protocol
 
 import httpx
 import openpyxl
@@ -102,8 +102,43 @@ def _parse_employees(raw: str) -> int | None:
         return None
     try:
         return int(float(text))
-    except ValueError:
+    except (ValueError, OverflowError):
         return None
+
+
+# Per-building confidence (docs/importer/LEGAL_FEDERAL_CARRY_2026-10.md, Phase 8a
+# spec section 4.3). The cell says "high"; a building keeps that only where a
+# statute or regulation reaches it regardless of the 2026 federal carry reading.
+HIGH_USES = frozenset({
+    "Courthouse", "Prisons and Detention Centers", "Land Port of Entry",
+    "Border/Inspection Station", "Aviation Security Related", "Facility Security",
+    "School",
+})
+VA_HEALTH_USES = frozenset({"Hospital", "Outpatient Healthcare Facility"})
+VA_AGENCY_CODE = "36"
+PARK_FOREST_AGENCY_CODES = frozenset({"14", "12"})  # Interior, Agriculture
+_PARK_VISITOR_USES = frozenset({"Public Facing Facility", "Museum"}) | GRAY_USES
+_OWNED = "owned"
+
+
+def _confidence_override(
+    use: str, agency: str, legal_interest: str
+) -> Literal["medium"] | None:
+    """None keeps the cell's high; "medium" lowers it. Order matters."""
+    use = use.strip().lower()
+    if use == "courthouse":
+        return None  # 18 USC 930(e): owned or leased
+    if legal_interest.strip().lower() != _OWNED:
+        return "medium"  # only the leased part is federal
+    agency = agency.strip()
+    canonical = _CANONICAL_USE.get(use)
+    if agency in PARK_FOREST_AGENCY_CODES and canonical in _PARK_VISITOR_USES:
+        return "medium"  # park and forest visitor buildings
+    if canonical in HIGH_USES:
+        return None
+    if canonical in VA_HEALTH_USES and agency == VA_AGENCY_CODE:
+        return None  # 38 CFR 1.218
+    return "medium"
 
 
 def _use_skip_reason(use: str, employees: int | None) -> str | None:
@@ -319,6 +354,9 @@ class GsaSource(Source):
                 # across agencies; the diff stage re-keys those pins by position.
                 legacy_external_id=row["_rpuid"],
                 legacy_point=(lat, lng),
+                confidence_override=_confidence_override(
+                    row.get(_COL_USE, ""), row.get(_COL_AGENCY, ""), row.get(_COL_LEGAL, "")
+                ),
             )
 
     @staticmethod

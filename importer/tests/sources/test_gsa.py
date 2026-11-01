@@ -7,7 +7,7 @@ from importer.geo.states import load_state_locator
 from importer.restriction_tag import RestrictionTag
 from importer.sources.gsa import (
     GRAY_USES, POST_OFFICE_USE, STAFFED_USES, UNSTAFFED_USES, GsaSource,
-    _parse_employees, _use_skip_reason,
+    _confidence_override, _parse_employees, _use_skip_reason,
 )
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
@@ -156,7 +156,7 @@ def test_every_fy24_use_is_in_exactly_one_list():
 
 
 @pytest.mark.parametrize("raw, expected", [
-    ("", None), ("0", 0), ("12", 12), ("1,951", 1951), ("12.0", 12), ("n/a", None),
+    ("", None), ("0", 0), ("12", 12), ("1,951", 1951), ("12.0", 12), ("n/a", None), ("inf", None),
 ])
 def test_parse_employees(raw, expected):
     assert _parse_employees(raw) == expected
@@ -202,3 +202,30 @@ def test_unknown_uses_are_listed(source):
 def test_kept_rows_are_counted_by_canonical_use(source):
     list(source.iter_candidates(state_filter={"TX"}))
     assert dict(source.last_kept_by_use) == {"Office": 7, "Courthouse": 1, "Warehouses": 2}
+
+
+@pytest.mark.parametrize("use, agency, legal, expected", [
+    ("Courthouse", "47", "Owned", None),
+    ("Courthouse", "47", "Leased", None),
+    ("Prisons and Detention Centers", "15", "Owned", None),
+    ("Prisons and Detention Centers", "15", "Leased", "medium"),
+    ("Land Port of Entry", "47", "Owned", None),
+    ("School", "14", "Owned", None),                        # BIE school
+    ("Hospital", "36", "Owned", None),
+    ("Outpatient Healthcare Facility", "36", "Owned", None),
+    ("Outpatient Healthcare Facility", "75", "Owned", "medium"),  # IHS clinic
+    ("Hospital", "36", "State Government-Owned", "medium"),
+    ("Office", "47", "Owned", "medium"),
+    ("Public Facing Facility", "14", "Owned", "medium"),
+    ("Museum", "12", "Owned", "medium"),
+    ("Warehouses", "14", "Owned", "medium"),
+    ("courthouse", "47", "leased", None),
+])
+def test_confidence_override(use, agency, legal, expected):
+    assert _confidence_override(use, agency, legal) == expected
+
+
+def test_candidates_carry_the_override(source):
+    cands = _by_id(source)
+    assert cands[K("RPUID-TX-2")].confidence_override is None       # Courthouse
+    assert cands[K("RPUID-TX-1")].confidence_override == "medium"   # Office
