@@ -72,6 +72,7 @@ BOUNDARIES = [
              multipolygon((-81.70, 30.48, -81.68, 30.50), (-81.50, 30.48, -81.49, 30.49)),
              component="airNationalGuard"),
     boundary("MIL-TX-CLOSED", "Closed Depot", "tx", polygon(-97.10, 31.50, -97.08, 31.52), status="clsd"),
+    boundary("MIL-TX-CLOSED-NULL", "Closed Null Depot", "tx", None, status="clsd"),
     boundary("MIL-PA-CARE", "Caretaker Depot", "pa", polygon(-76.90, 40.27, -76.88, 40.29), status="care"),
 ]
 

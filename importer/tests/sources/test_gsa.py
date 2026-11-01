@@ -229,3 +229,10 @@ def test_candidates_carry_the_override(source):
     cands = _by_id(source)
     assert cands[K("RPUID-TX-2")].confidence_override is None       # Courthouse
     assert cands[K("RPUID-TX-1")].confidence_override == "medium"   # Office
+
+
+def test_unusable_keys_are_the_rows_dropped_for_data_problems(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    assert source.last_unusable_keys == {
+        K("RPUID-TX-4"), K("RPUID-TX-5"), K("RPUID-TX-NOGEO"), K("RPUID-TX-NONAME"),
+    }  # Land, Disposed, no-bureau and use-filtered rows (HOUSING included) are not here

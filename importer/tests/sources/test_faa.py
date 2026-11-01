@@ -50,3 +50,8 @@ def test_drops_missing_and_mislocated_coords(source):
 def test_airports_carry_no_confidence_override(source):
     cands = source.iter_candidates(state_filter={"TX", "FL", "PA"})
     assert all(c.confidence_override is None for c in cands)
+
+
+def test_unusable_keys_are_airports_dropped_for_data_problems(source):
+    list(source.iter_candidates(state_filter={"TX", "FL", "PA"}))
+    assert source.last_unusable_keys == {"ABC", "AUS"}  # no NASR row; coordinate in WI

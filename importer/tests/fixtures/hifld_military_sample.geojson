@@ -488,6 +488,18 @@
   {
    "type": "Feature",
    "properties": {
+    "SDSID": "MIL-TX-CLOSED-NULL",
+    "SITENAME": "Closed Null Depot",
+    "STATENAMECODE": "tx",
+    "SITEOPERATIONALSTATUS": "clsd",
+    "SITEREPORTINGCOMPONENT": "usa",
+    "MIRTALOCATIONSIDPK": " "
+   },
+   "geometry": null
+  },
+  {
+   "type": "Feature",
+   "properties": {
     "SDSID": "MIL-PA-CARE",
     "SITENAME": "Caretaker Depot",
     "STATENAMECODE": "pa",

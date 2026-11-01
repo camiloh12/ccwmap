@@ -70,6 +70,7 @@ class FaaSource(Source):
         self._url = url
         self._nasr_url = nasr_url
         self.last_skip_counts: Counter[str] = Counter()
+        self.last_unusable_keys = set()
 
     def fetch(self, *, refetch: bool = False) -> None:
         # Commercial-service list: a bare .xlsx — flatten to CSV at cache_path.
@@ -110,6 +111,7 @@ class FaaSource(Source):
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         self.last_skip_counts = Counter()
+        self.last_unusable_keys = set()
         coords = self._load_nasr_coords()
         with open(self._cache_path, encoding="utf-8-sig", newline="") as f:
             for row in csv.DictReader(f):
@@ -128,14 +130,17 @@ class FaaSource(Source):
                 name = (row.get(self._CS_COL_NAME) or "").strip()
                 if not name:
                     self.last_skip_counts["missing_name"] += 1
+                    self.last_unusable_keys.add(locid)
                     continue
                 hit = coords.get(locid)
                 if hit is None:
                     self.last_skip_counts["missing_coords"] += 1
+                    self.last_unusable_keys.add(locid)
                     continue
                 lat, lng = hit
                 if self._locator.state_for(lat, lng) != state:
                     self.last_skip_counts["coord_state_mismatch"] += 1
+                    self.last_unusable_keys.add(locid)
                     continue
                 yield Candidate(
                     source=self.SOURCE_NAME,

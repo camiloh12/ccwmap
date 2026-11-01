@@ -214,6 +214,7 @@ class GsaSource(Source):
         self._locator = state_locator
         self._url = url
         self.last_skip_counts: Counter[str] = Counter()
+        self.last_unusable_keys = set()
         self.last_kept_by_use: Counter[str] = Counter()
         self.last_unknown_uses: Counter[str] = Counter()
 
@@ -253,6 +254,7 @@ class GsaSource(Source):
 
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         self.last_skip_counts = Counter()
+        self.last_unusable_keys = set()
         self.last_kept_by_use = Counter()
         self.last_unknown_uses = Counter()
         wanted_names = (
@@ -297,11 +299,13 @@ class GsaSource(Source):
             name = (row.get(_COL_NAME) or "").strip()
             if not name:
                 self.last_skip_counts["missing_name"] += 1
+                self.last_unusable_keys.add(eid)
                 continue
             street = (row.get(_COL_STREET) or "").strip()
             lat, lng = self._existing_coords(row)
             if lat is None and not street:
                 self.last_skip_counts["missing_address"] += 1
+                self.last_unusable_keys.add(eid)
                 continue
             row["_usps"] = usps
             row["_eid"] = eid
@@ -326,6 +330,7 @@ class GsaSource(Source):
                 hit = geocoded.get(row["_eid"])
                 if hit is None:
                     self.last_skip_counts["geocode_miss"] += 1
+                    self.last_unusable_keys.add(row["_eid"])
                     continue
                 lat, lng = hit
                 quality = CoordQuality.ADDRESS_CENTROID
@@ -335,6 +340,7 @@ class GsaSource(Source):
             # claimed state, drop the row rather than plot a pin in the wrong place.
             if self._locator.state_for(lat, lng) != row["_usps"]:
                 self.last_skip_counts["coord_state_mismatch"] += 1
+                self.last_unusable_keys.add(row["_eid"])
                 continue
             self.last_kept_by_use[_CANONICAL_USE[row[_COL_USE].strip().lower()]] += 1
             yield Candidate(

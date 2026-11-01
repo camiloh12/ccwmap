@@ -170,6 +170,7 @@ class HifldMilitarySource(Source):
         self._url = url
         self._points_url = points_url
         self.last_skip_counts: Counter[str] = Counter()
+        self.last_unusable_keys = set()
 
     def fetch(self, *, refetch: bool = False) -> None:
         layers = (
@@ -194,10 +195,12 @@ class HifldMilitarySource(Source):
     def iter_candidates(self, state_filter: set[str] | None) -> Iterator[Candidate]:
         """One Candidate per installation; respect state_filter when set.
 
-        Side effect: resets and populates `self.last_skip_counts`. Callers must
+        Side effect: resets and populates `self.last_skip_counts` and
+        `self.last_unusable_keys`. Callers must
         fully exhaust the iterator (e.g. via `list(...)`) before reading them.
         """
         self.last_skip_counts = Counter()
+        self.last_unusable_keys = set()
         features = _load_features(self._cache_path, "boundary")
         points = _SitePoints(_load_features(self._points_cache_path, "site-points"))
 
@@ -206,14 +209,18 @@ class HifldMilitarySource(Source):
         for feature in features:
             geom = feature.get("geometry")
             props = feature.get("properties") or {}
-            if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
-                self.last_skip_counts["missing_geometry"] += 1
-                continue
             if str(props.get("SITEOPERATIONALSTATUS") or "").strip().lower() == _CLOSED:
                 self.last_skip_counts["closed"] += 1
                 continue
             if not _site_name(props):
                 self.last_skip_counts["missing_name"] += 1
+                sdsid = _real_sdsid(props)
+                if sdsid:
+                    self.last_unusable_keys.add(sdsid)
+                continue
+            if not geom or geom.get("type") not in ("Polygon", "MultiPolygon"):
+                self.last_skip_counts["missing_geometry"] += 1
+                self.last_unusable_keys.add(_site_key(props))
                 continue
             groups.setdefault(_site_key(props), []).append(feature)
 
@@ -226,6 +233,7 @@ class HifldMilitarySource(Source):
             state = self._locator.state_for(lat, lng)
             if state is None:
                 self.last_skip_counts["state_pip_miss"] += 1
+                self.last_unusable_keys.add(key)
                 continue
             if state_filter is not None and state not in state_filter:
                 self.last_skip_counts["filtered_out"] += 1
