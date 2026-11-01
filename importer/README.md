@@ -68,7 +68,9 @@ locked behind `--i-know-this-writes-to-<ref>` to prevent fat-fingering prod.
   `Confidence: high N, medium M` (JSON `confidence_counts`). The GSA
   section also lists `Kept by use` counts (JSON `kept_by_use`) and any
   `Unknown uses (skipped; add each to a use list in gsa.py)` (JSON
-  `unknown_uses`).
+  `unknown_uses`). Existing pins under an unknown use are kept and marked
+  (reported as "Kept, unusable record"), never deleted, until the spelling
+  is added to a list.
 - **Run the full source set** (the workflow default). Dedup decides between
   sources, so a partial run can re-insert a pin another source won.
   Exception, Phase 8a (national federal wave): run `gsa,hifld_military,faa`

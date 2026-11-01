@@ -235,4 +235,11 @@ def test_unusable_keys_are_the_rows_dropped_for_data_problems(source):
     list(source.iter_candidates(state_filter={"TX"}))
     assert source.last_unusable_keys == {
         K("RPUID-TX-4"), K("RPUID-TX-5"), K("RPUID-TX-NOGEO"), K("RPUID-TX-NONAME"),
-    }  # Land, Disposed, no-bureau and use-filtered rows (HOUSING included) are not here
+        K("RPUID-TX-SPACEPORT"),
+    }  # unknown use counts as unusable; Land, Disposed, no-bureau and deliberate use filters do not
+
+
+def test_deliberately_excluded_rows_are_not_unusable(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    for rid in ("RPUID-TX-HOUSING", "RPUID-TX-PO", "RPUID-TX-ZERO", "RPUID-TX-WH-BLANK"):
+        assert K(rid) not in source.last_unusable_keys

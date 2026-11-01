@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 
 from importer.geo.census_geocode import CensusGeocoder
-from importer.geo.states import load_state_locator
+from importer.geo.states import CONTIGUOUS_STATES_AND_DC, load_state_locator
 from importer.pipeline import run_pipeline
 from importer.reports.json_report import render_json
 from importer.reports.markdown import render_markdown
@@ -135,6 +135,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _parse_args(argv=None):
         args = orig_parse_args(argv)
+        bad_states = sorted(set(args.states) - CONTIGUOUS_STATES_AND_DC)
+        if bad_states:
+            p.error(
+                f"unsupported --states: {','.join(bad_states)}; only the 48 "
+                f"contiguous states plus DC are supported"
+            )
         for s in args.sources:
             if s not in SUPPORTED_SOURCES:
                 p.error(f"unsupported source: {s!r}; supported: {','.join(SUPPORTED_SOURCES)}")

@@ -73,7 +73,9 @@ _INCLUDED_TYPES = {"building"}
 # Phase 8a spec section 4.2). The 2026 federal carry reading leaves 18 USC 930
 # standing only where federal employees regularly work, so housing, restrooms,
 # barracks and unmanned systems are out, and post offices are handled separately.
-# Spellings are the exact FY24 FRPP "Real Property Use" values.
+# Spellings are the exact FY24 FRPP "Real Property Use" values. A use in none of
+# these lists is skipped as use_unknown, but its existing pins are kept and marked
+# (unusable), never deleted, until someone adds the new spelling here.
 UNSTAFFED_USES = frozenset({
     "Family Housing", "Comfort Station/Restrooms", "Dormitories/Barracks",
     "Communications Systems", "Navigation and Traffic Aids",
@@ -288,14 +290,19 @@ class GsaSource(Source):
                 # No longer federal property: no legal basis for a pin.
                 self.last_skip_counts["disposed"] += 1
                 continue
+            eid = f"{agency}-{bureau}-{rpuid}"
             use = (row.get(_COL_USE) or "").strip()
             reason = _use_skip_reason(use, _parse_employees(row.get(_COL_EMPLOYEES) or ""))
             if reason is not None:
                 self.last_skip_counts[reason] += 1
                 if reason == "use_unknown":
+                    # An unrecognised use (for example a renamed category in a
+                    # new FRPP vintage) is not a deliberate exclusion: keep and
+                    # mark any existing pin instead of deleting it. The other
+                    # use filters are real exclusions and stay orphans.
                     self.last_unknown_uses[use] += 1
+                    self.last_unusable_keys.add(eid)
                 continue
-            eid = f"{agency}-{bureau}-{rpuid}"
             name = (row.get(_COL_NAME) or "").strip()
             if not name:
                 self.last_skip_counts["missing_name"] += 1

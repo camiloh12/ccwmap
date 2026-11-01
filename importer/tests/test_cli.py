@@ -327,3 +327,27 @@ def test_cap_accepts_per_source_pairs_with_spaces():
 def test_cap_rejects_bad_values(value):
     with pytest.raises(SystemExit):
         build_parser().parse_args(APPLY_TWO + ["--orphan-delete-cap", value])
+
+
+NATIONAL_STATES = (
+    "AL,AZ,AR,CA,CO,CT,DE,DC,FL,GA,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,"
+    "NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY"
+)
+
+
+def _parse_states(states: str):
+    return build_parser().parse_args([
+        "--dry-run", "--states", states,
+        "--sources", "hifld_courts", "--project-ref", "staging",
+    ])
+
+
+@pytest.mark.parametrize("states", ["AK", "TX,HI", "TZ"])
+def test_parser_rejects_non_contiguous_or_unknown_states(states) -> None:
+    with pytest.raises(SystemExit):
+        _parse_states(states)
+
+
+def test_parser_accepts_the_full_national_list() -> None:
+    args = _parse_states(NATIONAL_STATES)
+    assert len(args.states) == 49

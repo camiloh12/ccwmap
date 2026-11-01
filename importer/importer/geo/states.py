@@ -15,6 +15,10 @@ US_STATES_AND_DC = frozenset(
     "MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split()
 )
 
+# What the importer accepts for --states: Alaska and Hawaii are outside the app's
+# continental-US bounding box, so pins there could never be shown or created.
+CONTIGUOUS_STATES_AND_DC = US_STATES_AND_DC - {"AK", "HI"}
+
 
 class StateLocator:
     """In-memory STRtree over US state polygons keyed by USPS code."""
