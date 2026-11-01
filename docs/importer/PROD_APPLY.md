@@ -300,6 +300,7 @@ prod key, as in B1:
 
 ```powershell
 cd C:\Users\camil\projects\ccwmap\importer
+# staging ref and key for steps 1 and 3; prod ref and key for 5 and 8
 $env:IMPORTER_SUPABASE_SERVICE_ROLE_KEY = "<STAGING or PROD key>"
 uv run python -m importer.cli --dry-run --states $n `
   --sources gsa,hifld_military,faa --refetch `
@@ -317,9 +318,18 @@ uv run python -m importer.cli --dry-run --states $n `
      1,800 GSA deletions there and about 38,200 system pins in total
      after the wave. These are estimates; the cap comes from the
      dry-run's own GSA delete count (far over the default cap);
-   - no `Unknown uses (skipped; add each to a use list in gsa.py)` line;
+   - no `Unknown uses (skipped; add each to a use list in gsa.py)` line
+     (existing pins under an unknown use are kept and marked, reported as
+     "Kept, unusable record", never deleted, until the new spelling is
+     added to a use list in gsa.py);
    - no surprising `Kept, unusable record` counts (a pin whose record
-     the source saw but could not use is kept and marked, never deleted);
+     the source saw but could not use is kept and marked, never deleted).
+     The GSA count should be small. The 2026-11-01 offline smoke found
+     214 GSA unusable keys nationally, 148 of them geocode misses from a
+     stub geocoder that matched nothing, so a real run should report
+     fewer. A GSA count near or above that means existing pins are
+     backed by records that now fail a data check: understand it before
+     applying;
    - `coord_state_mismatch`, compared with the pilot's.
 2. **Staging apply** with the `importer-apply.yml` workflow: `states` set
    to the 49 codes, `sources` `gsa,hifld_military,faa`, `delete_orphans`
@@ -330,17 +340,23 @@ uv run python -m importer.cli --dry-run --states $n `
    delete_orphans"); the run summary prints the value in bold.
 3. **Second staging dry-run** must be all zeros (0 inserts, 0 re-keys,
    0 orphans).
-4. **Wait for the next health check** to come back green. Its 24 h window
-   holds the deletions, which sit inside the apply's `import_runs`
-   window.
-5. **Prod dry-run** (read-only, local, with the prod service-role key,
-   same flags plus `--project-ref prod`). Numbers must match staging
+4. **Wait for the next health check** to come back green. After a
+   staging apply this proves only that staging is reachable and serves
+   clusters: rules 3-9 run on prod only (`ci/health_check.py`), so a
+   green staging check is not approval of the delete list. The dry-run
+   and apply reports are the record of the deletions.
+5. **Prod dry-run** (read-only, local): the same command with
+   `--project-ref prod` and the prod key. Numbers must match staging
    within source churn.
 6. Re-check the dedup-pairs rule above against the newest full report.
 7. **Prod apply**, as step 2 but with target `prod`: the 49-code
    `states`, `sources` `gsa,hifld_military,faa`, `delete_orphans`
    checked, and `orphan_delete_cap` set to `gsa=<the prod dry-run's
    (step 5) GSA delete count, rounded up>`, not staging's number.
+   Pins kept as "unusable" or "user-corrected" stay marked
+   (`source_orphaned_at` set) and count toward health-check rule 8
+   (imported-orphaned, `MAX_ORPHANED` 100), so a large kept count can
+   trip it after the apply.
 8. **Prod zero check:** a prod dry-run that returns all zeros, then
    spot-check clusters at zoom 5 over California, Arizona and New Mexico.
 9. **Close-out.** Update the baseline table in

@@ -70,7 +70,9 @@ such buildings. Each drop has a skip count in the run report:
   Service, Industrial, All Other, Other Institutional Uses (`GRAY_USES`).
 
 A use that FRPP adds later is skipped (`use_unknown`) and listed in the dry-run
-report until someone adds it to one of the lists in `gsa.py`.
+report until someone adds it to one of the lists in `gsa.py`. Its existing pins
+are kept and marked (reported as "Kept, unusable record"), never deleted, until
+that happens.
 
 See spec section 4.2 (`docs/superpowers/specs/2026-10-26-phase8a-national-federal-wave-design.md`) and the memo
 `docs/importer/LEGAL_FEDERAL_CARRY_2026-10.md`.

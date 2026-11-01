@@ -40,6 +40,7 @@
 10. **A merged MIRTA site takes the component of its first record (Task 5),** the same record `extra` already uses.
 11. **Locator file (Task 1):** Census `cb_2025_us_state_500k`, 51 features (50 states plus DC, territories dropped), coordinates rounded to 6 decimals. Measured 2026-10-31 at 6,491,726 bytes, loading in 0.2 s. Census publishes NAD83, which is used as WGS84; the two differ by about 1–2 m in the contiguous states.
 12. **Existing system pins load once, before dedup (Task 9).** Dedup needs their keys for stickiness, and the diff reuses the same lists.
+13. **GSA rows with an unknown use count as unusable, not as real orphans (Task 4; decided at the final whole-branch review).** Their existing pins are kept and marked rather than deleted. This departs deliberately from the letter of spec §4.5.2: §4.2.5 exists so a new FRPP vintage can't silently change what is pinned, and a permanent deletion should need an operator decision. The other use filters (`use_unstaffed`, `use_post_office`, `zero_employees`, `use_unverified`) stay real orphans.
 
 ## Review Focus
 
