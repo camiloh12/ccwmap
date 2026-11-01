@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,3 +44,7 @@ class Candidate(BaseModel):
     # to the database. legacy_point is the (lat, lng) the old code wrote.
     legacy_external_id: str | None = None
     legacy_point: tuple[float, float] | None = None
+
+    # Set by sources. May only lower the cell's confidence (never raise it),
+    # and is never written by itself: apply_state_law pairs it with the cell.
+    confidence_override: Literal["high", "medium"] | None = None

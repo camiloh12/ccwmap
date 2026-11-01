@@ -27,7 +27,7 @@ def multipolygon(*boxes):
     return {"type": "MultiPolygon", "coordinates": [square(*b) for b in boxes]}
 
 
-def boundary(sdsid, name, state, geometry, status="act"):
+def boundary(sdsid, name, state, geometry, status="act", component="usa"):
     return {
         "type": "Feature",
         "properties": {
@@ -35,7 +35,7 @@ def boundary(sdsid, name, state, geometry, status="act"):
             "SITENAME": name,
             "STATENAMECODE": state,
             "SITEOPERATIONALSTATUS": status,
-            "SITEREPORTINGCOMPONENT": "usa",
+            "SITEREPORTINGCOMPONENT": component,
             "MIRTALOCATIONSIDPK": " ",
         },
         "geometry": geometry,
@@ -57,7 +57,8 @@ BOUNDARIES = [
     boundary("MIL-CA-1", "Camp Pendleton", "ca", polygon(-117.40, 33.30, -117.38, 33.32)),
     boundary("MIL-NULL", "No Geometry Base", "tx", None),
     # No SDSID: keyed by state + name. The old code gave all of these the id " ".
-    boundary(None, "NG Camp Mabry", "tx", polygon(-97.77, 30.31, -97.75, 30.33)),
+    boundary(None, "NG Camp Mabry", "tx", polygon(-97.77, 30.31, -97.75, 30.33),
+             component="armyNationalGuard"),
     # All-zero SDSID: also keyed by state + name.
     boundary(ZERO, "Camp Blanding", "fl", polygon(-81.99, 29.95, -81.97, 29.97)),
     # One installation split across two records: merged into one candidate.
@@ -68,8 +69,10 @@ BOUNDARIES = [
              multipolygon((-98.60, 29.65, -98.50, 29.75), (-98.63, 29.37, -98.61, 29.39))),
     # Multi-part base whose point is ~8 km off and whose area centroid misses both parts.
     boundary("MIL-FL-JAX", "Jacksonville IAP (ANG)", "fl",
-             multipolygon((-81.70, 30.48, -81.68, 30.50), (-81.50, 30.48, -81.49, 30.49))),
+             multipolygon((-81.70, 30.48, -81.68, 30.50), (-81.50, 30.48, -81.49, 30.49)),
+             component="airNationalGuard"),
     boundary("MIL-TX-CLOSED", "Closed Depot", "tx", polygon(-97.10, 31.50, -97.08, 31.52), status="clsd"),
+    boundary("MIL-TX-CLOSED-NULL", "Closed Null Depot", "tx", None, status="clsd"),
     boundary("MIL-PA-CARE", "Caretaker Depot", "pa", polygon(-76.90, 40.27, -76.88, 40.29), status="care"),
 ]
 

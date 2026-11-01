@@ -115,3 +115,66 @@ def test_dedup_osm_loses_to_higher_priority_source():
     result = dedup([gsa, osm], existing_user_pins=[])
     assert [cc.candidate.source for cc in result.survivors] == ["gsa"]
     assert result.drops_by_pair[("gsa", "osm")] == 1
+
+
+DFC = "Denver Federal Center"
+
+
+def _gsa(eid, lat=39.7200, lng=-105.1200, override=None):
+    cc = _cc("gsa", eid, DFC, lat, lng)
+    return cc.model_copy(update={"candidate": cc.candidate.model_copy(
+        update={"confidence_override": override})})
+
+
+def _eids(result):
+    return [s.candidate.source_external_id for s in result.survivors]
+
+
+def test_an_equal_priority_match_keeps_the_key_already_in_the_database():
+    a, b = _gsa("47-00-A"), _gsa("47-00-B", lat=39.7201)
+    assert _eids(dedup([a, b], existing_user_pins=[])) == ["47-00-A"]
+    assert _eids(dedup([a, b], existing_user_pins=[],
+                       existing_keys={("gsa", "47-00-B")})) == ["47-00-B"]
+
+
+def test_stickiness_never_beats_source_priority():
+    faa = _cc("faa", "DEN", DFC, 39.7200, -105.1200, category=RestrictionTag.AIRPORT_SECURE)
+    gsa = _gsa("47-00-A", lat=39.7201)
+    result = dedup([gsa, faa], existing_user_pins=[], existing_keys={("gsa", "47-00-A")})
+    assert [s.candidate.source for s in result.survivors] == ["faa"]
+
+
+def test_a_cluster_pin_takes_the_highest_confidence_in_either_order():
+    office = _gsa("47-00-A", override="medium")   # existing key: survives
+    court = _gsa("47-00-B", lat=39.7201)           # high
+    for order in ([office, court], [court, office]):
+        (pin,) = dedup(order, existing_user_pins=[],
+                       existing_keys={("gsa", "47-00-A")}).survivors
+        assert pin.candidate.source_external_id == "47-00-A"
+        assert pin.confidence == "high"
+
+
+def test_absorbed_rows_pass_their_confidence_through_a_chain():
+    # A-B and B-C are about 90 m apart, A-C about 180 m (beyond the 100 m match
+    # radius), so C's confidence can only reach A through B.
+    a = _gsa("47-00-A", 39.72000, -105.12000, override="medium")
+    b = _gsa("47-00-B", 39.72081, -105.12000, override="medium")
+    c = _gsa("47-00-C", 39.72162, -105.12000)   # high
+    (pin,) = dedup([c, b, a], existing_user_pins=[]).survivors
+    assert pin.candidate.source_external_id == "47-00-A"
+    assert pin.confidence == "high"
+
+
+def test_cluster_confidence_ignores_other_sources():
+    gsa = _gsa("47-00-A", override="medium")
+    mil = _cc("hifld_military", "MIL-1", DFC, 39.7201, -105.1200)   # high, lower priority
+    (pin,) = dedup([gsa, mil], existing_user_pins=[]).survivors
+    assert (pin.candidate.source, pin.confidence) == ("gsa", "medium")
+
+
+def test_cluster_confidence_never_exceeds_the_survivors_cell():
+    medium_cell = _cell(RestrictionTag.FEDERAL_PROPERTY).model_copy(update={"confidence": "medium"})
+    a = _gsa("47-00-A").model_copy(update={"cell": medium_cell})
+    b = _gsa("47-00-B", lat=39.7201)   # high cell
+    (pin,) = dedup([a, b], existing_user_pins=[]).survivors
+    assert (pin.candidate.source_external_id, pin.confidence) == ("47-00-A", "medium")

@@ -41,7 +41,7 @@ def _to_upsert_row(
         has_security_screening=defaults["has_security_screening"],
         has_posted_signage=defaults["has_posted_signage"],
         created_by=system_user_id,
-        confidence=cc.cell.confidence,
+        confidence=cc.confidence,
         legal_citation=cc.cell.citation,
         legal_citation_verified_date=cc.cell.last_verified_date.isoformat(),
     )
@@ -72,7 +72,7 @@ def apply_to_supabase(
         client.upsert_pins(rows)
 
     plan = orphan_plan or plan_orphans(diff.orphans, in_scope_count=0, delete=False)
-    to_mark = [row.id for row in plan.keep + plan.mark]
+    to_mark = [row.id for row in plan.keep + plan.mark + plan.unusable]
     if plan.delete:
         wanted = [row.id for row in plan.delete]
         deleted = set(client.delete_pins(wanted))

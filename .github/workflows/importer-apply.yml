@@ -29,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      orphan_delete_cap:
+        description: "One-time per-source cap override, e.g. gsa=2700 (needs delete_orphans; use the dry-run's delete count)"
+        required: false
+        type: string
+        default: ''
 
 concurrency:
   group: importer-${{ inputs.target }}
@@ -73,11 +78,21 @@ jobs:
       - name: Apply to ${{ inputs.target }}
         env:
           DELETE_ORPHANS: ${{ inputs.delete_orphans }}
+          ORPHAN_DELETE_CAP: ${{ inputs.orphan_delete_cap }}
         run: |
-          # --delete-orphans is opt-in. The cap override is deliberately not
-          # exposed here: a breach means stop and investigate.
+          # --delete-orphans is opt-in. The cap override is for a one-time
+          # cleanup whose deletions a dry-run listed first; otherwise a
+          # breach means stop and investigate.
           orphan_flags=()
           if [ "$DELETE_ORPHANS" = "true" ]; then orphan_flags+=(--delete-orphans); fi
+          if [ -n "$ORPHAN_DELETE_CAP" ]; then
+            if [ "$DELETE_ORPHANS" != "true" ]; then
+              echo "::error::orphan_delete_cap needs delete_orphans"
+              exit 1
+            fi
+            orphan_flags+=(--orphan-delete-cap "$ORPHAN_DELETE_CAP")
+            echo "**Orphan delete cap override: $ORPHAN_DELETE_CAP**" >> "$GITHUB_STEP_SUMMARY"
+          fi
           uv run --no-sync python -m importer.cli \
             --apply \
             --states "${{ inputs.states }}" \

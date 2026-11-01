@@ -4,6 +4,7 @@ import pytest
 
 from importer.geo.states import load_state_locator
 from importer.stages.orphans import (
+    cap_for,
     OrphanPlan,
     default_cap,
     plan_orphans,
@@ -75,3 +76,38 @@ def test_scoping_by_state_needs_a_locator():
     assert scope_to_states([], states={"TX"}, locator=None) == []
     with pytest.raises(ValueError, match="state_locator"):
         scope_to_states([_pin("tx")], states={"TX"}, locator=None)
+
+
+def test_a_saw_but_dropped_record_is_kept_and_marked_never_deleted():
+    gone, bad = _pin("gone"), _pin("bad")
+    plan = plan_orphans([gone, bad], in_scope_count=10, delete=True, unusable_keys={"E-bad"})
+    assert plan.delete == [gone] and plan.unusable == [bad]
+    assert plan.marked_count == 1
+    assert (bad, "unusable_kept") in plan.actions()
+
+
+def test_unusable_pins_never_count_toward_the_cap():
+    bad = [_pin(f"p{i}") for i in range(60)]
+    plan = plan_orphans(bad, in_scope_count=100, delete=True,
+                        unusable_keys={p.source_external_id for p in bad})
+    assert plan.delete == [] and len(plan.unusable) == 60 and not plan.breached
+
+
+def test_mark_mode_keeps_unusable_pins_in_their_own_bucket():
+    gone, bad = _pin("gone"), _pin("bad")
+    plan = plan_orphans([gone, bad], in_scope_count=10, delete=False, unusable_keys={"E-bad"})
+    assert plan.mark == [gone] and plan.unusable == [bad] and plan.marked_count == 2
+
+
+def test_a_user_correction_wins_over_unusable():
+    fixed = _pin("fixed", user_modified=True)
+    plan = plan_orphans([fixed], in_scope_count=10, delete=True, unusable_keys={"E-fixed"})
+    assert plan.keep == [fixed] and plan.unusable == []
+
+
+@pytest.mark.parametrize("override, source, expected", [
+    (None, "gsa", None), (7, "gsa", 7), (7, "faa", 7),
+    ({"gsa": 2700}, "gsa", 2700), ({"gsa": 2700}, "faa", None),
+])
+def test_cap_for(override, source, expected):
+    assert cap_for(source, override) == expected

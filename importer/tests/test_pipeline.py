@@ -1,3 +1,4 @@
+from collections import Counter
 from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -89,10 +90,17 @@ def test_pipeline_apply_mode_calls_client() -> None:
 
 
 class _FakeSource(Source):
-    def __init__(self, name, candidates, skips=None):
+    def __init__(self, name, candidates, skips=None, unusable=None,
+                 kept_by_use=None, unknown_uses=None):
         self.SOURCE_NAME = name
         self._candidates = candidates
         self.last_skip_counts = dict(skips or {})
+        if unusable is not None:
+            self.last_unusable_keys = set(unusable)
+        if kept_by_use is not None:
+            self.last_kept_by_use = Counter(kept_by_use)
+        if unknown_uses is not None:
+            self.last_unknown_uses = Counter(unknown_uses)
 
     def fetch(self, *, refetch=False):
         pass
@@ -297,6 +305,16 @@ def test_dry_run_reports_a_cap_breach_as_an_error():
     assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
 
 
+def test_a_per_source_cap_lifts_only_that_source():
+    client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap={"gsa": 100})
+    with pytest.raises(OrphanCapExceeded, match="hifld_military"):
+        run("apply")
+    client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap={"hifld_military": 100})
+    client.delete_pins.return_value = [f"m{i}" for i in range(51)]
+    run("apply")
+    assert len(client.delete_pins.call_args.args[0]) == 51
+
+
 def test_cap_override_lets_a_large_deletion_through():
     client, run = _over_cap_run(delete_orphans=True, orphan_delete_cap=100)
     client.delete_pins.return_value = [f"m{i}" for i in range(51)]
@@ -327,3 +345,54 @@ def test_delete_orphans_is_rejected_outside_apply():
 def test_skip_counts_reach_the_result():
     result = _run([_FakeSource("gsa", [], skips={"disposed": 3})], _mock_client(), mode="dry-run")
     assert result.sources[0].skip_counts == {"disposed": 3}
+
+
+def test_existing_keys_make_dedup_sticky_end_to_end():
+    a = _cand("gsa", "47-00-A", "Denver Federal Center", 30.2672, -97.7431)
+    b = _cand("gsa", "47-00-B", "Denver Federal Center", 30.2673, -97.7431)
+    client = _client_with({"gsa": [_pin("pin-b", (30.2673, -97.7431), eid="47-00-B")]})
+    diff = _run([_FakeSource("gsa", [a, b])], client, mode="dry-run").sources[0].diff
+    assert [cc.candidate.source_external_id for cc in diff.updates] == ["47-00-B"]
+    assert diff.inserts == [] and diff.orphans == []
+
+
+def test_unusable_records_keep_their_pins():
+    gone, bad = _pin("gone"), _pin("bad")
+    client = _client_with({"gsa": [gone, bad]})
+    client.delete_pins.return_value = ["gone"]
+    _run([_FakeSource("gsa", [], unusable={"E-bad"})], client, delete_orphans=True)
+    client.delete_pins.assert_called_once_with(["gone"])
+    client.mark_orphans.assert_called_once_with(["bad"])
+
+
+def test_confidence_and_use_counts_reach_the_result():
+    medium = _cand("gsa", "g1", "Federal Building Austin", 30.2672, -97.7431).model_copy(
+        update={"confidence_override": "medium"})
+    high = _cand("gsa", "g2", "US Courthouse Austin", 30.2900, -97.7431)
+    src = _FakeSource("gsa", [medium, high], kept_by_use={"Office": 1, "Courthouse": 1},
+                      unknown_uses={"Spaceport": 1})
+    sr = _run([src], _mock_client(), mode="dry-run").sources[0]
+    assert sr.confidence_counts == {"medium": 1, "high": 1}
+    assert sr.kept_by_use == {"Office": 1, "Courthouse": 1}
+    assert sr.unknown_uses == {"Spaceport": 1}
+
+
+def test_an_illegal_override_fails_before_any_write():
+    airport_cell = StateLawCell(
+        state="US", category=RestrictionTag.AIRPORT_SECURE, default_status="NO_GUN",
+        confidence="medium", conditions=[], citation="49 CFR 1540.111",
+        last_verified_date=date(2026, 5, 1),
+    )
+    table = StateLawTable(rows=[*_table().rows, airport_cell])
+    ok = _FakeSource("gsa", [_cand("gsa", "g1", "Federal Building Austin", 30.2672, -97.7431)])
+    bad = _FakeSource("faa", [Candidate(
+        source="faa", source_external_id="AUS", source_dataset_version="v",
+        name="Austin-Bergstrom International", latitude=30.1945, longitude=-97.6699,
+        coord_quality=CoordQuality.PRECISE, category=RestrictionTag.AIRPORT_SECURE,
+        state="TX", confidence_override="high",
+    )])
+    client = _mock_client()
+    with pytest.raises(ValueError, match="may only lower"):
+        run_pipeline(sources=[ok, bad], state_laws=table, client=client, states=["TX"],
+                     mode="apply", system_user_id=SYS, state_locator=LOCATOR)
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}

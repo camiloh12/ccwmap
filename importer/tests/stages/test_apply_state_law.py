@@ -101,3 +101,40 @@ def test_source_filter_in_cell_is_respected(table: StateLawTable) -> None:
     assert out == []
     assert stats.dropped_no_cell == 1
     assert ("TX", RestrictionTag.STATE_LOCAL_GOVT.name) in stats.missing_cells
+
+
+def _fed_cell(confidence):
+    return StateLawCell(
+        state="US", category=RestrictionTag.FEDERAL_PROPERTY, default_status="NO_GUN",
+        confidence=confidence, citation="18 USC §930(a)", last_verified_date=date(2026, 10, 25),
+    )
+
+
+def _fed(override=None):
+    return Candidate(
+        source="gsa", source_external_id="47-00-1", source_dataset_version="v",
+        name="Federal Building", latitude=30.27, longitude=-97.74,
+        coord_quality=CoordQuality.PRECISE, category=RestrictionTag.FEDERAL_PROPERTY,
+        state="TX", confidence_override=override,
+    )
+
+
+def test_override_lowers_confidence_and_leaves_the_cell_alone():
+    cc = ClassifiedCandidate(candidate=_fed("medium"), cell=_fed_cell("high"))
+    assert cc.confidence == "medium"
+    assert (cc.cell.default_status, cc.cell.citation) == ("NO_GUN", "18 USC §930(a)")
+
+
+def test_without_an_override_the_cell_decides():
+    assert ClassifiedCandidate(candidate=_fed(), cell=_fed_cell("high")).confidence == "high"
+
+
+def test_an_override_cannot_raise_confidence():
+    with pytest.raises(ValueError, match="may only lower"):
+        ClassifiedCandidate(candidate=_fed("high"), cell=_fed_cell("medium"))
+
+
+def test_classification_fails_on_an_illegal_override():
+    table = StateLawTable(rows=[_fed_cell("medium")])
+    with pytest.raises(ValueError, match="may only lower"):
+        list(apply_state_law([_fed("high")], table=table, stats=ApplyStateLawStats()))

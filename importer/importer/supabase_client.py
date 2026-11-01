@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -69,6 +71,10 @@ class SupabaseClient:
     UUID_CHUNK_SIZE = 100
     PAGE_SIZE = 1000
 
+    _MAX_ATTEMPTS = 3
+    _BACKOFF_BASE_SECONDS = 1.0
+    _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
     def __init__(
         self,
         *,
@@ -76,6 +82,7 @@ class SupabaseClient:
         service_role_key: str,
         system_user_id: str,
         timeout: float = 30.0,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self._project_url = url.rstrip("/")
         self._storage_base = self._project_url + "/storage/v1"
@@ -88,6 +95,7 @@ class SupabaseClient:
         }
         self._system_user_id = system_user_id
         self._client = httpx.Client(timeout=timeout)
+        self._sleep = sleep
 
     def close(self) -> None:
         self._client.close()
@@ -97,6 +105,30 @@ class SupabaseClient:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
+
+    def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Send a write, retrying transport errors and retryable statuses
+        (429/5xx) up to _MAX_ATTEMPTS times, sleeping 1 s then 2 s. Returns the
+        last response and leaves raise_for_status to the caller, so callers that
+        accept some error statuses (ensure_public_bucket) keep working. Re-raises
+        the transport error on the last attempt. Other 4xx are never retried.
+
+        insert_import_run is not idempotent: a retry after a lost response can
+        leave a second run row, which the health check ignores because it never
+        completes.
+        """
+        for attempt in range(self._MAX_ATTEMPTS):
+            last = attempt == self._MAX_ATTEMPTS - 1
+            try:
+                r = self._client.request(method, url, **kwargs)
+            except httpx.TransportError:
+                if last:
+                    raise
+            else:
+                if r.status_code not in self._RETRYABLE_STATUS or last:
+                    return r
+            self._sleep(self._BACKOFF_BASE_SECONDS * (2**attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def select_user_pins(self) -> list[ExistingPinRow]:
         """All user-created pins — dedup must never clobber these.
@@ -137,7 +169,8 @@ class SupabaseClient:
     def patch_external_id(self, pin_id: str, new_external_id: str) -> None:
         """Re-key one pin in place: its UUID and any user edits survive. A
         service-role write never sets user_modified (013)."""
-        r = self._client.patch(
+        r = self._send(
+            "PATCH",
             f"{self._base}/pins",
             headers=self._headers,  # return=representation: count the rows changed
             params={"id": f"eq.{pin_id}", "select": "id"},
@@ -157,7 +190,8 @@ class SupabaseClient:
         deleted: list[str] = []
         for i in range(0, len(pin_ids), self.UUID_CHUNK_SIZE):
             chunk = pin_ids[i : i + self.UUID_CHUNK_SIZE]
-            r = self._client.delete(
+            r = self._send(
+                "DELETE",
                 f"{self._base}/pins",
                 headers=self._headers,  # return=representation: the ids deleted
                 params={
@@ -189,12 +223,13 @@ class SupabaseClient:
                 {**r.model_dump(mode="json", exclude_none=True), "source_orphaned_at": None}
                 for r in rows[i : i + batch_size]
             ]
-            r = self._client.post(url, headers=headers, json=batch)
+            r = self._send("POST", url, headers=headers, json=batch)
             r.raise_for_status()
 
     def insert_import_run(self, *, mode: str, source_filter: str) -> str:
         payload = {"mode": mode, "source_filter": source_filter}
-        r = self._client.post(
+        r = self._send(
+            "POST",
             f"{self._base}/import_runs", headers=self._headers, json=payload
         )
         r.raise_for_status()
@@ -224,7 +259,8 @@ class SupabaseClient:
         }
         headers = dict(self._headers)
         headers["Prefer"] = "return=minimal"
-        r = self._client.patch(
+        r = self._send(
+            "PATCH",
             f"{self._base}/import_runs?run_id=eq.{run_id}",
             headers=headers,
             json=payload,
@@ -237,7 +273,8 @@ class SupabaseClient:
         headers["Prefer"] = "return=minimal"
         for i in range(0, len(pin_ids), self.UUID_CHUNK_SIZE):
             chunk = pin_ids[i : i + self.UUID_CHUNK_SIZE]
-            r = self._client.patch(
+            r = self._send(
+                "PATCH",
                 f"{self._base}/pins",
                 headers=headers,
                 params={"id": f"in.({','.join(chunk)})"},
@@ -276,7 +313,8 @@ class SupabaseClient:
             "Authorization": self._headers["Authorization"],
             "Content-Type": "application/json",
         }
-        r = self._client.post(
+        r = self._send(
+            "POST",
             f"{self._storage_base}/bucket",
             headers=headers,
             json={"id": bucket, "name": bucket, "public": True},
@@ -297,7 +335,8 @@ class SupabaseClient:
             "Content-Type": content_type,
             "x-upsert": "true",
         }
-        r = self._client.post(
+        r = self._send(
+            "POST",
             f"{self._storage_base}/object/{bucket}/{path}",
             headers=headers,
             content=data,
@@ -310,7 +349,8 @@ class SupabaseClient:
             "Authorization": self._headers["Authorization"],
             "Content-Type": "application/json",
         }
-        r = self._client.post(
+        r = self._send(
+            "POST",
             f"{self._storage_base}/object/list/{bucket}",
             headers=headers,
             json={"prefix": "", "limit": 1000, "offset": 0},
@@ -326,7 +366,7 @@ class SupabaseClient:
             "Authorization": self._headers["Authorization"],
             "Content-Type": "application/json",
         }
-        r = self._client.request(
+        r = self._send(
             "DELETE",
             f"{self._storage_base}/object/{bucket}",
             headers=headers,

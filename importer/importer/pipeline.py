@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,7 +16,7 @@ from importer.stages.dedup import dedup
 from importer.stages.diff import DiffStats, diff_candidates
 from importer.stages.normalize import NormalizeStats, normalize
 from importer.stages.odbl_dump import generate_and_upload
-from importer.stages.orphans import OrphanCapExceeded, plan_orphans, scope_to_states
+from importer.stages.orphans import OrphanCapExceeded, cap_for, plan_orphans, scope_to_states
 from importer.stages.refine_coords import refine_coords
 from importer.state_laws import StateLawTable
 from importer.supabase_client import SupabaseClient
@@ -31,7 +33,7 @@ def run_pipeline(
     refetch: bool = False,
     state_locator: StateLocator | None = None,
     delete_orphans: bool = False,
-    orphan_delete_cap: int | None = None,
+    orphan_delete_cap: int | Mapping[str, int] | None = None,
 ) -> PipelineResult:
     """Fetch, classify and dedup every source, diff each against its system
     pins, then (apply mode) write.
@@ -66,12 +68,28 @@ def run_pipeline(
             "asl": asl_stats,
             "norm": norm_stats,
             "skips": dict(skip),
+            "unusable_keys": set(getattr(source, "last_unusable_keys", ())),
+            "kept_by_use": dict(getattr(source, "last_kept_by_use", {})),
+            "unknown_uses": dict(getattr(source, "last_unknown_uses", {})),
             "geocode_miss": int(skip.get("geocode_miss", 0)) if source.SOURCE_NAME == "gsa" else None,
         })
 
-    # Phase B: one cross-source dedup pass against all user pins.
+    # Phase B: one cross-source dedup pass against all user pins. Every
+    # source's system pins are loaded first (reads only) so dedup keeps the
+    # key a pin already has; Phase C1 reuses the lists.
     existing_user_pins = client.select_user_pins()
-    dedup_out = dedup(all_classified, existing_user_pins=existing_user_pins)
+    existing_by_source = {
+        ps["source"]: client.select_system_pins(ps["source"]) for ps in per_source
+    }
+    existing_keys = {
+        (row.source, row.source_external_id)
+        for rows in existing_by_source.values()
+        for row in rows
+        if row.source_external_id is not None
+    }
+    dedup_out = dedup(
+        all_classified, existing_user_pins=existing_user_pins, existing_keys=existing_keys
+    )
     survivors_by_source: dict[str, list] = {}
     for cc in dedup_out.survivors:
         survivors_by_source.setdefault(cc.candidate.source, []).append(cc)
@@ -82,14 +100,15 @@ def run_pipeline(
     for ps in per_source:
         name = ps["source"]
         survivors = survivors_by_source.get(name, [])
-        existing = client.select_system_pins(name)
+        existing = existing_by_source[name]
         in_scope = scope_to_states(existing, states=state_set, locator=state_locator)
         diff_result = diff_candidates(
             survivors, existing=existing, in_scope=in_scope, stats=DiffStats()
         )
         orphan_plan = plan_orphans(
             diff_result.orphans, in_scope_count=len(in_scope),
-            delete=plan_deletes, cap=orphan_delete_cap,
+            delete=plan_deletes, cap=cap_for(name, orphan_delete_cap),
+            unusable_keys=ps["unusable_keys"],
         )
         asl: ApplyStateLawStats = ps["asl"]
         geocode_matched = None
@@ -111,6 +130,9 @@ def run_pipeline(
             geocode_missed=ps["geocode_miss"],
             orphan_plan=orphan_plan,
             skip_counts=ps["skips"],
+            confidence_counts=dict(Counter(cc.confidence for cc in survivors)),
+            kept_by_use=ps["kept_by_use"],
+            unknown_uses=ps["unknown_uses"],
         ))
 
     # Phase C2: delete caps, for every source before any write: a truncated

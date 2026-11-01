@@ -35,7 +35,7 @@ everything is fine.
 | 5 | more than 50 deletions in 24 h outside importer applies | a scripted mass delete | `pin_deletions.deleted_by`; Postgres logs show `P0001` if the rate limit fired |
 | 6 | statutory pins no longer NO_GUN | an edit made between 012 and 013, a 013 regression, a service-role write (importer bug or leaked key), or a dashboard edit | restore them (below), then find out how it happened |
 | 7 | more than 50 user edits of imported pins in 24 h | vandalism or a buggy client | look at those pins' names and `last_modified` |
-| 8 | more than 100 orphaned imported pins | a source dropped records in the last import | review the import report before the next apply |
+| 8 | more than 100 orphaned imported pins | a source dropped records in the last import. Pins kept as "unusable" or "user-corrected" stay marked and count here too | review the import report before the next apply |
 | 9 | stale citations | a `data/state_laws/states.yaml` cell's `last_verified_date` is over a year old | re-verify the law, bump the date, re-import |
 | — | a job *ended before reporting* | the script crashed or timed out | open the run log (tool output there is redacted) |
 

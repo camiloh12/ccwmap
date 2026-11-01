@@ -12,12 +12,14 @@ from importer.supabase_client import (
 
 
 @pytest.fixture()
-def client() -> SupabaseClient:
-    return SupabaseClient(
-        url="https://example.supabase.co",
-        service_role_key="srk-test",
-        system_user_id="81775f8b-1a6a-47d6-b793-e9ab7e38634e",
-    )
+def sleeps() -> list[float]:
+    return []
+
+
+@pytest.fixture()
+def client(sleeps) -> SupabaseClient:
+    return SupabaseClient(url="https://example.supabase.co", service_role_key="srk-test",
+                          system_user_id=SYS, sleep=sleeps.append)
 
 
 SYS = "81775f8b-1a6a-47d6-b793-e9ab7e38634e"
@@ -261,3 +263,46 @@ def test_delete_objects_sends_prefixes(client, httpx_mock):
     client.delete_objects("odbl-dumps", ["dump-2026-01-01.csv.gz"])
     req = httpx_mock.get_requests()[0]
     assert b"dump-2026-01-01.csv.gz" in req.content
+
+
+def test_a_write_retries_a_503_then_succeeds(client, httpx_mock, sleeps):
+    httpx_mock.add_response(method="POST", status_code=503)
+    httpx_mock.add_response(method="POST", status_code=201)
+    client.upsert_pins([_upsert_row("E1")])
+    assert len(httpx_mock.get_requests()) == 2
+    assert sleeps == [1.0]
+
+
+def test_a_write_gives_up_after_three_attempts(client, httpx_mock, sleeps):
+    for _ in range(3):
+        httpx_mock.add_response(method="POST", status_code=503)
+    with pytest.raises(httpx.HTTPStatusError):
+        client.upsert_pins([_upsert_row("E1")])
+    assert len(httpx_mock.get_requests()) == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_a_write_retries_a_dropped_connection(client, httpx_mock):
+    httpx_mock.add_exception(httpx.ConnectError("connection reset"))
+    httpx_mock.add_response(method="PATCH", json=[{"id": "p1"}])
+    client.patch_external_id("p1", "X")
+    assert len(httpx_mock.get_requests()) == 2
+
+
+def test_a_write_retries_429(client, httpx_mock):
+    httpx_mock.add_response(method="DELETE", status_code=429)
+    httpx_mock.add_response(method="DELETE", json=[{"id": "a"}])
+    assert client.delete_pins(["a"]) == ["a"]
+
+
+def test_a_write_does_not_retry_a_400(client, httpx_mock, sleeps):
+    httpx_mock.add_response(method="PATCH", status_code=400)
+    with pytest.raises(httpx.HTTPStatusError):
+        client.mark_orphans(["p1"])
+    assert len(httpx_mock.get_requests()) == 1 and sleeps == []
+
+
+def test_import_run_writes_retry_too(client, httpx_mock):
+    httpx_mock.add_response(method="POST", status_code=502)
+    httpx_mock.add_response(method="POST", json=[{"run_id": "r1"}])
+    assert client.insert_import_run(mode="dry-run", source_filter="gsa") == "r1"

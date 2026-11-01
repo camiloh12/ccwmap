@@ -3,6 +3,11 @@
 
 system_user_id: "81775f8b-1a6a-47d6-b793-e9ab7e38634e"
 
+# National state boundaries: Census cb_2025_us_state_500k (public domain), 50
+# states plus DC, coordinates rounded to 6 decimals. Rebuild with
+# importer/scripts/make_state_boundaries.py.
+state_boundaries: "data/geo/us_states_500k.geojson"
+
 projects:
   staging:
     project_ref: "miihmfhnsfmwgrvgayns"

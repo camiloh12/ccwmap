@@ -142,3 +142,19 @@ def test_markdown_shows_rekey_too_far_and_a_cap_breach() -> None:
 def test_markdown_lists_skip_counts() -> None:
     md = render_markdown(_cleanup_result("apply"))
     assert "Skipped at source: `disposed` 103, `filtered_out` 7" in md
+
+
+def test_markdown_shows_confidence_use_counts_and_unusable_orphans() -> None:
+    bad = _row("bad", "E-bad")
+    diff = DiffResult(inserts=[], updates=[], skips=[], orphans=[bad])
+    s = _source(source="gsa", diff=diff, orphan_plan=OrphanPlan(unusable=[bad]),
+                confidence_counts={"medium": 5, "high": 3},
+                kept_by_use={"Office": 5, "Courthouse": 3}, unknown_uses={"Spaceport": 1})
+    md = render_markdown(PipelineResult(
+        mode="dry-run", started_at=datetime(2026, 11, 1, tzinfo=timezone.utc),
+        completed_at=None, states=["CO"], sources=[s], dedup=DedupReport()))
+    assert "- Confidence: high **3**, medium **5**" in md
+    assert "could not use it): **1**" in md
+    assert "- Kept by use: `Office` 5, `Courthouse` 3" in md
+    assert "Unknown uses" in md and "`Spaceport` 1" in md
+    assert "(unusable_kept)" in md

@@ -68,5 +68,20 @@ def test_delete_orphans_is_an_opt_in_checkbox():
     assert step["env"]["DELETE_ORPHANS"] == "${{ inputs.delete_orphans }}"
     assert '[ "$DELETE_ORPHANS" = "true" ]' in step["run"]
     assert "--delete-orphans" in step["run"]
-    # The cap override stays local-only: a prod breach means stop and investigate.
-    assert "--orphan-delete-cap" not in raw
+
+
+def test_orphan_delete_cap_is_a_per_source_override_that_needs_delete_orphans():
+    wf = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    inputs = wf[True]["workflow_dispatch"]["inputs"]
+    assert (inputs["orphan_delete_cap"]["type"], inputs["orphan_delete_cap"]["default"]) == ("string", "")
+    assert inputs["states"]["default"] == "TX,FL,PA"
+    step = next(s for s in wf["jobs"]["apply"]["steps"] if "importer.cli" in s.get("run", ""))
+    assert step["env"]["ORPHAN_DELETE_CAP"] == "${{ inputs.orphan_delete_cap }}"
+    run = step["run"]
+    assert '[ -n "$ORPHAN_DELETE_CAP" ]' in run
+    assert '[ "$DELETE_ORPHANS" != "true" ]' in run
+    assert "orphan_delete_cap needs delete_orphans" in run
+    assert '--orphan-delete-cap "$ORPHAN_DELETE_CAP"' in run
+    assert "GITHUB_STEP_SUMMARY" in run
+    # Operator text reaches the shell only through env, never through ${{ }} in the script.
+    assert "inputs.orphan_delete_cap" not in run

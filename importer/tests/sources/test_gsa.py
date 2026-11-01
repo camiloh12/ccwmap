@@ -5,7 +5,10 @@ import pytest
 from importer.candidate import CoordQuality
 from importer.geo.states import load_state_locator
 from importer.restriction_tag import RestrictionTag
-from importer.sources.gsa import GsaSource
+from importer.sources.gsa import (
+    GRAY_USES, POST_OFFICE_USE, STAFFED_USES, UNSTAFFED_USES, GsaSource,
+    _confidence_override, _parse_employees, _use_skip_reason,
+)
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -62,7 +65,7 @@ def test_uses_existing_coords_and_geocodes_missing(source):
 def test_filters_state_before_geocoding(source):
     list(source.iter_candidates(state_filter={"TX"}))
     # Only TX rows that lack coords are geocoded, each under its composite id.
-    assert source._geocoder.calls == [[K("RPUID-TX-2"), "13-14-RPUID-TX-GEO", "14-10-RPUID-TX-GEO"]]
+    assert source._geocoder.calls == [[K("RPUID-TX-2"), "13-14-RPUID-TX-GEO", "14-10-RPUID-TX-GEO", K("RPUID-TX-NOGEO")]]
 
 
 def test_excludes_land_and_no_address(source):
@@ -132,3 +135,111 @@ def test_rows_sharing_a_property_id_each_get_their_own_geocode(source):
     a, b = cands["13-14-RPUID-TX-GEO"], cands["14-10-RPUID-TX-GEO"]
     assert (a.latitude, a.longitude) == (29.7590, -95.3650)
     assert (b.latitude, b.longitude) == (29.7550, -95.3620)
+
+
+FRPP_FY24_USES = (  # every Building use in the FY24 file, not Disposed (2026-10-31)
+    "All Other", "Warehouses", "Office", "Family Housing", "Service",
+    "Other Institutional Uses", "Industrial", "Comfort Station/Restrooms",
+    "Laboratories", "Dormitories/Barracks", "School", "Outpatient Healthcare Facility",
+    "Public Facing Facility", "Prisons and Detention Centers", "Communications Systems",
+    "Hospital", "Land Port of Entry", "Aviation Security Related", "Courthouse",
+    "Border/Inspection Station", "Navigation and Traffic Aids", "Facility Security",
+    "Museum", "Data Centers", "Child Care Center", "Post Office",
+)
+
+
+def test_every_fy24_use_is_in_exactly_one_list():
+    lists = [UNSTAFFED_USES, {POST_OFFICE_USE}, STAFFED_USES, GRAY_USES]
+    for use in FRPP_FY24_USES:
+        assert sum(use in group for group in lists) == 1, use
+    assert set().union(*lists) == set(FRPP_FY24_USES)
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("", None), ("0", 0), ("12", 12), ("1,951", 1951), ("12.0", 12), ("n/a", None), ("inf", None),
+])
+def test_parse_employees(raw, expected):
+    assert _parse_employees(raw) == expected
+
+
+@pytest.mark.parametrize("use, employees, reason", [
+    ("Family Housing", 40, "use_unstaffed"),
+    ("Post Office", 40, "use_post_office"),
+    ("Spaceport", 12, "use_unknown"),
+    ("Spaceport", 0, "use_unknown"),
+    ("Office", 0, "zero_employees"),
+    ("Courthouse", 0, "zero_employees"),
+    ("Office", None, None),            # blank is not zero
+    ("OFFICE", None, None),
+    (" courthouse ", None, None),
+    ("Warehouses", 3, None),
+    ("Warehouses", None, "use_unverified"),
+    ("Warehouses", 0, "zero_employees"),
+])
+def test_use_skip_reason(use, employees, reason):
+    assert _use_skip_reason(use, employees) == reason
+
+
+def test_use_filter_skip_counts(source):
+    cands = _by_id(source)
+    skips = source.last_skip_counts
+    assert (skips["use_unstaffed"], skips["use_post_office"], skips["zero_employees"],
+            skips["use_unverified"], skips["use_unknown"]) == (1, 1, 1, 1, 1)
+    for kept in ("RPUID-TX-1", "RPUID-TX-UPPER", "RPUID-TX-WH-STAFFED"):
+        assert K(kept) in cands
+
+
+def test_a_use_filtered_row_with_a_bad_coordinate_counts_as_use_filtered(source):
+    assert K("RPUID-TX-HOUSING") not in _by_id(source)
+    assert source.last_skip_counts["coord_state_mismatch"] == 1  # RPUID-TX-5 only
+
+
+def test_unknown_uses_are_listed(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    assert dict(source.last_unknown_uses) == {"Spaceport": 1}
+
+
+def test_kept_rows_are_counted_by_canonical_use(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    assert dict(source.last_kept_by_use) == {"Office": 7, "Courthouse": 1, "Warehouses": 2}
+
+
+@pytest.mark.parametrize("use, agency, legal, expected", [
+    ("Courthouse", "47", "Owned", None),
+    ("Courthouse", "47", "Leased", None),
+    ("Prisons and Detention Centers", "15", "Owned", None),
+    ("Prisons and Detention Centers", "15", "Leased", "medium"),
+    ("Land Port of Entry", "47", "Owned", None),
+    ("School", "14", "Owned", None),                        # BIE school
+    ("Hospital", "36", "Owned", None),
+    ("Outpatient Healthcare Facility", "36", "Owned", None),
+    ("Outpatient Healthcare Facility", "75", "Owned", "medium"),  # IHS clinic
+    ("Hospital", "36", "State Government-Owned", "medium"),
+    ("Office", "47", "Owned", "medium"),
+    ("Public Facing Facility", "14", "Owned", "medium"),
+    ("Museum", "12", "Owned", "medium"),
+    ("Warehouses", "14", "Owned", "medium"),
+    ("courthouse", "47", "leased", None),
+])
+def test_confidence_override(use, agency, legal, expected):
+    assert _confidence_override(use, agency, legal) == expected
+
+
+def test_candidates_carry_the_override(source):
+    cands = _by_id(source)
+    assert cands[K("RPUID-TX-2")].confidence_override is None       # Courthouse
+    assert cands[K("RPUID-TX-1")].confidence_override == "medium"   # Office
+
+
+def test_unusable_keys_are_the_rows_dropped_for_data_problems(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    assert source.last_unusable_keys == {
+        K("RPUID-TX-4"), K("RPUID-TX-5"), K("RPUID-TX-NOGEO"), K("RPUID-TX-NONAME"),
+        K("RPUID-TX-SPACEPORT"),
+    }  # unknown use counts as unusable; Land, Disposed, no-bureau and deliberate use filters do not
+
+
+def test_deliberately_excluded_rows_are_not_unusable(source):
+    list(source.iter_candidates(state_filter={"TX"}))
+    for rid in ("RPUID-TX-HOUSING", "RPUID-TX-PO", "RPUID-TX-ZERO", "RPUID-TX-WH-BLANK"):
+        assert K(rid) not in source.last_unusable_keys

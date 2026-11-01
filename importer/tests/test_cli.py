@@ -90,13 +90,13 @@ def test_osm_is_a_supported_source():
 def test_build_source_constructs_osm(tmp_path):
     import yaml
     from pathlib import Path
-    from importer.cli import _build_source, CONFIG_PATH, STATES_BOUNDARY_FIXTURE, STATES_YAML
+    from importer.cli import _build_source, CONFIG_PATH, STATES_YAML
     from importer.geo.states import load_state_locator
     from importer.state_laws import load_state_laws
     from importer.sources.osm import OsmSource
 
     config = yaml.safe_load(Path(CONFIG_PATH).read_text(encoding="utf-8"))
-    locator = load_state_locator(STATES_BOUNDARY_FIXTURE)
+    locator = load_state_locator(Path(__file__).parent / "fixtures" / "states_sample.geojson")
     laws = load_state_laws(STATES_YAML)
     src = _build_source(
         "osm", config=config, locator=locator, repo_root=tmp_path,
@@ -290,3 +290,64 @@ def test_main_exits_1_and_records_a_cap_breach(monkeypatch, tmp_path) -> None:
     rc = cli.main(APPLY_STAGING + ["--delete-orphans", "--report-out", str(tmp_path / "r.md")])
     assert rc == 1
     assert "exceed the cap" in fake.updates[-1]["errors_json"]["message"]
+
+
+def test_config_points_at_the_national_boundary_file():
+    from importer.cli import REPO_ROOT, _load_config
+    path = REPO_ROOT / _load_config()["state_boundaries"]
+    assert path == REPO_ROOT / "data" / "geo" / "us_states_500k.geojson"
+    assert path.exists()
+
+
+def test_main_loads_the_locator_from_the_configured_file(monkeypatch, tmp_path):
+    from importer.stages.orphans import OrphanCapExceeded
+
+    def stop(**kw):
+        raise OrphanCapExceeded("stop")
+
+    cli, _ = _fake_main(monkeypatch, stop)
+    seen = []
+    monkeypatch.setattr(cli, "load_state_locator", lambda path: seen.append(path) or object())
+    cli.main(APPLY_STAGING + ["--report-out", str(tmp_path / "r.md")])
+    assert seen == [cli.REPO_ROOT / "data" / "geo" / "us_states_500k.geojson"]
+
+
+APPLY_TWO = ["--apply", "--states", "TX", "--sources", "gsa,faa", "--project-ref", "staging",
+             "--i-know-this-writes-to-staging", "--delete-orphans"]
+
+
+def test_cap_accepts_per_source_pairs_with_spaces():
+    args = build_parser().parse_args(APPLY_TWO + ["--orphan-delete-cap", " gsa=2700 , faa=10 "])
+    assert args.orphan_delete_cap == {"gsa": 2700, "faa": 10}
+
+
+@pytest.mark.parametrize("value", [
+    "gas=2700", "hifld_military=5", "gsa=", "gsa=-1", "=5", "gsa=10,gsa=20", "gsa=2700;faa=10", "",
+])
+def test_cap_rejects_bad_values(value):
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(APPLY_TWO + ["--orphan-delete-cap", value])
+
+
+NATIONAL_STATES = (
+    "AL,AZ,AR,CA,CO,CT,DE,DC,FL,GA,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,"
+    "NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY"
+)
+
+
+def _parse_states(states: str):
+    return build_parser().parse_args([
+        "--dry-run", "--states", states,
+        "--sources", "hifld_courts", "--project-ref", "staging",
+    ])
+
+
+@pytest.mark.parametrize("states", ["AK", "TX,HI", "TZ"])
+def test_parser_rejects_non_contiguous_or_unknown_states(states) -> None:
+    with pytest.raises(SystemExit):
+        _parse_states(states)
+
+
+def test_parser_accepts_the_full_national_list() -> None:
+    args = _parse_states(NATIONAL_STATES)
+    assert len(args.states) == 49

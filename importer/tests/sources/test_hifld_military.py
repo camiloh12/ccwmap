@@ -118,7 +118,7 @@ def test_without_a_site_point_the_pin_is_inside_the_boundary(run):
 def test_closed_sites_are_skipped_and_caretaker_sites_stay(run):
     cands, skips = run
     assert "MIL-TX-CLOSED" not in cands
-    assert skips["closed"] == 1
+    assert skips["closed"] == 2
     assert "MIL-PA-CARE" in cands
 
 
@@ -182,3 +182,23 @@ def test_fetch_requires_a_points_url(tmp_path):
     )
     with pytest.raises(RuntimeError, match="points_url"):
         src.fetch()
+
+
+def test_guard_sites_are_medium_confidence(run):
+    cands, _ = run
+    assert cands["TX:NG CAMP MABRY"].confidence_override == "medium"
+    assert cands["MIL-FL-JAX"].confidence_override == "medium"
+
+
+def test_other_components_keep_the_cell_confidence(run):
+    cands, _ = run
+    assert cands["MIL-TX-1"].confidence_override is None
+    assert cands["MIL-PA-CARE"].confidence_override is None
+
+
+def test_unusable_keys_cover_data_problems_not_closures():
+    src = _source()
+    list(src.iter_candidates(state_filter=PILOT))
+    # MIL-NULL has no geometry; Camp Pendleton is outside the fixture's states.
+    # The closed site with no geometry counts as closed, not unusable.
+    assert src.last_unusable_keys == {"MIL-NULL", "MIL-CA-1"}

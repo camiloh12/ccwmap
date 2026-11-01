@@ -17,7 +17,7 @@ from pathlib import Path
 import yaml
 
 from importer.geo.census_geocode import CensusGeocoder
-from importer.geo.states import load_state_locator
+from importer.geo.states import CONTIGUOUS_STATES_AND_DC, load_state_locator
 from importer.pipeline import run_pipeline
 from importer.reports.json_report import render_json
 from importer.reports.markdown import render_markdown
@@ -38,22 +38,30 @@ SUPPORTED_REFS = ("staging", "prod")
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent  # importer/../ == repo root
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.yaml"
 STATES_YAML = REPO_ROOT / "data" / "state_laws" / "states.yaml"
-# PHASE 2 SCOPE: this points at the TX+FL+PA test fixture, which is the only
-# state coverage Phase 2 demonstrates. Running --states with any code outside
-# {TX,FL,PA} will silently yield zero candidates (every courthouse outside those
-# polygons fails state point-in-polygon and is skipped). Phase 3 MUST replace
-# this with a committed full-50-state boundary file under data/ before widening
-# state coverage. See docs/superpowers/plans/2026-05-24-pre-populate-pins-phase-2.md.
-STATES_BOUNDARY_FIXTURE = (
-    Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "states_sample.geojson"
-)
 
 
-def _non_negative_int(value: str) -> int:
-    n = int(value)
-    if n < 0:
-        raise argparse.ArgumentTypeError("must be >= 0")
-    return n
+def _cap_number(text: str) -> int:
+    if not text.isascii() or not text.isdigit():
+        raise argparse.ArgumentTypeError(f"{text!r} is not a non-negative integer")
+    return int(text)
+
+
+def _orphan_cap(value: str) -> int | dict[str, int]:
+    """A bare non-negative int (every source) or comma-separated name=N pairs."""
+    text = value.strip()
+    if text.isascii() and text.isdigit():
+        return int(text)
+    caps: dict[str, int] = {}
+    for pair in text.split(","):
+        name, sep, number = (part.strip() for part in pair.partition("="))
+        if not sep or name not in SUPPORTED_SOURCES:
+            raise argparse.ArgumentTypeError(
+                f"{pair.strip()!r}: expected N or name=N pairs; names: {','.join(SUPPORTED_SOURCES)}"
+            )
+        if name in caps:
+            raise argparse.ArgumentTypeError(f"{name!r} is given twice")
+        caps[name] = _cap_number(number)
+    return caps
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,11 +122,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--orphan-delete-cap",
-        type=_non_negative_int,
+        type=_orphan_cap,
         default=None,
-        metavar="N",
-        help="Override the per-source orphan delete cap "
-             "(default: max(50, 5%% of the source's in-scope pins)). Local runs only.",
+        metavar="N|name=N,...",
+        help="One-time override of the orphan delete cap: N for every source, or "
+             "name=N pairs such as gsa=2700,faa=10 "
+             "(default: max(50, 5%% of the source's in-scope pins)).",
     )
 
     # Manual choice validation for friendlier errors than argparse's default.
@@ -126,6 +135,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _parse_args(argv=None):
         args = orig_parse_args(argv)
+        bad_states = sorted(set(args.states) - CONTIGUOUS_STATES_AND_DC)
+        if bad_states:
+            p.error(
+                f"unsupported --states: {','.join(bad_states)}; only the 48 "
+                f"contiguous states plus DC are supported"
+            )
         for s in args.sources:
             if s not in SUPPORTED_SOURCES:
                 p.error(f"unsupported source: {s!r}; supported: {','.join(SUPPORTED_SOURCES)}")
@@ -136,6 +151,10 @@ def build_parser() -> argparse.ArgumentParser:
                     f"--apply with --project-ref {args.project_ref} requires "
                     f"--i-know-this-writes-to-{args.project_ref}"
                 )
+        if isinstance(args.orphan_delete_cap, dict):
+            missing = sorted(set(args.orphan_delete_cap) - set(args.sources))
+            if missing:
+                p.error(f"--orphan-delete-cap names sources not in --sources: {','.join(missing)}")
         if args.delete_orphans and args.dry_run:
             p.error("--delete-orphans is apply-only; a dry-run already reports what it would delete")
         return args
@@ -232,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     system_user_id = config["system_user_id"]
 
-    locator = load_state_locator(STATES_BOUNDARY_FIXTURE)
+    locator = load_state_locator(REPO_ROOT / config["state_boundaries"])
     state_laws = load_state_laws(STATES_YAML)
 
     mode = "apply" if args.apply else "dry-run"
