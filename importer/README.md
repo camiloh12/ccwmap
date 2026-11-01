@@ -47,10 +47,36 @@ locked behind `--i-know-this-writes-to-<ref>` to prevent fat-fingering prod.
   checked against `max(50, 5% of its in-scope pins)`. One breach stops the
   whole apply with nothing written. A dry-run plans orphans the way
   `--delete-orphans` would and lists a breach under **Errors**.
-  `--orphan-delete-cap N` overrides the cap for a local run; the Actions
-  workflow doesn't expose it. `--delete-orphans` is rejected with `--dry-run`.
+  `--orphan-delete-cap` takes a bare non-negative integer (applies to
+  every source) or comma-separated `name=N` pairs such as `gsa=2700` or
+  `gsa=2700,faa=10`; a name not in `--sources` is a usage error. The Actions
+  workflow exposes it as the `orphan_delete_cap` input (string, default
+  empty), honoured only with `delete_orphans` checked (otherwise the run
+  fails with "orphan_delete_cap needs delete_orphans"); the run summary
+  prints the value in bold. Use it only for a planned cleanup whose
+  deletions a dry-run listed first. `--delete-orphans` is rejected with
+  `--dry-run`.
+- **Unusable records.** GSA, MIRTA and FAA remember records they saw but
+  dropped for a data problem. The orphan plan keeps and marks the pin of
+  such a record (`unusable_kept`), reports it, and never deletes it. The
+  report line is "Kept, unusable record (the source saw it but could not
+  use it)"; JSON `counts.orphans_unusable_kept`.
+- **Per-pin confidence.** A source may lower a pin's confidence below its
+  state-law cell's (never raise it): GSA by use, ownership and agency,
+  MIRTA for National Guard sites. When same-source rows collapse into one
+  pin, it takes the highest confidence among them. Reports show
+  `Confidence: high N, medium M` (JSON `confidence_counts`). The GSA
+  section also lists `Kept by use` counts (JSON `kept_by_use`) and any
+  `Unknown uses (skipped; add each to a use list in gsa.py)` (JSON
+  `unknown_uses`).
 - **Run the full source set** (the workflow default). Dedup decides between
   sources, so a partial run can re-insert a pin another source won.
+  Exception, Phase 8a (national federal wave): run `gsa,hifld_military,faa`
+  only. Outside TX/FL/PA no other source has a cell, and in the pilot
+  states a three-source run could re-insert a GSA or FAA pin only where
+  NCES or IPEDS used to win dedup (none did in the 2026-10-19 prod
+  report). Re-check the dedup pairs first; see
+  `docs/importer/PROD_APPLY.md`.
 
 ## Data Sources & Licenses
 

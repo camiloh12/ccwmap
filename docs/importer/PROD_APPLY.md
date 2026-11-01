@@ -243,8 +243,9 @@ files minutes ago (check their timestamps).
    higher-priority source).
 2. **B2** with `delete_orphans` checked. A cap breach stops the run before any
    write. That means stop and investigate (a truncated download, an upstream
-   change), never re-run with a bigger cap from the workflow; if the deletion
-   is intended, raise it in a PR.
+   change), never raise the cap to get past a breach you did not expect. Use
+   the workflow's `orphan_delete_cap` only for a planned cleanup whose
+   deletions a dry-run listed first (see the Phase 8a section below).
 3. **B3:** the second dry-run shows 0 inserts / 0 re-keys / 0 orphans.
    `SELECT source, source_external_id, count(*) FROM pins WHERE source_external_id IS NOT NULL GROUP BY 1, 2 HAVING count(*) > 1;`
    returns no rows. (Without the `WHERE`, user pins, whose external id is
@@ -267,3 +268,75 @@ files minutes ago (check their timestamps).
    them can trip the health check's imported-orphaned rule (rule 8 in
    `docs/importer/PROD_HEALTH_CHECK.md`; threshold `MAX_ORPHANED` in
    `ci/health_check.py`, currently 100) until a deleting run clears them.
+
+---
+
+## Phase 8a national federal wave (2026-10)
+
+Adds GSA, MIRTA and FAA pins for all 48 contiguous states plus DC. Every
+step is a run you approve; nothing is automatic. Prod is written only in
+step 8.
+
+Define the 49-code list once per PowerShell session (lines kept short
+because the terminal hard-wraps long pastes):
+
+```powershell
+$n = "AL,AZ,AR,CA,CO,CT,DE,DC,FL,GA,ID,IL,IN,IA,KS,KY,LA"
+$n += ",ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC"
+$n += ",ND,OH,OK,OR,PA,RI,SC,SD,TN,TX,UT,VT,VA,WA,WV,WI,WY"
+```
+
+**Why three sources is safe here.** Outside TX/FL/PA no other source has
+a cell. In the pilot states, a three-source run could re-insert a GSA or
+FAA pin only where NCES or IPEDS used to win dedup. The 2026-10-19 prod
+report had none of those wins (its pairs: faa>gsa 5, gsa>gsa 5,501,
+gsa>hifld_courts 3, nces>ipeds 33, nces>hifld_courts 1, plus same-source
+and user pairs). Re-check the latest full report's dedup pairs before
+each run, and run all seven sources if any such win appears.
+
+Dry-run command (prod: use the prod key and add `--project-ref prod`,
+as in B1):
+
+```powershell
+cd C:\Users\camil\projects\ccwmap\importer
+$env:IMPORTER_SUPABASE_SERVICE_ROLE_KEY = "<service_role key>"
+uv run python -m importer.cli --dry-run --states $n `
+  --sources gsa,hifld_military,faa --refetch
+```
+
+1. **Staging dry-run** with the command above. Read the report:
+   - per-source skip counts (GSA: `use_unstaffed`, `use_post_office`,
+     `use_unknown`, `zero_employees`, `use_unverified`);
+   - `Kept by use` counts and the `Confidence: high N, medium M` lines;
+   - GSA deletes in the pilot states should be about 2,700, far over the
+     default cap;
+   - no `Unknown uses (skipped; add each to a use list in gsa.py)` line;
+   - no surprising `Kept, unusable record` counts (a pin whose record
+     the source saw but could not use is kept and marked, never deleted);
+   - `coord_state_mismatch`, compared with the pilot's.
+2. **Staging apply** with the `importer-apply.yml` workflow: `states` set
+   to the 49 codes, `sources` `gsa,hifld_military,faa`, `delete_orphans`
+   checked, and `orphan_delete_cap` set to `gsa=<the dry-run's GSA delete
+   count, rounded up>` (for example `gsa=2700`). The other sources keep
+   their default caps. Setting `orphan_delete_cap` without
+   `delete_orphans` fails the run ("orphan_delete_cap needs
+   delete_orphans"); the run summary prints the value in bold.
+3. **Second staging dry-run** must be all zeros (0 inserts, 0 re-keys,
+   0 orphans).
+4. **Wait for the next health check** to come back green. Its 24 h window
+   holds the deletions, which sit inside the apply's `import_runs`
+   window.
+5. **Prod dry-run** (read-only, local, with the prod service-role key,
+   same flags plus `--project-ref prod`). Numbers must match staging
+   within source churn.
+6. Re-check the dedup-pairs rule above against the newest full report.
+7. **Prod apply** with the same `orphan_delete_cap`.
+8. **Prod zero check:** a prod dry-run that returns all zeros, then
+   spot-check clusters at zoom 5 over California, Arizona and New Mexico.
+9. **Close-out.** Update the baseline table in
+   `docs/importer/PROD_HEALTH_CHECK.md`, CLAUDE.md's status line, and
+   archive the report under `.local/importer-reports/`.
+
+**Rollback** is unchanged (B4): the one
+`DELETE ... WHERE created_by = <system user>`. The pilot-state pins come
+back with a TX/FL/PA re-apply.
