@@ -178,3 +178,12 @@ def test_upsert_row_refuses_an_override_above_the_cell():
     bad = _with_override(medium, "high")  # model_copy skips validation
     with pytest.raises(ValueError, match="may only lower"):
         _to_upsert_row(bad, system_user_id=SYS)
+
+
+def test_unusable_orphans_are_marked_not_deleted():
+    bad = _orphan("E-bad", pin_id="bad")
+    client = MagicMock()
+    apply_to_supabase(_empty_diff(orphans=[bad]), client=client, system_user_id=SYS,
+                      orphan_plan=OrphanPlan(unusable=[bad]))
+    client.delete_pins.assert_not_called()
+    client.mark_orphans.assert_called_once_with(["bad"])

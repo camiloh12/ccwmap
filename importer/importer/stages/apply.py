@@ -72,7 +72,7 @@ def apply_to_supabase(
         client.upsert_pins(rows)
 
     plan = orphan_plan or plan_orphans(diff.orphans, in_scope_count=0, delete=False)
-    to_mark = [row.id for row in plan.keep + plan.mark]
+    to_mark = [row.id for row in plan.keep + plan.mark + plan.unusable]
     if plan.delete:
         wanted = [row.id for row in plan.delete]
         deleted = set(client.delete_pins(wanted))
