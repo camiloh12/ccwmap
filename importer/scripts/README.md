@@ -1,0 +1,1 @@
+`make_state_boundaries.py` rebuilds `data/geo/us_states_500k.geojson` from the Census cartographic boundary file; run `uv run --with pyshp python scripts/make_state_boundaries.py --year 2025` from `importer/`.

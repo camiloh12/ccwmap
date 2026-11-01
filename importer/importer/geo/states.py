@@ -8,6 +8,13 @@ from pathlib import Path
 from shapely.geometry import Point, shape
 from shapely.strtree import STRtree
 
+# The 50 states plus DC. Territories are excluded on purpose: they have no
+# state-law cells and lie outside the app's US bounding box.
+US_STATES_AND_DC = frozenset(
+    "AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS "
+    "MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY".split()
+)
+
 
 class StateLocator:
     """In-memory STRtree over US state polygons keyed by USPS code."""

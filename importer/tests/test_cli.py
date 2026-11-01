@@ -90,13 +90,13 @@ def test_osm_is_a_supported_source():
 def test_build_source_constructs_osm(tmp_path):
     import yaml
     from pathlib import Path
-    from importer.cli import _build_source, CONFIG_PATH, STATES_BOUNDARY_FIXTURE, STATES_YAML
+    from importer.cli import _build_source, CONFIG_PATH, STATES_YAML
     from importer.geo.states import load_state_locator
     from importer.state_laws import load_state_laws
     from importer.sources.osm import OsmSource
 
     config = yaml.safe_load(Path(CONFIG_PATH).read_text(encoding="utf-8"))
-    locator = load_state_locator(STATES_BOUNDARY_FIXTURE)
+    locator = load_state_locator(Path(__file__).parent / "fixtures" / "states_sample.geojson")
     laws = load_state_laws(STATES_YAML)
     src = _build_source(
         "osm", config=config, locator=locator, repo_root=tmp_path,
@@ -290,3 +290,23 @@ def test_main_exits_1_and_records_a_cap_breach(monkeypatch, tmp_path) -> None:
     rc = cli.main(APPLY_STAGING + ["--delete-orphans", "--report-out", str(tmp_path / "r.md")])
     assert rc == 1
     assert "exceed the cap" in fake.updates[-1]["errors_json"]["message"]
+
+
+def test_config_points_at_the_national_boundary_file():
+    from importer.cli import REPO_ROOT, _load_config
+    path = REPO_ROOT / _load_config()["state_boundaries"]
+    assert path == REPO_ROOT / "data" / "geo" / "us_states_500k.geojson"
+    assert path.exists()
+
+
+def test_main_loads_the_locator_from_the_configured_file(monkeypatch, tmp_path):
+    from importer.stages.orphans import OrphanCapExceeded
+
+    def stop(**kw):
+        raise OrphanCapExceeded("stop")
+
+    cli, _ = _fake_main(monkeypatch, stop)
+    seen = []
+    monkeypatch.setattr(cli, "load_state_locator", lambda path: seen.append(path) or object())
+    cli.main(APPLY_STAGING + ["--report-out", str(tmp_path / "r.md")])
+    assert seen == [cli.REPO_ROOT / "data" / "geo" / "us_states_500k.geojson"]
