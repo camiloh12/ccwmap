@@ -13,15 +13,21 @@
   confidence: high
   conditions:
     - "Federal facilities: possession of a firearm by a non-exempt person is prohibited."
-  citation: "18 USC §930(a)"
-  last_verified_date: 2026-05-31
+  citation: "18 USC §930(a); §930(d)(3) as read by OLC, Application of 18 U.S.C. § 930(a) to Post Offices (Aug. 12, 2026)"
+  last_verified_date: 2026-10-25
   source_filter:
     - gsa
     - hifld_military
   notes: |
-    Federal-uniform. Applies to GSA-owned/leased federal property and HIFLD
+    Federal-uniform. Covers federal facilities, meaning buildings where federal
+    employees regularly work: GSA-owned/leased federal property and HIFLD
     military installations nationwide. 18 USC §930 exempts law enforcement and
     certain official purposes; pre-populated pins assert the default prohibition.
+    The importer lowers confidence to medium per pin while status stays NO_GUN
+    (Phase 8a design section 4.3; memo docs/importer/LEGAL_FEDERAL_CARRY_2026-10.md).
+    Watch list: Zimmerman v. Blanche, Hornbake v. Blanche, any Fifth Circuit
+    ruling on 18 USC §930(a), withdrawal of the OLC opinion, and VA changes to
+    38 CFR 1.218.
 
 - state: US
   category: AIRPORT_SECURE

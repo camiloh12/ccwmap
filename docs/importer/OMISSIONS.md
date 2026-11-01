@@ -53,3 +53,24 @@ and 3 of those are in territories. Federal courthouses already come from GSA
 (`FEDERAL_PROPERTY`). Outside TX/FL/PA, courthouse candidates drop at
 `apply_state_law` and appear in the dry-run "needs research" list until that
 state gets its own court cell. That list entry is expected, not a gap.
+
+## Federal buildings not pinned (2026-10)
+
+18 USC §930 covers buildings where federal employees regularly work, so the
+GSA importer (`importer/importer/sources/gsa.py`) drops records that are not
+such buildings. Each drop has a skip count in the run report:
+
+- **Unstaffed uses** (`use_unstaffed`): Family Housing, Comfort Station/Restrooms,
+  Dormitories/Barracks, Communications Systems, Navigation and Traffic Aids
+  (`UNSTAFFED_USES`).
+- **Post Office** (`use_post_office`): left for a later round. After the OLC
+  opinion of 2026-08-12 it would be UNCERTAIN rather than red.
+- **Zero federal employees** (`zero_employees`): buildings reporting 0 employees.
+- **Gray uses without a reported count above 0** (`use_unverified`): Warehouses,
+  Service, Industrial, All Other, Other Institutional Uses (`GRAY_USES`).
+
+A use that FRPP adds later is skipped (`use_unknown`) and listed in the dry-run
+report until someone adds it to one of the lists in `gsa.py`.
+
+See spec section 4.2 (`docs/superpowers/specs/2026-10-26-phase8a-national-federal-wave-design.md`) and the memo
+`docs/importer/LEGAL_FEDERAL_CARRY_2026-10.md`.

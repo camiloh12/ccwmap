@@ -246,3 +246,19 @@ def test_courthouse_in_a_state_without_a_cell_drops_and_is_reported():
     assert out == []
     assert stats.dropped_no_cell == 1
     assert ("GA", "STATE_LOCAL_GOVT") in stats.missing_cells
+
+
+def test_federal_property_cell_cites_the_olc_reading():
+    cell = load_state_laws(PROD_TABLE).lookup("CO", RestrictionTag.FEDERAL_PROPERTY)
+    assert cell is not None and cell.state == "US"
+    assert (cell.default_status, cell.confidence) == ("NO_GUN", "high")
+    assert cell.citation == (
+        "18 USC §930(a); §930(d)(3) as read by OLC, Application of "
+        "18 U.S.C. § 930(a) to Post Offices (Aug. 12, 2026)"
+    )
+    assert cell.last_verified_date == date(2026, 10, 25)
+    assert cell.source_filter == ["gsa", "hifld_military"]
+    notes = " ".join(cell.notes.split())
+    for watched in ("medium", "Zimmerman v. Blanche", "Hornbake v. Blanche",
+                    "Fifth Circuit", "OLC opinion", "38 CFR 1.218"):
+        assert watched in notes
