@@ -275,7 +275,7 @@ files minutes ago (check their timestamps).
 
 Adds GSA, MIRTA and FAA pins for all 48 contiguous states plus DC. Every
 step is a run you approve; nothing is automatic. Prod is written only in
-step 8.
+step 7.
 
 Define the 49-code list once per PowerShell session (lines kept short
 because the terminal hard-wraps long pastes):
@@ -294,22 +294,29 @@ gsa>hifld_courts 3, nces>ipeds 33, nces>hifld_courts 1, plus same-source
 and user pairs). Re-check the latest full report's dedup pairs before
 each run, and run all seven sources if any such win appears.
 
-Dry-run command (prod: use the prod key and add `--project-ref prod`,
-as in B1):
+Dry-run command. Steps 1 and 3 use `--project-ref staging` and the
+staging service-role key; steps 5 and 8 use `--project-ref prod` and the
+prod key, as in B1:
 
 ```powershell
 cd C:\Users\camil\projects\ccwmap\importer
-$env:IMPORTER_SUPABASE_SERVICE_ROLE_KEY = "<service_role key>"
+$env:IMPORTER_SUPABASE_SERVICE_ROLE_KEY = "<STAGING or PROD key>"
 uv run python -m importer.cli --dry-run --states $n `
-  --sources gsa,hifld_military,faa --refetch
+  --sources gsa,hifld_military,faa --refetch `
+  --project-ref staging
 ```
 
 1. **Staging dry-run** with the command above. Read the report:
    - per-source skip counts (GSA: `use_unstaffed`, `use_post_office`,
      `use_unknown`, `zero_employees`, `use_unverified`);
    - `Kept by use` counts and the `Confidence: high N, medium M` lines;
-   - GSA deletes in the pilot states should be about 2,700, far over the
-     default cap;
+   - GSA deletes in the pilot states: the 2026-11-01 offline smoke
+     (cached FY24 FRPP, MIRTA, FAA; no database) estimates 17,524 GSA
+     survivors nationally and 2,429 in TX+FL+PA, 719 MIRTA and 405 FAA.
+     Prod holds 4,184 GSA pins in the pilot states, so expect about
+     1,800 GSA deletions there and about 38,200 system pins in total
+     after the wave. These are estimates; the cap comes from the
+     dry-run's own GSA delete count (far over the default cap);
    - no `Unknown uses (skipped; add each to a use list in gsa.py)` line;
    - no surprising `Kept, unusable record` counts (a pin whose record
      the source saw but could not use is kept and marked, never deleted);
@@ -317,7 +324,7 @@ uv run python -m importer.cli --dry-run --states $n `
 2. **Staging apply** with the `importer-apply.yml` workflow: `states` set
    to the 49 codes, `sources` `gsa,hifld_military,faa`, `delete_orphans`
    checked, and `orphan_delete_cap` set to `gsa=<the dry-run's GSA delete
-   count, rounded up>` (for example `gsa=2700`). The other sources keep
+   count, rounded up>` (for example `gsa=1800`). The other sources keep
    their default caps. Setting `orphan_delete_cap` without
    `delete_orphans` fails the run ("orphan_delete_cap needs
    delete_orphans"); the run summary prints the value in bold.
@@ -330,7 +337,10 @@ uv run python -m importer.cli --dry-run --states $n `
    same flags plus `--project-ref prod`). Numbers must match staging
    within source churn.
 6. Re-check the dedup-pairs rule above against the newest full report.
-7. **Prod apply** with the same `orphan_delete_cap`.
+7. **Prod apply**, as step 2 but with target `prod`: the 49-code
+   `states`, `sources` `gsa,hifld_military,faa`, `delete_orphans`
+   checked, and `orphan_delete_cap` set to `gsa=<the prod dry-run's
+   (step 5) GSA delete count, rounded up>`, not staging's number.
 8. **Prod zero check:** a prod dry-run that returns all zeros, then
    spot-check clusters at zoom 5 over California, Arizona and New Mexico.
 9. **Close-out.** Update the baseline table in
