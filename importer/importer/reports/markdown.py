@@ -5,6 +5,14 @@ from __future__ import annotations
 from importer.reports import PipelineResult, SourceResult
 
 
+_CONFIDENCE_ORDER = ("high", "medium", "low")
+
+
+def _use_entries(counts: dict[str, int]) -> str:
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return ", ".join(f"`{name}` {n}" for name, n in ranked)
+
+
 def _source_block(s: SourceResult, *, dry_run: bool) -> list[str]:
     lines = [f"### Source: `{s.source}`", ""]
     lines.append(f"- Candidates fetched: **{s.candidates_fetched}**")
@@ -15,6 +23,11 @@ def _source_block(s: SourceResult, *, dry_run: bool) -> list[str]:
         lines.append(f"- Geocoded (address centroid): **{s.geocode_matched or 0}**")
         lines.append(f"- Geocode misses (dropped): **{s.geocode_missed or 0}**")
     plan = s.orphan_plan
+    if s.confidence_counts:
+        present = [c for c in _CONFIDENCE_ORDER if s.confidence_counts.get(c)]
+        lines.append(
+            "- Confidence: " + ", ".join(f"{c} **{s.confidence_counts[c]}**" for c in present)
+        )
     lines.append(f"- INSERT: **{len(s.diff.inserts)}**")
     lines.append(f"- UPDATE: **{len(s.diff.updates)}**")
     lines.append(f"- Re-key: **{len(s.diff.rekeys)}**")
@@ -34,6 +47,11 @@ def _source_block(s: SourceResult, *, dry_run: bool) -> list[str]:
             f"- Orphan: **{len(s.diff.orphans)}** (deleted **{len(plan.delete)}**, "
             f"kept, user-corrected **{len(plan.keep)}**, marked **{len(plan.mark)}**)"
         )
+    if plan.unusable:
+        lines.append(
+            f"- Kept, unusable record (the source saw it but could not use it): "
+            f"**{len(plan.unusable)}**"
+        )
     if plan.breached:
         lines.append(
             f"- **Orphan delete cap breached: {len(plan.delete)} deletions > cap {plan.cap}**"
@@ -41,6 +59,13 @@ def _source_block(s: SourceResult, *, dry_run: bool) -> list[str]:
     if s.skip_counts:
         skipped = ", ".join(f"`{k}` {v}" for k, v in sorted(s.skip_counts.items()))
         lines.append(f"- Skipped at source: {skipped}")
+    if s.kept_by_use:
+        lines.append(f"- Kept by use: {_use_entries(s.kept_by_use)}")
+    if s.unknown_uses:
+        lines.append(
+            "- **Unknown uses (skipped; add each to a use list in gsa.py):** "
+            + _use_entries(s.unknown_uses)
+        )
     lines.append("")
     if s.missing_cells:
         lines.append("**Needs research** (no `states.yaml` cell, dropped):")

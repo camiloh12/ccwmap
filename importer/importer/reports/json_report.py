@@ -28,10 +28,14 @@ def _source(s) -> dict:
             "orphans_deleted": len(plan.delete),
             "orphans_kept_user_corrected": len(plan.keep),
             "orphans_marked": len(plan.mark),
+            "orphans_unusable_kept": len(plan.unusable),
             "orphan_delete_cap": plan.cap,
             "orphan_cap_breached": plan.breached,
         },
         "skip_counts": dict(sorted(s.skip_counts.items())),
+        "confidence_counts": dict(sorted(s.confidence_counts.items())),
+        "kept_by_use": dict(sorted(s.kept_by_use.items())),
+        "unknown_uses": dict(sorted(s.unknown_uses.items())),
         "missing_cells": [list(p) for p in s.missing_cells],
         "rekeys": [
             {

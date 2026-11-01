@@ -34,6 +34,10 @@ class SourceResult:
     # way --delete-orphans would), and its skip counts by reason.
     orphan_plan: OrphanPlan = field(default_factory=OrphanPlan)
     skip_counts: dict[str, int] = field(default_factory=dict)
+    # Confidence of the post-dedup survivors, and (GSA) the uses kept or skipped.
+    confidence_counts: dict[str, int] = field(default_factory=dict)
+    kept_by_use: dict[str, int] = field(default_factory=dict)
+    unknown_uses: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass

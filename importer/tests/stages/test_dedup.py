@@ -155,12 +155,12 @@ def test_a_cluster_pin_takes_the_highest_confidence_in_either_order():
 
 
 def test_absorbed_rows_pass_their_confidence_through_a_chain():
-    # Three rows about 34 m apart. Whichever pair is compared first, A (lowest
-    # key) ends up absorbing B and C, directly or through B.
+    # A-B and B-C are about 90 m apart, A-C about 180 m (beyond the 100 m match
+    # radius), so C's confidence can only reach A through B.
     a = _gsa("47-00-A", 39.72000, -105.12000, override="medium")
-    b = _gsa("47-00-B", 39.72030, -105.12000, override="medium")
-    c = _gsa("47-00-C", 39.72015, -105.12035)   # high
-    (pin,) = dedup([b, c, a], existing_user_pins=[]).survivors
+    b = _gsa("47-00-B", 39.72081, -105.12000, override="medium")
+    c = _gsa("47-00-C", 39.72162, -105.12000)   # high
+    (pin,) = dedup([c, b, a], existing_user_pins=[]).survivors
     assert pin.candidate.source_external_id == "47-00-A"
     assert pin.confidence == "high"
 

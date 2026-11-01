@@ -4,6 +4,13 @@ Two records match when they are within MATCH_RADIUS_M AND
 rapidfuzz.token_set_ratio(name_a, name_b) >= NAME_RATIO_THRESHOLD. On a match the
 lower-priority record is dropped. user-created pins are highest priority and are
 never dropped; a candidate matching a user pin is dropped.
+
+Two rules decide the rest:
+- On an equal-priority match, the record whose (source, source_external_id) is
+  already in the database wins (so a re-run keeps existing pins' keys), then
+  the existing (source, external_id) order.
+- A survivor takes the highest confidence of the same-source rows it absorbed
+  (transitively, through chains), never above its own cell's confidence.
 """
 
 from __future__ import annotations
@@ -84,6 +91,7 @@ def dedup(
     existing_keys: Collection[tuple[str, str]] = frozenset(),
 ) -> DedupResult:
     result = DedupResult(survivors=[])
+    existing_keys = frozenset(existing_keys)
 
     # 1. Within-source dedup on (source, external_id). First occurrence wins.
     seen_keys: set[tuple[str, str]] = set()

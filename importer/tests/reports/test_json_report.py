@@ -74,3 +74,30 @@ def test_json_report_has_rekeys_the_orphan_split_and_skips() -> None:
     assert src["rekeys"] == [{"pin_id": "p", "old_external_id": "140",
                               "new_external_id": "13-14-140", "user_modified": False}]
     assert src["orphans"] == [{"id": "g", "source_external_id": "OLD", "name": "Old", "action": "delete"}]
+
+
+def test_json_report_has_unusable_orphans_confidence_and_use_counts() -> None:
+    from importer.stages.orphans import OrphanPlan
+    from importer.supabase_client import ExistingPinRow
+
+    bad = ExistingPinRow(id="b", source="gsa", source_external_id="E-bad", name="Bad", latitude=30.0,
+                         longitude=-97.0, status=2, restriction_tag="FEDERAL_PROPERTY",
+                         user_modified=False, source_dataset_version="v")
+    result = PipelineResult(
+        mode="dry-run", started_at=datetime(2026, 11, 1, tzinfo=timezone.utc), completed_at=None,
+        states=["CO"], dedup=DedupReport(),
+        sources=[SourceResult(
+            source="gsa", candidates_fetched=1, candidates_after_state_filter=1, classified=1,
+            dropped_no_cell=0, missing_cells=[], name_truncations=0,
+            diff=DiffResult(inserts=[], updates=[], skips=[], orphans=[bad]),
+            orphan_plan=OrphanPlan(unusable=[bad]),
+            confidence_counts={"medium": 5, "high": 3},
+            kept_by_use={"Office": 5}, unknown_uses={"Spaceport": 1},
+        )],
+    )
+    src = json.loads(render_json(result))["sources"][0]
+    assert src["counts"]["orphans_unusable_kept"] == 1
+    assert src["confidence_counts"] == {"high": 3, "medium": 5}
+    assert src["kept_by_use"] == {"Office": 5}
+    assert src["unknown_uses"] == {"Spaceport": 1}
+    assert src["orphans"][0]["action"] == "unusable_kept"
