@@ -113,26 +113,36 @@ SELECT '4_clusters', kind, count(*)::text FROM get_pins_in_view(25.0, -107.0, 37
 ORDER BY 1, 2;
 ```
 
-### Expected output (baseline after the 2026-10-19 re-apply)
+### Expected output (baseline after the 2026-11-02 Phase 8a national apply)
 
 | chk             | key                | value  |
 |-----------------|--------------------|--------|
-| 1_source_status | faa / 2            | 60     |
-| 1_source_status | gsa / 2            | 4184   |
+| 1_source_status | faa / 2            | 405    |
+| 1_source_status | gsa / 2            | 17598  |
 | 1_source_status | hifld_courts / 2   | 469    |
-| 1_source_status | hifld_military / 2 | 101    |
+| 1_source_status | hifld_military / 2 | 719    |
 | 1_source_status | ipeds / 2          | 290    |
 | 1_source_status | nces / 2           | 15414  |
 | 1_source_status | **osm / 1**        | 3386   |
-| 1_total         | all                | 23904  |
+| 1_total         | all                | 38281  |
 | 2_deletions_24h | -                  | 0      |
 | 3_orphaned      | -                  | 0      |
-| 4_clusters      | cluster            | 28     |
+| 4_clusters      | cluster            | 36     |
 
 The first import (2026-07-06) had 23,813: gsa 4,216, military 77, osm 3,287,
-the rest as above. The re-apply (run 39183871400) re-keyed GSA and military
-pins in place, added 192 and deleted 101 orphans. Within 24 h of an apply,
-`2_deletions_24h` counts its deletions (101 on 2026-10-19).
+faa 60. The re-apply (run 39183871400) re-keyed GSA and military pins in
+place, added 192 and deleted 101 orphans, leaving 23,904. The Phase 8a
+national apply (run 41473015667) added 16,289
+GSA, military and airport pins across the 48 contiguous states plus DC and
+deleted 1,912 unstaffed GSA buildings in TX/FL/PA. Within 24 h of an apply,
+`2_deletions_24h` counts its deletions (101 on 2026-10-19, 1,912 on
+2026-11-02). The `4_clusters` box is Texas-centred, so its count rose from
+28 to 36 with the national pins.
+
+GSA and military pins now carry per-pin confidence: GSA 2,296 high /
+15,302 medium, military 471 high / 248 medium (National Guard sites). Medium
+pins are user-editable (migration 013 locks only `confidence = 'high'`), so
+rule 7 (user edits of imported pins) may see more traffic than before.
 
 Source keys are the literal `pins.source` values (`hifld_courts`,
 `hifld_military` — not `courts` / `military`).
