@@ -277,6 +277,20 @@ Adds GSA, MIRTA and FAA pins for all 48 contiguous states plus DC. Every
 step is a run you approve; nothing is automatic. Prod is written only in
 step 7.
 
+> **Done 2026-11-02.** Staging (2026-11-01, run 41362604471, cap
+> `gsa=1950`): 16,290 inserts, 2,433 updates, 1,912 GSA deletes; staging
+> 38,301 system pins; second dry-run all zeros. Prod (run 41473015667,
+> cap `gsa=1950`, 3m08s): gsa 15,326 inserts / 2,272 updates / 1,912
+> deletes, military 618 / 101 / 0, faa 345 / 60 / 0, no errors; prod
+> now **38,281** system pins. The prod delete list was the same 1,912
+> keys as staging's, all deliberate use-filter exclusions
+> (`use_unverified` 768, `zero_employees` 589, `use_unstaffed` 553,
+> post office 2). Prod's one-pin difference from staging: 2 GSA
+> candidates yielded to existing prod user pins. Post-apply dry-run all
+> zeros; health check green on both projects; West zoom 5 returns 60
+> clusters (4,135 pins). Reports: `.local/importer-reports/` (`8a-*`,
+> `stg-apply-41362604471/`, `prod-apply-41473015667/`).
+
 Define the 49-code list once per PowerShell session (lines kept short
 because the terminal hard-wraps long pastes):
 
