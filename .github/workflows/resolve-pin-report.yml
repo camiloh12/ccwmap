@@ -1,0 +1,69 @@
+name: Resolve pin report
+
+# Manual. Resolves one user report on an imported pin by calling the
+# resolve_pin_report() function (migration 014) with the service-role key.
+# Inputs reach the script only through env: so a crafted value is never
+# parsed as shell. Each target sees only its own key.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which Supabase project to write to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - prod
+      confirm:
+        description: 'Type exactly: I-KNOW-THIS-WRITES-TO-STAGING or I-KNOW-THIS-WRITES-TO-PROD'
+        required: true
+        type: string
+      report_id:
+        description: 'Report id (UUID from the moderation email)'
+        required: true
+        type: string
+      action:
+        description: 'remove deletes the pin; move relocates it; dismiss closes the report only'
+        required: true
+        type: choice
+        options:
+          - remove
+          - move
+          - dismiss
+      latitude:
+        description: 'New latitude (move only)'
+        required: false
+        type: string
+        default: ''
+      longitude:
+        description: 'New longitude (move only)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resolve-pin-report-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve on ${{ inputs.target }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve report
+        env:
+          TARGET: ${{ inputs.target }}
+          CONFIRM: ${{ inputs.confirm }}
+          REPORT_ID: ${{ inputs.report_id }}
+          ACTION: ${{ inputs.action }}
+          LATITUDE: ${{ inputs.latitude }}
+          LONGITUDE: ${{ inputs.longitude }}
+          PROD_SERVICE_ROLE_KEY: ${{ inputs.target == 'prod' && secrets.PROD_SUPABASE_SERVICE_ROLE_KEY || '' }}
+          STAGING_SERVICE_ROLE_KEY: ${{ inputs.target == 'staging' && secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY || '' }}
+        run: python3 ci/resolve_pin_report.py
