@@ -104,8 +104,12 @@ def key_ref(key: str) -> str | None:
 
 
 def check_key(target: str, key: str) -> None:
+    key = key.strip()
     if not key:
         raise InputError(f"{KEY_ENV[target]} is not set for {target}")
+    if any(c.isspace() or not c.isprintable() for c in key):
+        # Never echo the key: a bad header value would leak it in a traceback.
+        raise InputError(f"{KEY_ENV[target]} contains whitespace or control characters")
     if key_ref(key) != PROJECT_REFS[target]:
         raise InputError(f"the service key is not for the {target} project")
 
@@ -135,8 +139,10 @@ def _server_message(status: int, body: bytes) -> str:
     return "".join(c if c.isprintable() else " " for c in message)[:MESSAGE_LIMIT]
 
 
-def call_resolve(req: ResolveRequest, key: str, post=_http_post) -> dict:
+def call_resolve(req: ResolveRequest, key: str, post=None) -> dict:
+    post = post or _http_post
     url = f"https://{PROJECT_REFS[req.target]}.supabase.co/rest/v1/rpc/resolve_pin_report"
+    key = key.strip()
     headers = {"apikey": key, "Content-Type": "application/json", "Accept": "application/json"}
     if key.startswith("eyJ"):
         headers["Authorization"] = f"Bearer {key}"
@@ -203,11 +209,14 @@ def main() -> int:
             latitude=env("LATITUDE", ""),
             longitude=env("LONGITUDE", ""),
         )
-        key = env(KEY_ENV[req.target], "")
+        key = env(KEY_ENV[req.target], "").strip()
         check_key(req.target, key)
         result = call_resolve(req, key)
     except (InputError, ResolveError) as e:
         print(f"::error::{_annotation(str(e))}")
+        return 1
+    except Exception as e:  # type only: its message could hold a header value (the key)
+        print(f"::error::unexpected {type(e).__name__}")
         return 1
     summary = render_summary(req, result)
     path = env("GITHUB_STEP_SUMMARY")

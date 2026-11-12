@@ -154,3 +154,43 @@ def test_summary_never_contains_note_or_reporter():
     assert "Courthouse" in out and "hifld_courts" in out and UUID in out
     for bad in ("note", "reporter", "SECRET"):
         assert bad not in out
+
+
+@pytest.mark.parametrize("suffix", ["\n", "\r\n", "\r"])
+def test_key_with_trailing_newline_is_stripped(suffix):
+    key = _jwt({"ref": rpr.PROJECT_REFS["staging"], "role": "service_role"})
+    rpr.check_key("staging", key + suffix)
+    seen = {}
+
+    def post(url, headers, body):
+        seen.update(headers)
+        return 200, b"{}"
+
+    rpr.call_resolve(_req(), key + suffix, post=post)
+    assert seen["apikey"] == key and "\n" not in seen["Authorization"] and "\r" not in seen["Authorization"]
+
+
+def test_key_with_interior_whitespace_is_rejected_without_echo():
+    key = _jwt({"ref": rpr.PROJECT_REFS["staging"], "role": "service_role"})
+    bad = key[:10] + " " + key[10:]
+    with pytest.raises(rpr.InputError) as e:
+        rpr.check_key("staging", bad)
+    assert key[:10] not in str(e.value)
+
+
+def test_main_never_prints_key_on_unexpected_exception(monkeypatch, capsys):
+    key = _jwt({"ref": rpr.PROJECT_REFS["staging"], "role": "service_role"})
+    for k, v in dict(TARGET="staging", CONFIRM="I-KNOW-THIS-WRITES-TO-STAGING", GITHUB_REF=MASTER,
+                     REPORT_ID=UUID, ACTION="remove", LATITUDE="", LONGITUDE="",
+                     STAGING_SERVICE_ROLE_KEY=key + "\n").items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+    def post(url, headers, body):
+        raise ValueError("Invalid header value 'SECRET'")
+
+    monkeypatch.setattr(rpr, "_http_post", post)
+    assert rpr.main() == 1
+    out = capsys.readouterr()
+    for text in (out.out, out.err):
+        assert "SECRET" not in text and key not in text
