@@ -101,3 +101,16 @@ def test_json_report_has_unusable_orphans_confidence_and_use_counts() -> None:
     assert src["kept_by_use"] == {"Office": 5}
     assert src["unknown_uses"] == {"Spaceport": 1}
     assert src["orphans"][0]["action"] == "unusable_kept"
+
+
+def test_json_report_has_suppressed_count() -> None:
+    result = PipelineResult(
+        mode="dry-run", started_at=datetime(2026, 5, 24, tzinfo=timezone.utc),
+        completed_at=None, states=["TX"], dedup=DedupReport(),
+        sources=[SourceResult(
+            source="gsa", candidates_fetched=1, candidates_after_state_filter=1,
+            classified=1, dropped_no_cell=0, missing_cells=[], name_truncations=0,
+            diff=DiffResult(inserts=[], updates=[], skips=[], orphans=[]), suppressed=3,
+        )],
+    )
+    assert json.loads(render_json(result))["sources"][0]["counts"]["suppressed"] == 3

@@ -306,3 +306,20 @@ def test_import_run_writes_retry_too(client, httpx_mock):
     httpx_mock.add_response(method="POST", status_code=502)
     httpx_mock.add_response(method="POST", json=[{"run_id": "r1"}])
     assert client.insert_import_run(mode="dry-run", source_filter="gsa") == "r1"
+
+
+def test_select_suppressions_pages_and_parses(client, httpx_mock):
+    def row(i):
+        return {"source": "gsa", "source_external_id": f"E{i}", "name": None,
+                "latitude": None, "longitude": None}
+    httpx_mock.add_response(method="GET", match_headers={"Range": "0-999"},
+                            json=[row(i) for i in range(1000)])
+    httpx_mock.add_response(method="GET", match_headers={"Range": "1000-1999"},
+                            json=[row(1000)])
+    rows = client.select_suppressions()
+    assert len(rows) == 1001
+    assert rows[0].source_external_id == "E0"
+    first = httpx_mock.get_requests()[0]
+    assert "/import_suppressions" in str(first.url)
+    assert "order=id" in str(first.url)
+    assert first.headers["Range"] == "0-999"

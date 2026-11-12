@@ -34,6 +34,18 @@ class ExistingPinRow(BaseModel):
     source_dataset_version: str | None
 
 
+class SuppressionRow(BaseModel):
+    """One do-not-import entry: a removed pin the importer must not re-insert."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    source_external_id: str
+    name: str | None
+    latitude: float | None
+    longitude: float | None
+
+
 class SupabaseUpsertRow(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -162,6 +174,28 @@ class SupabaseClient:
             r.raise_for_status()
             rows = r.json()
             out.extend(ExistingPinRow.model_validate(row) for row in rows)
+            if len(rows) < self.PAGE_SIZE:
+                return out
+            offset += self.PAGE_SIZE
+
+    def select_suppressions(self) -> list[SuppressionRow]:
+        """The whole do-not-import list. Paged like select_system_pins."""
+        out: list[SuppressionRow] = []
+        offset = 0
+        while True:
+            headers = dict(self._headers)
+            headers["Range-Unit"] = "items"
+            headers["Range"] = f"{offset}-{offset + self.PAGE_SIZE - 1}"
+            params = {
+                "select": "source,source_external_id,name,latitude,longitude",
+                "order": "id",
+            }
+            r = self._client.get(
+                f"{self._base}/import_suppressions", headers=headers, params=params
+            )
+            r.raise_for_status()
+            rows = r.json()
+            out.extend(SuppressionRow.model_validate(row) for row in rows)
             if len(rows) < self.PAGE_SIZE:
                 return out
             offset += self.PAGE_SIZE

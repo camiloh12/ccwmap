@@ -28,6 +28,7 @@ def _source_block(s: SourceResult, *, dry_run: bool) -> list[str]:
         lines.append(
             "- Confidence: " + ", ".join(f"{c} **{s.confidence_counts[c]}**" for c in present)
         )
+    lines.append(f"- Suppressed (do-not-import list): **{s.suppressed}**")
     lines.append(f"- INSERT: **{len(s.diff.inserts)}**")
     lines.append(f"- UPDATE: **{len(s.diff.updates)}**")
     lines.append(f"- Re-key: **{len(s.diff.rekeys)}**")
