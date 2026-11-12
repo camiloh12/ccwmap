@@ -181,8 +181,11 @@ CREATE TRIGGER pin_reports_before_insert_trigger
   EXECUTE FUNCTION pin_reports_before_insert();
 
 -- Firing a trigger does not check EXECUTE, so nothing needs to call this
--- function directly; revoking the default PUBLIC grant keeps it off the API.
-REVOKE EXECUTE ON FUNCTION pin_reports_before_insert() FROM PUBLIC;
+-- function directly. Supabase's default privileges also grant EXECUTE on new
+-- public functions straight to anon and authenticated, so revoke from those
+-- too; this keeps it off the API (and quiets the SECURITY DEFINER advisor).
+REVOKE EXECUTE ON FUNCTION pin_reports_before_insert()
+  FROM PUBLIC, anon, authenticated;
 
 -- BEFORE triggers run before the RLS WITH CHECK, so a guest supplying a
 -- reporter_id could otherwise tell "limit exceeded" from "denied" and probe
