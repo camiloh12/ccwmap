@@ -198,8 +198,7 @@ function formatImportedReport(r: Record<string, unknown>): { subject: string; bo
     ``,
     `Studio:     ${studioLink("pin_reports", String(r.id))}`,
     `Pin row:    ${studioLink("pins", String(r.pin_id))}`,
-  ].join("
-");
+  ].join("\n");
   return { subject, body };
 }
 
