@@ -49,9 +49,27 @@ def test_validate_rejects_wrong_confirm_phrase():
         rpr.validate_inputs(**_args(confirm="I-KNOW-THIS-WRITES-TO-PROD"))
 
 
-def test_validate_rejects_non_master_ref():
+def test_validate_rejects_non_master_ref_for_prod():
     with pytest.raises(rpr.InputError):
-        rpr.validate_inputs(**_args(ref="refs/heads/feature/x"))
+        rpr.validate_inputs(
+            **_args(
+                target="prod",
+                confirm="I-KNOW-THIS-WRITES-TO-PROD",
+                ref="refs/heads/feature/x",
+            )
+        )
+
+
+def test_validate_accepts_prod_from_master():
+    req = rpr.validate_inputs(
+        **_args(target="prod", confirm="I-KNOW-THIS-WRITES-TO-PROD")
+    )
+    assert req.target == "prod"
+
+
+def test_validate_accepts_staging_from_non_master_ref():
+    req = rpr.validate_inputs(**_args(ref="refs/heads/feature/x"))
+    assert req.target == "staging"
 
 
 def test_validate_rejects_bad_uuid():

@@ -44,7 +44,7 @@ starting point for a move.
 ### Resolving a report
 
 1. GitHub, Actions, **Resolve pin report**, **Run workflow**. Run it from
-   `master`; other branches are refused.
+   `master` for `prod`; `prod` from other branches is refused.
 2. Fill in `target` (`prod` for real reports), `report_id`, `action`,
    and for a move `latitude` and `longitude` (inside the continental US).
 3. `confirm` must be exactly `I-KNOW-THIS-WRITES-TO-PROD` (staging:
@@ -52,9 +52,10 @@ starting point for a move.
 
 The actions:
 
-- **remove:** deletes the pin, adds its source record (and same-dataset
-  records within 100 m with a similar name) to the do-not-import list so
-  the next import does not bring it back, and closes **every** open
+- **remove:** deletes the pin, adds its source record to the do-not-import
+  list (one row; at import time, same-dataset neighbours within 100 m
+  with a similar name are matched against it) so the next import does
+  not bring it back, and closes **every** open
   report on the pin as `removed`. If an import already removed the pin,
   the outcome and the list entry are still recorded. The list never
   blocks a record that already has a pin.
@@ -102,7 +103,8 @@ Nothing in CI deploys Edge Functions. After changing
 `send-moderation-email`, deploy it yourself:
 
 ```
-supabase functions deploy send-moderation-email   --project-ref <ref>
+supabase functions deploy send-moderation-email \
+  --project-ref <ref>
 ```
 
 ## What ban does

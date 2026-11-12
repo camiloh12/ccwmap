@@ -180,6 +180,15 @@ CREATE TRIGGER pin_reports_before_insert_trigger
   FOR EACH ROW
   EXECUTE FUNCTION pin_reports_before_insert();
 
+-- Firing a trigger does not check EXECUTE, so nothing needs to call this
+-- function directly; revoking the default PUBLIC grant keeps it off the API.
+REVOKE EXECUTE ON FUNCTION pin_reports_before_insert() FROM PUBLIC;
+
+-- BEFORE triggers run before the RLS WITH CHECK, so a guest supplying a
+-- reporter_id could otherwise tell "limit exceeded" from "denied" and probe
+-- another account's report count. No app path inserts reports as anon.
+REVOKE INSERT ON pin_reports FROM anon;
+
 -- =============================================================================
 -- 8. import_suppressions: the do-not-import list. Read by the importer
 --    (service role). No policies, no access for app roles.
@@ -328,3 +337,38 @@ REVOKE EXECUTE ON FUNCTION resolve_pin_report(uuid, text, double precision, doub
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION resolve_pin_report(uuid, text, double precision, double precision)
   TO service_role;
+
+-- =============================================================================
+-- 10. Guard: the constraint names dropped above are assumed. Fail (and roll
+--     the migration back) if a foreign key from pin_reports to pins survived
+--     under another name, or no reason CHECK accepts 'CLOSED'.
+-- =============================================================================
+
+DO $$
+DECLARE
+  v_fk     text;
+  v_checks int;
+  v_ok     int;
+BEGIN
+  SELECT string_agg(conname, ', ') INTO v_fk
+  FROM pg_constraint
+  WHERE conrelid = 'public.pin_reports'::regclass
+    AND confrelid = 'public.pins'::regclass
+    AND contype = 'f';
+  IF v_fk IS NOT NULL THEN
+    RAISE EXCEPTION 'pin_reports still has a foreign key to pins: %', v_fk;
+  END IF;
+
+  SELECT count(*),
+         count(*) FILTER (WHERE pg_get_constraintdef(oid) LIKE '%''CLOSED''%')
+    INTO v_checks, v_ok
+  FROM pg_constraint
+  WHERE conrelid = 'public.pin_reports'::regclass
+    AND contype = 'c'
+    AND pg_get_constraintdef(oid) LIKE '%reason%';
+  IF v_checks = 0 OR v_ok <> v_checks THEN
+    RAISE EXCEPTION
+      'a pin_reports reason CHECK does not accept CLOSED (% of % do)',
+      v_ok, v_checks;
+  END IF;
+END $$;

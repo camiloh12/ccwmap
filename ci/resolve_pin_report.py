@@ -64,10 +64,10 @@ def _coordinate(name: str, text: str, lo: float, hi: float) -> float:
 def validate_inputs(
     *, target: str, confirm: str, ref: str, report_id: str, action: str, latitude: str, longitude: str
 ) -> ResolveRequest:
-    if ref != REQUIRED_REF:
-        raise InputError(f"run this workflow from master, not {ref or '(unknown ref)'}")
     if target not in PROJECT_REFS:
         raise InputError("target must be staging or prod")
+    if target == "prod" and ref != REQUIRED_REF:
+        raise InputError(f"prod runs only from master, not {ref or '(unknown ref)'}")
     expected = f"I-KNOW-THIS-WRITES-TO-{target.upper()}"
     if confirm != expected:
         raise InputError(f"confirmation phrase must be exactly: {expected}")

@@ -246,3 +246,13 @@ def test_suppression_runs_before_user_pin_and_cross_source_steps():
     assert result.suppressed_by_source == {"gsa": 1}
     assert result.dropped_total == 0
     assert ("user", "gsa") not in result.drops_by_pair
+
+
+def test_suppression_never_drops_a_candidate_whose_legacy_key_has_a_pin():
+    cand = _cc("gsa", "A-B-2", _OFFICE, 27.95 + 0.00036, -82.46)
+    cand = cand.model_copy(update={"candidate": cand.candidate.model_copy(
+        update={"legacy_external_id": "OLD-KEY"})})
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()],
+                   existing_keys={("gsa", "OLD-KEY")})
+    assert len(result.survivors) == 1
+    assert result.suppressed_by_source == {}

@@ -91,9 +91,11 @@ class ViewportPinsManager {
     }
 
     // Complete pin list for this box (street zoom, no density-fallback
-    // clusters): anything cached here that the server did not return is gone.
+    // clusters, and under PostgREST's row cap so it cannot be truncated):
+    // anything cached here that the server did not return is gone.
     if (zoom >= kClusterCutoverZoom &&
         clustersOut.isEmpty &&
+        items.length < kMaxRowsPerResponse &&
         generation == _fetchGeneration) {
       await pinDao.deleteCachedNonMineInBox(
         myUserId: userIdProvider(),

@@ -129,7 +129,11 @@ def dedup(
             cand = cc.candidate
             key = (cand.source, cand.source_external_id)
             entries = by_source.get(cand.source, ())
-            if key not in existing_keys and any(
+            has_pin = key in existing_keys or (
+                cand.legacy_external_id is not None
+                and (cand.source, cand.legacy_external_id) in existing_keys
+            )
+            if not has_pin and any(
                 _suppresses(e, cand) for e in entries
             ):
                 result.suppressed_by_source[cand.source] = (

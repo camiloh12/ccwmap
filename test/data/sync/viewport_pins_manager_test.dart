@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ccwmap/core/map_constants.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
 import 'package:ccwmap/data/mappers/pin_mapper.dart';
@@ -358,6 +359,45 @@ void main() {
       await seed('b');
       await fetchBox(12);
       expect(await ids(), isEmpty);
+    });
+
+    group('row cap', () {
+      late ViewportPinsManager bigVpm;
+
+      setUp(() {
+        bigVpm = ViewportPinsManager(
+          remote: remote,
+          pinDao: db.pinDao,
+          tombstoneDao: db.pinTombstoneDao,
+          fetchedBboxDao: db.fetchedBboxDao,
+          userIdProvider: () => 'me',
+          cacheRowLimit: 5000,
+        );
+      });
+
+      List<MapItem> pins(int n) => [
+        for (var i = 0; i < n; i++) MapItemPin(_pin('p$i')),
+      ];
+
+      Future<void> fetchBig() =>
+          bigVpm.fetch(swLat: 29, swLng: -96, neLat: 31, neLng: -94, zoom: 14);
+
+      test(
+        'a response of exactly kMaxRowsPerResponse deletes nothing',
+        () async {
+          await seed('ghost');
+          remote.bboxResult = pins(kMaxRowsPerResponse);
+          await fetchBig();
+          expect(await ids(), contains('ghost'));
+        },
+      );
+
+      test('a response under the cap still cleans up', () async {
+        await seed('ghost');
+        remote.bboxResult = pins(kMaxRowsPerResponse - 1);
+        await fetchBig();
+        expect(await ids(), isNot(contains('ghost')));
+      });
     });
 
     test('a superseded fetch deletes nothing', () async {
