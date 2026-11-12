@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 // Conditional imports for platform-specific database implementations
 import 'database_connection.dart'

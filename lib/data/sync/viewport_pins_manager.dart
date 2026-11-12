@@ -16,7 +16,7 @@ import 'package:ccwmap/domain/models/map_item.dart';
 /// - LRU-evicts oldest non-mine cached pins when row count > [cacheRowLimit].
 ///
 /// Works for anonymous callers — the RPC is open to `anon` (cf. migration
-/// 008 Â§ 7 GRANT). When unauthenticated, [userIdProvider] returns null and
+/// 008 § 7 GRANT). When unauthenticated, [userIdProvider] returns null and
 /// "non-mine" effectively means "everything", which is the right semantics.
 class ViewportPinsManager {
   final RemoteDataSourceInterface remote;
