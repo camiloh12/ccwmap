@@ -31,12 +31,13 @@ everything is fine.
 | 1 | `<NAME> is malformed` | a mis-pasted secret | re-set it from its `.local/` file (`docs/dev/STAGING.md`); the value is never printed |
 | 2 | clusters: HTTP ≠ 200 or no clusters | `get_pins_in_view` broke (BUG-005 looked like this), or anon grants changed | run the manual query below in the dashboard; look at the last migration |
 | 3 | prod has no imported pins | a mass delete, or someone ran the rollback | check `pin_deletions` and `import_runs` |
-| 4 | imported pins deleted outside an importer apply | users can't delete them (012), so: an admin delete, a leaked service key, or an RLS regression. Deletions while a *successful* importer apply ran (inside its `import_runs` window, with no `errors_json`) don't count; the digest shows them as "Pins deleted during importer applies". A failed or killed apply covers nothing, so its deletions still alert | `pin_deletions.deleted_by` for rows whose `original_created_by` is the system user says who |
+| 4 | imported pins deleted outside an importer apply | users can't delete them (012), so: an admin delete, a leaked service key, or an RLS regression. Deletions while a *successful* importer apply ran (inside its `import_runs` window, with no `errors_json`) don't count; the digest shows them as "Pins deleted during importer applies". A failed or killed apply covers nothing, so its deletions still alert. Pins the owner removed by resolving a user report (a `removed` resolution) also don't count; the digest shows them as "Removed via reports" | `pin_deletions.deleted_by` for rows whose `original_created_by` is the system user says who |
 | 5 | more than 50 deletions in 24 h outside importer applies | a scripted mass delete | `pin_deletions.deleted_by`; Postgres logs show `P0001` if the rate limit fired |
 | 6 | statutory pins no longer NO_GUN | an edit made between 012 and 013, a 013 regression, a service-role write (importer bug or leaked key), or a dashboard edit | restore them (below), then find out how it happened |
 | 7 | more than 50 user edits of imported pins in 24 h | vandalism or a buggy client | look at those pins' names and `last_modified` |
 | 8 | more than 100 orphaned imported pins | a source dropped records in the last import. Pins kept as "unusable" or "user-corrected" stay marked and count here too | review the import report before the next apply |
 | 9 | stale citations | a `data/state_laws/states.yaml` cell's `last_verified_date` is over a year old | re-verify the law, bump the date, re-import |
+| 10 | imported-pin reports open more than 7 days | a user report on an imported pin nobody has resolved | check the moderation inbox, then resolve the report with the *Resolve pin report* workflow (`docs/dev/MODERATION.md`) |
 | — | a job *ended before reporting* | the script crashed or timed out | open the run log (tool output there is redacted) |
 
 An importer apply with `--delete-orphans` deletes pins on purpose. Rules 4 and
@@ -44,6 +45,11 @@ An importer apply with `--delete-orphans` deletes pins on purpose. Rules 4 and
 `completed_at` (one with no `errors_json`). An apply that failed (`errors_json`
 set) or was killed before it recorded `completed_at` covers nothing, so its
 deletions still alert.
+
+The digest also lists three report lines, none judged: pins removed through
+resolved reports in the last 24 h, open reports on imported pins, and the age
+in days of the oldest open one ("none" when nothing is open). Only rule 10
+alerts, once a report on an imported pin has been open more than 7 days.
 
 ### Restore a flipped statutory pin
 

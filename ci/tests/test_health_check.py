@@ -32,6 +32,10 @@ HEALTHY = {
     "user_pins_total": 199,
     "imported_user_corrected": 7,
     "imported_reports_7d": 0,
+    "removed_via_reports_24h": 0,
+    "imported_reports_open": 0,
+    "imported_reports_open_over_7d": 0,
+    "oldest_open_report_days": None,
 }
 REST_OK = RestResult(status=200, clusters=28)
 
@@ -492,3 +496,36 @@ def test_importer_deletions_are_shown_but_never_judged():
     m = metrics(importer_deleted_24h=4321)
     assert evaluate("prod", m, REST_OK) == []
     assert "Pins deleted during importer applies, last 24 h (not judged): 4,321" in hc.render_digest("prod", m, REST_OK, [])
+
+
+def test_rule_10_flags_stale_imported_reports():
+    (f,) = evaluate("prod", metrics(imported_reports_open_over_7d=2), REST_OK)
+    assert f.check == "imported_reports_open_over_7d"
+    assert "2 report(s) on imported pins" in f.message
+    assert "docs/dev/MODERATION.md" in f.message
+    assert "\n" not in f.message
+
+
+def test_rule_10_quiet_when_zero():
+    assert evaluate("prod", metrics(imported_reports_open_over_7d=0), REST_OK) == []
+
+
+def test_digest_lists_report_lines():
+    m = metrics(removed_via_reports_24h=1, imported_reports_open=3, oldest_open_report_days=9)
+    d = hc.render_digest("prod", m, REST_OK, [])
+    assert "Removed via reports, last 24 h (not judged): 1" in d
+    assert "Open reports on imported pins: 3" in d
+    assert "Oldest open report: 9 days" in d
+    assert "Imported-pin reports open more than 7 days" in d
+    d = hc.render_digest("prod", metrics(oldest_open_report_days=None), REST_OK, [])
+    assert "Oldest open report: none" in d
+
+
+def test_deletion_rules_skip_report_removals():
+    code = _sql_code()
+    cte = re.search(r"recent_deletions AS \((.*?)\n\),", code, re.S).group(1)
+    assert "by_report" in cte and "resolution = 'removed'" in cte
+    assert "interval '5 minutes'" in cte
+    for key in ("imported_deleted_24h", "deletions_24h"):
+        expr = re.search(rf"'{key}',\s*\((.*?)\),\n", code, re.S).group(1)
+        assert "NOT by_report" in expr, key
