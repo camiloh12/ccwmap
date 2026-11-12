@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:ccwmap/core/map_constants.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
 import 'package:ccwmap/data/mappers/pin_mapper.dart';
@@ -9,10 +10,13 @@ import 'package:ccwmap/domain/models/map_item.dart';
 /// - Calls `get_pins_in_view` for the supplied viewport.
 /// - Persists [MapItemPin]s to local DB with `cachedAt = now`.
 /// - Exposes [MapItemCluster]s through [clusters] for the map screen.
+/// - At street zoom with no clusters (a complete pin list for the box), drops
+///   cached non-mine pins in the box the server no longer returns, so pins
+///   deleted server-side leave the map (design §4.8).
 /// - LRU-evicts oldest non-mine cached pins when row count > [cacheRowLimit].
 ///
-/// Works for anonymous callers — the RPC is open to `anon` (cf. migration
-/// 008 § 7 GRANT). When unauthenticated, [userIdProvider] returns null and
+/// Works for anonymous callers â€” the RPC is open to `anon` (cf. migration
+/// 008 Â§ 7 GRANT). When unauthenticated, [userIdProvider] returns null and
 /// "non-mine" effectively means "everything", which is the right semantics.
 class ViewportPinsManager {
   final RemoteDataSourceInterface remote;
@@ -26,7 +30,7 @@ class ViewportPinsManager {
       ValueNotifier<List<MapItemCluster>>(const []);
 
   /// Bumped on every fetch. After the remote call returns, the manager checks
-  /// whether its generation is still current — if a newer fetch superseded it,
+  /// whether its generation is still current â€” if a newer fetch superseded it,
   /// the result is dropped before any local writes or notifier updates.
   int _fetchGeneration = 0;
 
@@ -68,10 +72,12 @@ class ViewportPinsManager {
 
     final pinsToWrite = <PinEntity>[];
     final clustersOut = <MapItemCluster>[];
+    final serverPinIds = <String>{};
     int pinRowCount = 0;
     for (final item in items) {
       switch (item) {
         case MapItemPin(:final pin):
+          serverPinIds.add(pin.id);
           if (tombstoned.contains(pin.id)) continue;
           pinsToWrite.add(PinMapper.toCachedEntity(pin, cachedAt: now));
           pinRowCount++;
@@ -82,6 +88,21 @@ class ViewportPinsManager {
 
     if (pinsToWrite.isNotEmpty) {
       await pinDao.upsertCachedPins(pinsToWrite);
+    }
+
+    // Complete pin list for this box (street zoom, no density-fallback
+    // clusters): anything cached here that the server did not return is gone.
+    if (zoom >= kClusterCutoverZoom &&
+        clustersOut.isEmpty &&
+        generation == _fetchGeneration) {
+      await pinDao.deleteCachedNonMineInBox(
+        myUserId: userIdProvider(),
+        swLat: swLat,
+        swLng: swLng,
+        neLat: neLat,
+        neLng: neLng,
+        keepIds: serverPinIds,
+      );
     }
 
     final myId = userIdProvider();
@@ -104,7 +125,7 @@ class ViewportPinsManager {
 
     // Second defensive check: a newer fetch may have landed during the
     // DB await chain above. DB writes are idempotent (upsert + LRU
-    // re-converges), but `clusters.value` is replace-semantics — racing
+    // re-converges), but `clusters.value` is replace-semantics â€” racing
     // it would render a stale cluster set. The primary serialization
     // lives in BboxRequestDebouncer (Task 9, 500 ms debounce); this
     // check is a defensive belt-and-suspenders.
@@ -129,7 +150,7 @@ class ViewportPinsManager {
   /// Cleanup invoked when the user signs out. We need to drop the prior
   /// user's bbox cache (their pins now look "non-mine" to the new session
   /// state) BEFORE [userIdProvider] starts returning null, because
-  /// [reset]'s eviction is keyed off the current user id — at sign-out
+  /// [reset]'s eviction is keyed off the current user id â€” at sign-out
   /// time Supabase has already cleared the session, so the provider
   /// returns null and [reset] would skip the delete entirely.
   ///

@@ -219,6 +219,42 @@ void main() {
     });
   });
 
+  group('deleteCachedNonMineInBox', () {
+    test('treats null user as everyone', () async {
+      await database.pinDao.upsertCachedPins([
+        PinEntity(
+          id: 'x1',
+          name: 'x',
+          latitude: 30,
+          longitude: -95,
+          status: 0,
+          restrictionTag: null,
+          hasSecurityScreening: false,
+          hasPostedSignage: false,
+          createdBy: 'x',
+          createdAt: 1,
+          lastModified: 1,
+          photoUri: null,
+          notes: null,
+          votes: 0,
+          source: 'user',
+          userModified: false,
+          cachedAt: 5,
+        ),
+      ]);
+      final n = await database.pinDao.deleteCachedNonMineInBox(
+        myUserId: null,
+        swLat: 29,
+        swLng: -96,
+        neLat: 31,
+        neLng: -94,
+        keepIds: {},
+      );
+      expect(n, 1);
+      expect(await database.pinDao.getPinById('x1'), isNull);
+    });
+  });
+
   group('SyncQueueDao', () {
     test('enqueue and retrieve operations', () async {
       final operation = SyncQueueEntity(

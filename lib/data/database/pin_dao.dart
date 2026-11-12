@@ -90,6 +90,53 @@ class PinDao extends DatabaseAccessor<AppDatabase> with _$PinDaoMixin {
     );
   }
 
+  /// Delete cached pins inside the box that the server no longer returns.
+  ///
+  /// Only rows with `cached_at` set, not mine ([myUserId] null = everyone),
+  /// within the box (edges inclusive), not in [keepIds] and with no pending
+  /// sync_queue operation are removed. Returns the number of rows deleted.
+  Future<int> deleteCachedNonMineInBox({
+    required String? myUserId,
+    required double swLat,
+    required double swLng,
+    required double neLat,
+    required double neLng,
+    required Set<String> keepIds,
+  }) async {
+    final mineClause = myUserId == null
+        ? ''
+        : ' AND (created_by IS NULL OR created_by != ?)';
+    final rows = await customSelect(
+      'SELECT id FROM pins'
+      ' WHERE cached_at IS NOT NULL'
+      '$mineClause'
+      ' AND latitude BETWEEN ? AND ?'
+      ' AND longitude BETWEEN ? AND ?'
+      ' AND id NOT IN (SELECT pin_id FROM sync_queue)',
+      variables: [
+        if (myUserId != null) Variable.withString(myUserId),
+        Variable.withReal(swLat),
+        Variable.withReal(neLat),
+        Variable.withReal(swLng),
+        Variable.withReal(neLng),
+      ],
+      readsFrom: {pins},
+    ).get();
+    final victims = [
+      for (final r in rows)
+        if (!keepIds.contains(r.read<String>('id'))) r.read<String>('id'),
+    ];
+    var deleted = 0;
+    for (var i = 0; i < victims.length; i += 500) {
+      final chunk = victims.sublist(
+        i,
+        i + 500 > victims.length ? victims.length : i + 500,
+      );
+      deleted += await (delete(pins)..where((t) => t.id.isIn(chunk))).go();
+    }
+    return deleted;
+  }
+
   /// Bulk upsert cached pins from a bbox fetch. Single transaction → single
   /// stream emission to the UI.
   Future<void> upsertCachedPins(List<PinEntity> entities) async {

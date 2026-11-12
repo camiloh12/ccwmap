@@ -1,8 +1,4 @@
-/// Zoom level at which `get_pins_in_view` switches from returning clustered
-/// aggregates (below) to individual pin rows (at or above). MUST stay in sync
-/// with the `zoom >= 12` cutover in the SQL RPC (migration 008 §7) so the client
-/// hides its individual-pin layers in lockstep with the server's mode switch.
-const int kClusterCutoverZoom = 12;
+import 'package:ccwmap/core/map_constants.dart';
 
 /// Whether the individual-pin layers (`mine-pins-layer`, `cached-pins-layer`,
 /// and their label layers) should be visible at the given [zoom].

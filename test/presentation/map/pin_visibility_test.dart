@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ccwmap/core/map_constants.dart';
 import 'package:ccwmap/presentation/map/pin_visibility.dart';
 
 void main() {
