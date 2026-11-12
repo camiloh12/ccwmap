@@ -137,7 +137,74 @@ async function healthCheck(send: boolean): Promise<Response> {
   return json(200, { ok: true, check: "brevo-send", sentTo: MOD_TO, plan });
 }
 
+const SYSTEM_USER_ID = "81775f8b-1a6a-47d6-b793-e9ab7e38634e";
+const PROD_PROJECT_REF = "gqbxloaqamokbolcvesg";
+
+const REASON_LABELS: Record<string, string> = {
+  CLOSED: "Closed or no longer there",
+  WRONG_LOCATION: "Wrong location",
+  NOT_CATEGORY: "Wrong category",
+  DUPLICATE: "Duplicate",
+  OTHER: "Something else",
+  INACCURATE: "Inaccurate",
+  OFFENSIVE: "Offensive",
+  SPAM: "Spam",
+};
+
+// Mirrors sourceLabel() in lib/presentation/widgets/pin_provenance.dart.
+const SOURCE_LABELS: Record<string, string> = {
+  nces: "public school records (NCES)",
+  ipeds: "college records (IPEDS)",
+  gsa: "federal property records (GSA)",
+  hifld_courts: "courthouse records (HIFLD)",
+  hifld_military: "military site records (HIFLD/USACE)",
+  faa: "FAA airport records",
+  osm: "OpenStreetMap",
+};
+
+function orNone(v: unknown): string {
+  return v === null || v === undefined || v === "" ? "(none)" : String(v);
+}
+
+function formatImportedReport(r: Record<string, unknown>): { subject: string; body: string } {
+  const reason = String(r.reason);
+  const reasonLabel = REASON_LABELS[reason] ?? reason;
+  const source = String(r.pin_source ?? "");
+  const sourceLabel = SOURCE_LABELS[source] ?? "public records";
+  const subject = `[CCW Map] Imported pin reported: ${reasonLabel} (${orNone(r.pin_source)})`;
+  const lat = orNone(r.pin_latitude);
+  const lng = orNone(r.pin_longitude);
+  const target = SUPABASE_URL.includes(PROD_PROJECT_REF) ? "prod" : "staging";
+  const body = [
+    `report_id:  ${r.id}`,
+    `reason:     ${reasonLabel}`,
+    `note:       ${orNone(r.note)}`,
+    `reporter:   ${r.reporter_id ?? "anonymous"}`,
+    `created_at: ${r.created_at}`,
+    ``,
+    `pin name:   ${orNone(r.pin_name)}`,
+    `dataset:    ${sourceLabel} (${orNone(r.pin_source)})`,
+    `record id:  ${orNone(r.pin_source_external_id)}`,
+    `tag:        ${orNone(r.pin_restriction_tag)}`,
+    `confidence: ${orNone(r.pin_confidence)}`,
+    `citation:   ${orNone(r.pin_legal_citation)}`,
+    `map:        https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`,
+    ``,
+    `Resolve: GitHub → Actions → Resolve pin report → Run workflow`,
+    `  target:    ${target}`,
+    `  report_id: ${r.id}`,
+    `  action:    remove | move | dismiss`,
+    `  move only: latitude / longitude (now ${lat}, ${lng})`,
+    ``,
+    `Studio:     ${studioLink("pin_reports", String(r.id))}`,
+    `Pin row:    ${studioLink("pins", String(r.pin_id))}`,
+  ].join("
+");
+  return { subject, body };
+}
+
 function formatReport(r: Record<string, unknown>): { subject: string; body: string } {
+  if (r.pin_created_by === SYSTEM_USER_ID) return formatImportedReport(r);
   const subject = `[CCW Map] Pin reported — ${r.reason}`;
   const body = [
     `pin_id:     ${r.pin_id}`,
