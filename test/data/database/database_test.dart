@@ -295,6 +295,16 @@ void main() {
       expect(await database.pinDao.getPinById('n'), isNull);
     });
 
+    test('a concurrent upsert is not lost to the sweep', () async {
+      await database.pinDao.upsertCachedPins([cached('a')]);
+      // The sweep's select + deletes hold one transaction; the upsert issued
+      // meanwhile runs after it, so the freshly written row survives.
+      final sweeping = sweep();
+      final upserting = database.pinDao.upsertCachedPins([cached('a')]);
+      await Future.wait([sweeping, upserting]);
+      expect(await database.pinDao.getPinById('a'), isNotNull);
+    });
+
     test('the DELETE itself protects own, uncached and queued pins', () async {
       await database.pinDao.upsertCachedPins([
         cached('mine', createdBy: 'me'),

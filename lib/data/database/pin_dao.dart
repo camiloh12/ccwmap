@@ -106,23 +106,23 @@ class PinDao extends DatabaseAccessor<AppDatabase> with _$PinDaoMixin {
     final mineClause = myUserId == null
         ? ''
         : ' AND (created_by IS NULL OR created_by != ?)';
-    final rows = await customSelect(
-      'SELECT id FROM pins'
-      ' WHERE cached_at IS NOT NULL'
-      '$mineClause'
-      ' AND latitude BETWEEN ? AND ?'
-      ' AND longitude BETWEEN ? AND ?'
-      ' AND id NOT IN (SELECT pin_id FROM sync_queue)',
-      variables: [
-        if (myUserId != null) Variable.withString(myUserId),
-        Variable.withReal(swLat),
-        Variable.withReal(neLat),
-        Variable.withReal(swLng),
-        Variable.withReal(neLng),
-      ],
-      readsFrom: {pins},
-    ).get();
     return transaction(() async {
+      final rows = await customSelect(
+        'SELECT id FROM pins'
+        ' WHERE cached_at IS NOT NULL'
+        '$mineClause'
+        ' AND latitude BETWEEN ? AND ?'
+        ' AND longitude BETWEEN ? AND ?'
+        ' AND id NOT IN (SELECT pin_id FROM sync_queue)',
+        variables: [
+          if (myUserId != null) Variable.withString(myUserId),
+          Variable.withReal(swLat),
+          Variable.withReal(neLat),
+          Variable.withReal(swLng),
+          Variable.withReal(neLng),
+        ],
+        readsFrom: {pins},
+      ).get();
       final victims = [
         for (final r in rows)
           if (!keepIds.contains(r.read<String>('id'))) r.read<String>('id'),
