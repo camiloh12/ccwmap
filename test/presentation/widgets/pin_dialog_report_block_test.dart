@@ -97,5 +97,51 @@ void main() {
       await tester.pumpAndSettle();
       expect(blocked, isTrue);
     });
+
+    testWidgets('shows the custom report label', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PinDialog(
+              isEditMode: true,
+              poiName: 'x',
+              initialStatus: PinStatus.ALLOWED,
+              onConfirm: (_) {},
+              onCancel: () {},
+              onReport: () {},
+              reportLabel: 'Report a problem',
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Report a problem'), findsOneWidget);
+      expect(find.text('Report pin'), findsNothing);
+    });
+
+    testWidgets('reported state is disabled', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PinDialog(
+              isEditMode: true,
+              poiName: 'x',
+              initialStatus: PinStatus.ALLOWED,
+              onConfirm: (_) {},
+              onCancel: () {},
+              onReport: () {},
+              isReported: true,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Reported'), findsOneWidget);
+      final button = tester.widget<TextButton>(
+        find.ancestor(
+          of: find.text('Reported'),
+          matching: find.byWidgetPredicate((w) => w is TextButton),
+        ),
+      );
+      expect(button.onPressed, isNull);
+    });
   });
 }

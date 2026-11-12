@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
+import 'package:ccwmap/presentation/widgets/pin_report_rules.dart';
 
 typedef ReportSubmitCallback =
     Future<void> Function(ReportReason reason, String? note);
@@ -10,7 +11,18 @@ typedef ReportSubmitCallback =
 class ReportPinDialog extends StatefulWidget {
   final ReportSubmitCallback onSubmit;
 
-  const ReportPinDialog({super.key, required this.onSubmit});
+  /// Reason options; null means the four user-pin reasons.
+  final List<(ReportReason, String)>? reasons;
+  final String title;
+  final String? noteHint;
+
+  const ReportPinDialog({
+    super.key,
+    required this.onSubmit,
+    this.reasons,
+    this.title = 'Report this pin',
+    this.noteHint,
+  });
 
   @override
   State<ReportPinDialog> createState() => _ReportPinDialogState();
@@ -21,12 +33,8 @@ class _ReportPinDialogState extends State<ReportPinDialog> {
   final TextEditingController _noteController = TextEditingController();
   bool _submitting = false;
 
-  static const List<(ReportReason, String)> _options = [
-    (ReportReason.INACCURATE, 'Inaccurate'),
-    (ReportReason.OFFENSIVE, 'Offensive'),
-    (ReportReason.SPAM, 'Spam'),
-    (ReportReason.OTHER, 'Other'),
-  ];
+  List<(ReportReason, String)> get _options =>
+      widget.reasons ?? reportReasonsFor(imported: false);
 
   @override
   void dispose() {
@@ -47,7 +55,7 @@ class _ReportPinDialogState extends State<ReportPinDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Report this pin'),
+      title: Text(widget.title),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -68,9 +76,11 @@ class _ReportPinDialogState extends State<ReportPinDialog> {
               enabled: !_submitting,
               maxLength: 500,
               maxLines: 3,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Note (optional)',
-                border: OutlineInputBorder(),
+                helperText: widget.noteHint,
+                helperMaxLines: 3,
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
