@@ -14,6 +14,8 @@ import 'package:ccwmap/core/system_constants.dart';
 import 'package:ccwmap/data/datasources/maptiler_geocoding_client.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/location_service.dart';
+import 'package:ccwmap/data/services/reported_pins_store.dart';
+import 'package:ccwmap/presentation/widgets/pin_report_rules.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/map/cluster_label.dart';
 import 'package:ccwmap/presentation/map/pin_visibility.dart';
@@ -62,6 +64,36 @@ bool isOtherUserPin({
 @visibleForTesting
 bool canDeletePin({required String? pinCreatorId}) =>
     pinCreatorId != kSystemUserId;
+
+/// Report is offered to signed-in users on other users' pins and on imported
+/// (system-owned) pins, in edit mode only. Block stays other-users-only.
+@visibleForTesting
+bool canReportPin({
+  required bool isEditMode,
+  required String? currentUserId,
+  required String? pinCreatorId,
+}) =>
+    isEditMode &&
+    currentUserId != null &&
+    (isOtherUserPin(pinCreatorId: pinCreatorId, currentUserId: currentUserId) ||
+        isImportedPin(pinCreatorId));
+
+enum ReportOutcome { filed, alreadyFiled, limitReached, pinGone, failed }
+
+/// Maps the error from `submitPinReport` (null = success) to an outcome.
+@visibleForTesting
+ReportOutcome reportOutcomeFor(Object? error) {
+  if (error == null) return ReportOutcome.filed;
+  if (error is ReportAlreadyFiledException) return ReportOutcome.alreadyFiled;
+  if (error is ReportLimitReachedException) return ReportOutcome.limitReached;
+  if (error is ReportedPinGoneException) return ReportOutcome.pinGone;
+  return ReportOutcome.failed;
+}
+
+/// A duplicate report still counts as reported (the server has one).
+@visibleForTesting
+bool shouldMarkReported(ReportOutcome o) =>
+    o == ReportOutcome.filed || o == ReportOutcome.alreadyFiled;
 
 class _MapScreenState extends State<MapScreen> {
   MapLibreMapController? _mapController;
@@ -1315,6 +1347,20 @@ class _MapScreenState extends State<MapScreen> {
       pinCreatorId = existing?.metadata.createdBy;
     }
     if (!mounted) return;
+    final imported = isImportedPin(pinCreatorId);
+    final canReport = canReportPin(
+      isEditMode: isEditMode,
+      currentUserId: currentUserId,
+      pinCreatorId: pinCreatorId,
+    );
+    final locked = isStatutoryLocked(
+      createdBy: pinCreatorId,
+      confidence: existing?.metadata.confidence,
+    );
+    final reportedStore = Provider.of<ReportedPinsStore>(
+      context,
+      listen: false,
+    );
     final canModerate =
         isEditMode &&
         currentUserId != null &&
@@ -1338,8 +1384,22 @@ class _MapScreenState extends State<MapScreen> {
         legalCitation: existing?.metadata.legalCitation,
         legalCitationVerifiedDate: existing?.metadata.legalCitationVerifiedDate,
         sourceExternalId: existing?.metadata.sourceExternalId,
-        onReport: canModerate && pinId != null
-            ? () => _handleReportPin(dialogContext, pinId)
+        isStatusLocked: locked,
+        lockedStatusNote: locked
+            ? lockedStatusNote(existing?.metadata.legalCitation)
+            : null,
+        reportLabel: imported ? 'Report a problem' : 'Report pin',
+        isReported:
+            currentUserId != null &&
+            pinId != null &&
+            reportedStore.isReported(currentUserId, pinId),
+        onReport: canReport && pinId != null
+            ? () => _handleReportPin(
+                dialogContext,
+                pinId,
+                imported: imported,
+                tag: existing?.restrictionTag,
+              )
             : null,
         onBlock: canModerate && pinCreatorId != null
             ? () => _handleBlockUser(dialogContext, pinCreatorId!, pinId!)
@@ -1530,12 +1590,22 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _handleReportPin(
     BuildContext dialogContext,
-    String pinId,
-  ) async {
+    String pinId, {
+    required bool imported,
+    RestrictionTag? tag,
+  }) async {
     final moderation = Provider.of<ModerationRepository>(
       context,
       listen: false,
     );
+    final reportedStore = Provider.of<ReportedPinsStore>(
+      context,
+      listen: false,
+    );
+    final userId = Provider.of<AuthViewModel>(
+      context,
+      listen: false,
+    ).currentUser?.id;
 
     final navigator = Navigator.of(dialogContext, rootNavigator: true);
     // Close the PinDialog first so the report sub-dialog is the topmost modal.
@@ -1544,35 +1614,60 @@ class _MapScreenState extends State<MapScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => ReportPinDialog(
+        reasons: reportReasonsFor(imported: imported, tag: tag),
+        title: imported ? 'Report a problem' : 'Report this pin',
+        noteHint: imported
+            ? 'If the location is wrong, say where it really is.'
+            : null,
         onSubmit: (reason, note) async {
+          Object? error;
           try {
             await moderation.submitPinReport(
               pinId: pinId,
               reason: reason,
               note: note,
             );
-            if (ctx.mounted) Navigator.of(ctx).pop();
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Report submitted. Thanks for helping keep the map accurate.',
-                  ),
-                  backgroundColor: Colors.green,
-                  duration: Duration(seconds: 3),
-                ),
-              );
-            }
           } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Report failed: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
+            error = e;
           }
+          final outcome = reportOutcomeFor(error);
+          if (shouldMarkReported(outcome) && userId != null) {
+            await reportedStore.markReported(userId, pinId);
+          }
+          if (outcome != ReportOutcome.failed && ctx.mounted) {
+            Navigator.of(ctx).pop();
+          }
+          if (!mounted) return;
+          final (String text, Color color) = switch (outcome) {
+            ReportOutcome.filed when imported => (
+              "Thanks, we'll check it.",
+              Colors.green,
+            ),
+            ReportOutcome.filed => (
+              'Report submitted. Thanks for helping keep the map accurate.',
+              Colors.green,
+            ),
+            ReportOutcome.alreadyFiled => (
+              "You've already reported this pin.",
+              Colors.grey.shade700,
+            ),
+            ReportOutcome.limitReached => (
+              "You've reached today's report limit. Please try again tomorrow.",
+              Colors.orange,
+            ),
+            ReportOutcome.pinGone => (
+              'This pin has already been removed.',
+              Colors.grey.shade700,
+            ),
+            ReportOutcome.failed => ('Report failed: $error', Colors.red),
+          };
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(text),
+              backgroundColor: color,
+              duration: const Duration(seconds: 3),
+            ),
+          );
         },
       ),
     );

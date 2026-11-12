@@ -15,6 +15,7 @@ import 'package:ccwmap/data/repositories/supabase_moderation_repository.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
 import 'package:ccwmap/data/services/network_monitor.dart';
 import 'package:ccwmap/data/sync/background_sync.dart';
+import 'package:ccwmap/data/services/reported_pins_store.dart';
 import 'package:ccwmap/data/sync/last_synced_at_store.dart';
 import 'package:ccwmap/data/sync/my_pins_sync.dart';
 import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
@@ -75,6 +76,7 @@ Future<void> main() async {
 
   // Create sync components (Phase 1: tiered sync)
   final watermarks = await LastSyncedAtStore.create();
+  final reportedPinsStore = await ReportedPinsStore.create();
 
   final myPinsSync = MyPinsSync(
     userIdProvider: () => supabaseClient.auth.currentUser?.id,
@@ -127,6 +129,7 @@ Future<void> main() async {
       moderationRepository: moderationRepository,
       viewportPinsManager: viewportPinsManager,
       lastSyncedAtStore: watermarks,
+      reportedPinsStore: reportedPinsStore,
     ),
   );
 }
@@ -139,6 +142,7 @@ class CCWMapApp extends StatelessWidget {
   final ModerationRepository moderationRepository;
   final ViewportPinsManager viewportPinsManager;
   final LastSyncedAtStore lastSyncedAtStore;
+  final ReportedPinsStore reportedPinsStore;
 
   const CCWMapApp({
     super.key,
@@ -149,6 +153,7 @@ class CCWMapApp extends StatelessWidget {
     required this.moderationRepository,
     required this.viewportPinsManager,
     required this.lastSyncedAtStore,
+    required this.reportedPinsStore,
   });
 
   @override
@@ -162,6 +167,7 @@ class CCWMapApp extends StatelessWidget {
         Provider<ModerationRepository>.value(value: moderationRepository),
         Provider<ViewportPinsManager>.value(value: viewportPinsManager),
         Provider<LastSyncedAtStore>.value(value: lastSyncedAtStore),
+        Provider<ReportedPinsStore>.value(value: reportedPinsStore),
       ],
       child: MaterialApp(
         title: 'CCW Map',
