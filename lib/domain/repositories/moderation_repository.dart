@@ -1,6 +1,31 @@
 /// Reason codes accepted by the server-side CHECK on `pin_reports.reason`.
-/// Keep in sync with migration 005_pin_reports.sql.
-enum ReportReason { INACCURATE, OFFENSIVE, SPAM, OTHER }
+/// Keep in sync with migrations 005_pin_reports.sql and
+/// 014 (imported-pin reasons).
+enum ReportReason {
+  INACCURATE,
+  OFFENSIVE,
+  SPAM,
+  OTHER,
+  CLOSED,
+  WRONG_LOCATION,
+  NOT_CATEGORY,
+  DUPLICATE,
+}
+
+/// The user already has an open report on this pin.
+class ReportAlreadyFiledException implements Exception {
+  const ReportAlreadyFiledException();
+}
+
+/// The user hit the per-account daily report limit.
+class ReportLimitReachedException implements Exception {
+  const ReportLimitReachedException();
+}
+
+/// The reported pin no longer exists.
+class ReportedPinGoneException implements Exception {
+  const ReportedPinGoneException();
+}
 
 /// Report-and-block operations for user-generated content moderation.
 abstract class ModerationRepository {

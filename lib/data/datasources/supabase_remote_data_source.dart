@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../domain/repositories/moderation_repository.dart';
 import '../../domain/models/map_item.dart';
 import '../models/get_pins_in_view_row.dart';
 import '../models/server_pin_deletion_dto.dart';
@@ -278,11 +280,29 @@ class SupabaseRemoteDataSource implements RemoteDataSourceInterface {
   }) async {
     final uid = _supabase.auth.currentUser?.id;
     final n = (note == null || note.trim().isEmpty) ? null : note.trim();
-    await _supabase.from('pin_reports').insert({
-      'pin_id': pinId,
-      'reporter_id': uid,
-      'reason': reason,
-      'note': n,
-    });
+    try {
+      await _supabase.from('pin_reports').insert({
+        'pin_id': pinId,
+        'reporter_id': uid,
+        'reason': reason,
+        'note': n,
+      });
+    } on PostgrestException catch (e) {
+      throw mapReportInsertError(e);
+    }
   }
+}
+
+/// Maps the server's report-insert failures (migration 014) to domain
+/// exceptions; anything else is returned unchanged.
+@visibleForTesting
+Object mapReportInsertError(PostgrestException e) {
+  if (e.code == '23505') return const ReportAlreadyFiledException();
+  if (e.message.startsWith('report_limit_exceeded')) {
+    return const ReportLimitReachedException();
+  }
+  if (e.message.startsWith('pin_not_found')) {
+    return const ReportedPinGoneException();
+  }
+  return e;
 }
