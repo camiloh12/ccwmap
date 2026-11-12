@@ -133,6 +133,10 @@ BEGIN
     NEW.reporter_id := auth.uid();
   END IF;
 
+  -- Always stamp the time here: a client-supplied created_at would let a
+  -- user backdate reports out of the 24-hour window below.
+  NEW.created_at := now();
+
   -- 2. At most 10 reports per account per 24 hours.
   IF NEW.reporter_id IS NOT NULL THEN
     SELECT count(*) INTO v_recent

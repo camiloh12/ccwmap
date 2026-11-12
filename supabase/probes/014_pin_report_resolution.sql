@@ -14,7 +14,7 @@
 --   R1 reporter=self snapshot=from_pin resolved=null
 --   R2 dup=23505
 --   R4 missing=pin_not_found
---   R3 limit=report_limit_exceeded
+--   R3 limit=report_limit_exceeded stamped=t
 --   R5 removed: pin_gone=t entry=1 closed=<n>
 --   R5 again=report_already_resolved
 --   R6 swapped=coordinates_outside_continental_us
@@ -132,7 +132,9 @@ BEGIN
   -- ---- R3: 9 more reports on 9 more pins (10 in total), then an 11th
   SET LOCAL ROLE authenticated;
   FOR i IN 2..10 LOOP
-    INSERT INTO pin_reports (pin_id, reason) VALUES (ids[i], 'INACCURATE');
+    -- backdated by the client: the trigger must restamp, so they still count
+    INSERT INTO pin_reports (pin_id, reason, created_at)
+      VALUES (ids[i], 'INACCURATE', now() - interval '2 days');
   END LOOP;
   st := 'none';
   BEGIN
@@ -142,7 +144,9 @@ BEGIN
                ELSE SQLSTATE || ' ' || SQLERRM END;
   END;
   RESET ROLE;
-  r := r || format('R3 limit=%s; ', st);
+  SELECT count(*) INTO n FROM pin_reports
+    WHERE reporter_id = usr AND created_at = now();
+  r := r || format('R3 limit=%s stamped=%s; ', st, n = 10);
 
   -- ---- R5: importer-side remove, then remove again (service_role)
   PERFORM set_config('request.jwt.claims',
