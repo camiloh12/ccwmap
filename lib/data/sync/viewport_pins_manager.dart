@@ -15,7 +15,7 @@ import 'package:ccwmap/domain/models/map_item.dart';
 ///   deleted server-side leave the map (design §4.8).
 /// - LRU-evicts oldest non-mine cached pins when row count > [cacheRowLimit].
 ///
-/// Works for anonymous callers â€” the RPC is open to `anon` (cf. migration
+/// Works for anonymous callers — the RPC is open to `anon` (cf. migration
 /// 008 Â§ 7 GRANT). When unauthenticated, [userIdProvider] returns null and
 /// "non-mine" effectively means "everything", which is the right semantics.
 class ViewportPinsManager {
@@ -30,7 +30,7 @@ class ViewportPinsManager {
       ValueNotifier<List<MapItemCluster>>(const []);
 
   /// Bumped on every fetch. After the remote call returns, the manager checks
-  /// whether its generation is still current â€” if a newer fetch superseded it,
+  /// whether its generation is still current — if a newer fetch superseded it,
   /// the result is dropped before any local writes or notifier updates.
   int _fetchGeneration = 0;
 
@@ -125,7 +125,7 @@ class ViewportPinsManager {
 
     // Second defensive check: a newer fetch may have landed during the
     // DB await chain above. DB writes are idempotent (upsert + LRU
-    // re-converges), but `clusters.value` is replace-semantics â€” racing
+    // re-converges), but `clusters.value` is replace-semantics — racing
     // it would render a stale cluster set. The primary serialization
     // lives in BboxRequestDebouncer (Task 9, 500 ms debounce); this
     // check is a defensive belt-and-suspenders.
@@ -150,7 +150,7 @@ class ViewportPinsManager {
   /// Cleanup invoked when the user signs out. We need to drop the prior
   /// user's bbox cache (their pins now look "non-mine" to the new session
   /// state) BEFORE [userIdProvider] starts returning null, because
-  /// [reset]'s eviction is keyed off the current user id â€” at sign-out
+  /// [reset]'s eviction is keyed off the current user id — at sign-out
   /// time Supabase has already cleared the session, so the provider
   /// returns null and [reset] would skip the delete entirely.
   ///
