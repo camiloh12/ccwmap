@@ -6,6 +6,9 @@ on:
     paths:
       - 'importer/**'
       - 'data/state_laws/**'
+      # tests/test_apply_workflow.py guards importer-apply.yml, so a PR that
+      # only touches that workflow must still run the tests.
+      - '.github/workflows/importer-*.yml'
 
 concurrency:
   # Serialize importer dry-runs against staging — only one PR at a time may
