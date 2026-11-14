@@ -97,15 +97,12 @@ digest also shows removals made via reports, the open-report count and
 the oldest open report. Removals made through the workflow do not trip
 rules 4 and 5. See `docs/importer/PROD_HEALTH_CHECK.md`.
 
-### Deploying the Edge Function by hand
+### Deploying the Edge Function
 
-Nothing in CI deploys Edge Functions. After changing
-`send-moderation-email`, deploy it yourself:
-
-```
-supabase functions deploy send-moderation-email \
-  --project-ref <ref>
-```
+Changes to `send-moderation-email` reach staging and prod through the
+`edge-functions.yml` workflow. A PR deploys to staging. After the merge,
+prod waits for your approval and then checks `/health`. Don't deploy by
+hand. See `docs/dev/DEPLOY.md`.
 
 ## What ban does
 
