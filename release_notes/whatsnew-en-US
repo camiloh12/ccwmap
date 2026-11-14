@@ -1,2 +1,5 @@
-Updated for Android 16 compatibility.
-Internal maintenance and build improvements. No changes to existing features.
+New: Report a problem on any pre-loaded pin, for example if the place has closed or is in the wrong spot.
+Pins whose status is set by law now say so and cite the law, instead of offering changes that would not save.
+Pre-loaded pins no longer show a Delete option.
+Pins that have been removed now also disappear from your map.
+Pins are easier to tap on Android.
