@@ -22,6 +22,7 @@ def _source(s) -> dict:
             "inserts": len(s.diff.inserts),
             "updates": len(s.diff.updates),
             "skips": len(s.diff.skips),
+            "suppressed": s.suppressed,
             "rekeys": len(s.diff.rekeys),
             "rekey_too_far": s.diff.rekey_too_far,
             "orphans": len(s.diff.orphans),

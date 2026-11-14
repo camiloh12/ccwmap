@@ -42,6 +42,7 @@ def _mock_client():
     client = MagicMock()
     client.select_system_pins.return_value = []
     client.select_user_pins.return_value = []
+    client.select_suppressions.return_value = []
     return client
 
 
@@ -295,14 +296,14 @@ def test_cap_breach_stops_the_apply_before_any_write():
     with pytest.raises(OrphanCapExceeded, match="hifld_military: 51 orphan deletions exceed the cap of 50"):
         run("apply")
     # Only the read-side calls (Phase A/B/C1) happened; no write method ran.
-    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins", "select_suppressions"}
 
 
 def test_dry_run_reports_a_cap_breach_as_an_error():
     client, run = _over_cap_run()
     result = run("dry-run")
     assert any("hifld_military: 51 orphan deletions exceed the cap of 50" in e for e in result.errors)
-    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins", "select_suppressions"}
 
 
 def test_a_per_source_cap_lifts_only_that_source():
@@ -395,4 +396,16 @@ def test_an_illegal_override_fails_before_any_write():
     with pytest.raises(ValueError, match="may only lower"):
         run_pipeline(sources=[ok, bad], state_laws=table, client=client, states=["TX"],
                      mode="apply", system_user_id=SYS, state_locator=LOCATOR)
-    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins"}
+    assert {c[0] for c in client.method_calls} <= {"select_user_pins", "select_system_pins", "select_suppressions"}
+
+
+def test_pipeline_passes_suppressions_and_reports_the_count():
+    from importer.supabase_client import SuppressionRow
+
+    client = _mock_client()
+    client.select_suppressions.return_value = [SuppressionRow(
+        source="gsa", source_external_id="g1", name=None, latitude=None, longitude=None)]
+    gsa = _FakeSource("gsa", [_cand("gsa", "g1", "Federal Building Austin", 30.2672, -97.7431)])
+    result = _run([gsa], client, mode="dry-run")
+    assert result.sources[0].suppressed == 1
+    assert result.sources[0].diff.inserts == []

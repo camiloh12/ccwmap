@@ -38,6 +38,8 @@ class SourceResult:
     confidence_counts: dict[str, int] = field(default_factory=dict)
     kept_by_use: dict[str, int] = field(default_factory=dict)
     unknown_uses: dict[str, int] = field(default_factory=dict)
+    # Candidates dropped because they are on the do-not-import list.
+    suppressed: int = 0
 
 
 @dataclass

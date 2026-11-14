@@ -158,3 +158,11 @@ def test_markdown_shows_confidence_use_counts_and_unusable_orphans() -> None:
     assert "- Kept by use: `Office` 5, `Courthouse` 3" in md
     assert "Unknown uses" in md and "`Spaceport` 1" in md
     assert "(unusable_kept)" in md
+
+
+def test_markdown_shows_the_suppressed_row() -> None:
+    result = PipelineResult(
+        mode="dry-run", started_at=datetime.now(timezone.utc), completed_at=None,
+        states=["TX"], sources=[_source(suppressed=2)], dedup=DedupReport(),
+    )
+    assert "Suppressed (do-not-import list): **2**" in render_markdown(result)

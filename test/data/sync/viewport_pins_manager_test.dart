@@ -1,5 +1,9 @@
+import 'dart:async';
+
+import 'package:ccwmap/core/map_constants.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
+import 'package:ccwmap/data/mappers/pin_mapper.dart';
 import 'package:ccwmap/data/models/server_pin_deletion_dto.dart';
 import 'package:ccwmap/data/models/supabase_pin_dto.dart';
 import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
@@ -14,6 +18,9 @@ import 'package:flutter_test/flutter_test.dart';
 class _FakeRemote implements RemoteDataSourceInterface {
   List<MapItem> bboxResult = [];
 
+  /// When set, the next getPinsInView call awaits this before returning.
+  Completer<void>? gate;
+
   @override
   Future<List<MapItem>> getPinsInView({
     required double swLat,
@@ -22,7 +29,16 @@ class _FakeRemote implements RemoteDataSourceInterface {
     required double neLng,
     required int zoom,
     required String? currentUserId,
-  }) async => bboxResult;
+  }) async {
+    final g = gate;
+    if (g != null) {
+      gate = null;
+      final snapshot = bboxResult;
+      await g.future;
+      return snapshot;
+    }
+    return bboxResult;
+  }
 
   @override
   Future<List<SupabasePinDto>> getMyPinsModifiedSince({
@@ -44,10 +60,15 @@ class _FakeRemote implements RemoteDataSourceInterface {
   Future<SupabasePinDto?> getPinById(String id) async => null;
 }
 
-Pin _pin(String id, {String createdBy = 'other'}) => Pin(
+Pin _pin(
+  String id, {
+  String createdBy = 'other',
+  double lat = 30,
+  double lng = -95,
+}) => Pin(
   id: id,
   name: id,
-  location: Location.fromLatLng(30, -95),
+  location: Location.fromLatLng(lat, lng),
   status: PinStatus.ALLOWED,
   restrictionTag: null,
   hasSecurityScreening: false,
@@ -253,4 +274,143 @@ void main() {
       expect(signedOutVpm.clusters.value, isEmpty);
     },
   );
+
+  group('server-deleted pin cleanup', () {
+    Future<void> seed(
+      String id, {
+      String createdBy = 'other',
+      double lat = 30,
+      double lng = -95,
+    }) => db.pinDao.upsertCachedPins([
+      PinMapper.toCachedEntity(
+        _pin(id, createdBy: createdBy, lat: lat, lng: lng),
+        cachedAt: DateTime.utc(2026, 1, 1),
+      ),
+    ]);
+
+    Future<void> fetchBox(int zoom) =>
+        vpm.fetch(swLat: 29, swLng: -96, neLat: 31, neLng: -94, zoom: zoom);
+
+    Future<Set<String>> ids() async =>
+        (await db.pinDao.getAllPins()).map((p) => p.id).toSet();
+
+    test(
+      'drops cached pins the server no longer returns at pin zoom',
+      () async {
+        await seed('a');
+        await seed('b');
+        remote.bboxResult = [MapItemPin(_pin('a'))];
+        await fetchBox(14);
+        expect(await ids(), {'a'});
+      },
+    );
+
+    test('keeps own pins', () async {
+      await seed('mine', createdBy: 'me');
+      await fetchBox(14);
+      expect(await ids(), {'mine'});
+    });
+
+    test('keeps pins with a pending sync operation', () async {
+      await seed('edited');
+      await db.syncQueueDao.enqueue(
+        SyncQueueEntity(
+          id: 'q1',
+          pinId: 'edited',
+          operationType: 'UPDATE',
+          timestamp: 1,
+          retryCount: 0,
+          lastError: null,
+        ),
+      );
+      await fetchBox(14);
+      expect(await ids(), {'edited'});
+    });
+
+    test('keeps pins outside the box', () async {
+      await seed('far', lat: 40, lng: -80);
+      await fetchBox(14);
+      expect(await ids(), {'far'});
+    });
+
+    test('does nothing when the response has clusters', () async {
+      await seed('a');
+      remote.bboxResult = [
+        const MapItemCluster(
+          centroidLat: 30,
+          centroidLng: -95,
+          count: 5,
+          dominantStatus: PinStatus.ALLOWED,
+          dominantRestrictionTag: null,
+        ),
+      ];
+      await fetchBox(14);
+      expect(await ids(), {'a'});
+    });
+
+    test('does nothing below the cutover zoom', () async {
+      await seed('a');
+      await fetchBox(11);
+      expect(await ids(), {'a'});
+    });
+
+    test('empty pin-zoom response clears cached ghosts in the box', () async {
+      await seed('a');
+      await seed('b');
+      await fetchBox(12);
+      expect(await ids(), isEmpty);
+    });
+
+    group('row cap', () {
+      late ViewportPinsManager bigVpm;
+
+      setUp(() {
+        bigVpm = ViewportPinsManager(
+          remote: remote,
+          pinDao: db.pinDao,
+          tombstoneDao: db.pinTombstoneDao,
+          fetchedBboxDao: db.fetchedBboxDao,
+          userIdProvider: () => 'me',
+          cacheRowLimit: 5000,
+        );
+      });
+
+      List<MapItem> pins(int n) => [
+        for (var i = 0; i < n; i++) MapItemPin(_pin('p$i')),
+      ];
+
+      Future<void> fetchBig() =>
+          bigVpm.fetch(swLat: 29, swLng: -96, neLat: 31, neLng: -94, zoom: 14);
+
+      test(
+        'a response of exactly kMaxRowsPerResponse deletes nothing',
+        () async {
+          await seed('ghost');
+          remote.bboxResult = pins(kMaxRowsPerResponse);
+          await fetchBig();
+          expect(await ids(), contains('ghost'));
+        },
+      );
+
+      test('a response under the cap still cleans up', () async {
+        await seed('ghost');
+        remote.bboxResult = pins(kMaxRowsPerResponse - 1);
+        await fetchBig();
+        expect(await ids(), isNot(contains('ghost')));
+      });
+    });
+
+    test('a superseded fetch deletes nothing', () async {
+      await seed('a');
+      final gate = Completer<void>();
+      remote.gate = gate;
+      remote.bboxResult = [];
+      final first = fetchBox(14);
+      remote.bboxResult = [MapItemPin(_pin('a'))];
+      await fetchBox(14);
+      gate.complete();
+      await first;
+      expect(await ids(), {'a'});
+    });
+  });
 }

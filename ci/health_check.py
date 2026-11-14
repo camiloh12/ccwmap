@@ -159,6 +159,15 @@ METRIC_RULES: tuple[Rule, ...] = (
             "re-verify data/state_laws/states.yaml, then re-import"
         ),
     ),
+    Rule(
+        10, "imported_reports_open_over_7d", "Imported-pin reports open more than 7 days", "> 0",
+        lambda n: n > 0,
+        lambda n, m: (
+            f"{n} report(s) on imported pins have been open more than 7 days: check the "
+            "moderation inbox, then resolve them with the Resolve pin report workflow "
+            "(docs/dev/MODERATION.md)"
+        ),
+    ),
 )
 
 # Every key health_check.sql returns; test_health_check.py keeps the two in sync.
@@ -171,6 +180,9 @@ METRIC_KEYS = frozenset(
         "user_pins_total",
         "imported_user_corrected",
         "imported_reports_7d",
+        "removed_via_reports_24h",
+        "imported_reports_open",
+        "oldest_open_report_days",
     }
 )
 
@@ -186,7 +198,7 @@ def _rest_problem(rest: RestResult) -> str | None:
 
 
 def evaluate(env: str, metrics: dict | None, rest: RestResult) -> list[Finding]:
-    """Findings for rule 2 (both envs) and rules 3-9 (prod only).
+    """Findings for rule 2 (both envs) and rules 3-10 (prod only).
 
     `metrics` is None when the database check failed; check_db() reports
     that (rule 1) itself.
@@ -344,6 +356,8 @@ def render_digest(env: str, metrics: dict | None, rest: RestResult, findings: li
     if not judged:
         lines += ["", "Staging data is wiped and re-imported during testing, so only checks 1 and 2 are judged here."]
     if metrics is not None:
+        days = metrics["oldest_open_report_days"]
+        oldest = "none" if days is None else f"{days:,} {'day' if days == 1 else 'days'}"
         lines += ["", "### Imported pins by source and status", "", "| Source | Status | Pins |", "|---|---|---|"]
         for row in metrics["imported_by_source_status"]:
             status = STATUS_NAMES.get(row["status"], row["status"])
@@ -354,6 +368,9 @@ def render_digest(env: str, metrics: dict | None, rest: RestResult, findings: li
             f"- User pins: {metrics['user_pins_total']:,}",
             f"- Imported pins users have corrected (all time): {metrics['imported_user_corrected']:,}",
             f"- Reports filed on imported pins, last 7 days: {metrics['imported_reports_7d']:,}",
+            f"- Removed via reports, last 24 h (not judged): {metrics['removed_via_reports_24h']:,}",
+            f"- Open reports on imported pins: {metrics['imported_reports_open']:,}",
+            f"- Oldest open report: {oldest}",
         ]
     lines += ["", "### Findings", ""]
     lines += [f"- {f.message}" for f in findings] or ["None."]

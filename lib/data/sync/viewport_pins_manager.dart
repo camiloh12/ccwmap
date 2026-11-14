@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:ccwmap/core/map_constants.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/datasources/remote_data_source_interface.dart';
 import 'package:ccwmap/data/mappers/pin_mapper.dart';
@@ -9,6 +10,9 @@ import 'package:ccwmap/domain/models/map_item.dart';
 /// - Calls `get_pins_in_view` for the supplied viewport.
 /// - Persists [MapItemPin]s to local DB with `cachedAt = now`.
 /// - Exposes [MapItemCluster]s through [clusters] for the map screen.
+/// - At street zoom with no clusters (a complete pin list for the box), drops
+///   cached non-mine pins in the box the server no longer returns, so pins
+///   deleted server-side leave the map (design §4.8).
 /// - LRU-evicts oldest non-mine cached pins when row count > [cacheRowLimit].
 ///
 /// Works for anonymous callers — the RPC is open to `anon` (cf. migration
@@ -68,10 +72,12 @@ class ViewportPinsManager {
 
     final pinsToWrite = <PinEntity>[];
     final clustersOut = <MapItemCluster>[];
+    final serverPinIds = <String>{};
     int pinRowCount = 0;
     for (final item in items) {
       switch (item) {
         case MapItemPin(:final pin):
+          serverPinIds.add(pin.id);
           if (tombstoned.contains(pin.id)) continue;
           pinsToWrite.add(PinMapper.toCachedEntity(pin, cachedAt: now));
           pinRowCount++;
@@ -82,6 +88,23 @@ class ViewportPinsManager {
 
     if (pinsToWrite.isNotEmpty) {
       await pinDao.upsertCachedPins(pinsToWrite);
+    }
+
+    // Complete pin list for this box (street zoom, no density-fallback
+    // clusters, and under PostgREST's row cap so it cannot be truncated):
+    // anything cached here that the server did not return is gone.
+    if (zoom >= kClusterCutoverZoom &&
+        clustersOut.isEmpty &&
+        items.length < kMaxRowsPerResponse &&
+        generation == _fetchGeneration) {
+      await pinDao.deleteCachedNonMineInBox(
+        myUserId: userIdProvider(),
+        swLat: swLat,
+        swLng: swLng,
+        neLat: neLat,
+        neLng: neLng,
+        keepIds: serverPinIds,
+      );
     }
 
     final myId = userIdProvider();

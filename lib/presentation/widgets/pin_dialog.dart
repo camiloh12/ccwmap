@@ -39,6 +39,13 @@ class PinDialog extends StatefulWidget {
   final VoidCallback? onReport;
   final VoidCallback? onBlock;
 
+  /// When true, status and restriction tag are fixed by law and cannot be
+  /// changed in this dialog (statutory imported pins).
+  final bool isStatusLocked;
+  final String? lockedStatusNote;
+  final String reportLabel;
+  final bool isReported;
+
   /// Provenance — non-null only for pins read from the server/cache. When
   /// [source] is not 'user', a verify-locally caveat block renders.
   final String? source;
@@ -62,6 +69,10 @@ class PinDialog extends StatefulWidget {
     this.onSignInToEdit,
     this.onReport,
     this.onBlock,
+    this.isStatusLocked = false,
+    this.lockedStatusNote,
+    this.reportLabel = 'Report pin',
+    this.isReported = false,
     this.source,
     this.confidence,
     this.legalCitation,
@@ -207,6 +218,22 @@ class _PinDialogState extends State<PinDialog> {
                 'No Guns',
                 const Color(0xFFF44336),
               ),
+              if (widget.isStatusLocked && widget.lockedStatusNote != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.lock_outline, size: 18, color: Colors.grey[700]),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.lockedStatusNote!,
+                        style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 24),
 
               // Restriction Section (conditional)
@@ -248,9 +275,11 @@ class _PinDialogState extends State<PinDialog> {
                   (widget.onReport != null || widget.onBlock != null)) ...[
                 if (widget.onReport != null)
                   TextButton.icon(
-                    onPressed: widget.onReport,
+                    onPressed: widget.isReported ? null : widget.onReport,
                     icon: const Icon(Icons.flag_outlined),
-                    label: const Text('Report pin'),
+                    label: Text(
+                      widget.isReported ? 'Reported' : widget.reportLabel,
+                    ),
                   ),
                 if (widget.onBlock != null)
                   TextButton.icon(
@@ -363,8 +392,9 @@ class _PinDialogState extends State<PinDialog> {
   Widget _buildStatusOption(PinStatus status, String label, Color color) {
     final isSelected = _selectedStatus == status;
 
-    return InkWell(
-      onTap: widget.isReadOnly
+    final locked = widget.isStatusLocked;
+    final option = InkWell(
+      onTap: (widget.isReadOnly || locked)
           ? null
           : () => setState(() {
               _selectedStatus = status;
@@ -403,6 +433,8 @@ class _PinDialogState extends State<PinDialog> {
         ),
       ),
     );
+    if (locked && !isSelected) return Opacity(opacity: 0.4, child: option);
+    return option;
   }
 
   Widget _buildRestrictionDropdown() {
@@ -427,7 +459,7 @@ class _PinDialogState extends State<PinDialog> {
               ),
             );
           }).toList(),
-          onChanged: widget.isReadOnly
+          onChanged: (widget.isReadOnly || widget.isStatusLocked)
               ? null
               : (value) => setState(() => _selectedRestrictionTag = value),
         ),

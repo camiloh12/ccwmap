@@ -229,6 +229,9 @@ class _FakeClient:
     def __exit__(self, *exc):
         return None
 
+    def select_suppressions(self):
+        return []
+
     def insert_import_run(self, **kw):
         return "run-1"
 

@@ -87,8 +87,10 @@ def run_pipeline(
         for row in rows
         if row.source_external_id is not None
     }
+    suppressions = client.select_suppressions()
     dedup_out = dedup(
-        all_classified, existing_user_pins=existing_user_pins, existing_keys=existing_keys
+        all_classified, existing_user_pins=existing_user_pins,
+        existing_keys=existing_keys, suppressions=suppressions,
     )
     survivors_by_source: dict[str, list] = {}
     for cc in dedup_out.survivors:
@@ -133,6 +135,7 @@ def run_pipeline(
             confidence_counts=dict(Counter(cc.confidence for cc in survivors)),
             kept_by_use=ps["kept_by_use"],
             unknown_uses=ps["unknown_uses"],
+            suppressed=dedup_out.suppressed_by_source.get(name, 0),
         ))
 
     # Phase C2: delete caps, for every source before any write: a truncated

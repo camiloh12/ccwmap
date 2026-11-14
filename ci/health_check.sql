@@ -20,13 +20,20 @@ imported AS (
 -- errors_json), e.g. by --delete-orphans. Rules 4 and 5 skip those;
 -- importer_deleted_24h counts them. A run that failed (errors_json set) or
 -- never recorded completed_at (killed mid-run) covers nothing, so its
--- deletions still alert.
+-- deletions still alert. by_report: the owner removed the pin by resolving a
+-- user report (the resolve function deletes the pin and stamps resolved_at in
+-- one transaction; the 5-minute window is a safety margin). Also skipped.
 recent_deletions AS (
   SELECT d.original_created_by,
          EXISTS (SELECT 1 FROM import_runs r
                  WHERE r.mode = 'apply'
                    AND r.errors_json IS NULL
-                   AND d.deleted_at BETWEEN r.started_at AND r.completed_at) AS by_importer
+                   AND d.deleted_at BETWEEN r.started_at AND r.completed_at) AS by_importer,
+         EXISTS (SELECT 1 FROM pin_reports r
+                 WHERE r.pin_id = d.pin_id
+                   AND r.resolution = 'removed'
+                   AND d.deleted_at BETWEEN r.resolved_at - interval '5 minutes'
+                                        AND r.resolved_at + interval '5 minutes') AS by_report
   FROM pin_deletions d
   WHERE d.deleted_at > now() - interval '24 hours'
 ),
@@ -43,8 +50,9 @@ SELECT json_build_object(
   'imported_total', (SELECT count(*) FROM imported),
   'imported_deleted_24h', (SELECT count(*) FROM recent_deletions d, sys
                            WHERE d.original_created_by = sys.id
-                             AND NOT by_importer),
-  'deletions_24h', (SELECT count(*) FROM recent_deletions WHERE NOT by_importer),
+                             AND NOT by_importer AND NOT by_report),
+  'deletions_24h', (SELECT count(*) FROM recent_deletions
+                    WHERE NOT by_importer AND NOT by_report),
   'importer_deleted_24h', (SELECT count(*) FROM recent_deletions WHERE by_importer),
   'statutory_flipped', (SELECT count(*) FROM flipped),
   'statutory_flipped_sample', (SELECT coalesce(json_agg(json_build_object(
@@ -73,7 +81,22 @@ SELECT json_build_object(
                       WHERE p.created_by IS DISTINCT FROM sys.id),
   'imported_user_corrected', (SELECT count(*) FROM imported
                               WHERE user_modified),
-  'imported_reports_7d', (SELECT count(*) FROM pin_reports r
-                          JOIN imported i ON i.id = r.pin_id
-                          WHERE r.created_at > now() - interval '7 days')
+  'imported_reports_7d', (SELECT count(*) FROM pin_reports r, sys
+                          WHERE r.pin_created_by = sys.id
+                            AND r.created_at > now() - interval '7 days'),
+  'removed_via_reports_24h', (SELECT count(DISTINCT r.pin_id) FROM pin_reports r
+                              WHERE r.resolution = 'removed'
+                                AND r.resolved_at > now() - interval '24 hours'),
+  'imported_reports_open', (SELECT count(*) FROM pin_reports r, sys
+                            WHERE r.pin_created_by = sys.id
+                              AND r.resolved_at IS NULL),
+  'imported_reports_open_over_7d', (SELECT count(*) FROM pin_reports r, sys
+                                    WHERE r.pin_created_by = sys.id
+                                      AND r.resolved_at IS NULL
+                                      AND r.created_at < now() - interval '7 days'),
+  'oldest_open_report_days', (SELECT floor(extract(epoch FROM now() - min(r.created_at))
+                                           / 86400)::int
+                              FROM pin_reports r, sys
+                              WHERE r.pin_created_by = sys.id
+                                AND r.resolved_at IS NULL)
 );

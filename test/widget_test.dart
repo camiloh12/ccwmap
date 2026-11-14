@@ -15,6 +15,7 @@ import 'package:ccwmap/main.dart';
 import 'package:ccwmap/data/database/database.dart';
 import 'package:ccwmap/data/repositories/pin_repository_impl.dart';
 import 'package:ccwmap/data/services/blocklist_service.dart';
+import 'package:ccwmap/data/services/reported_pins_store.dart';
 import 'package:ccwmap/data/sync/last_synced_at_store.dart';
 import 'package:ccwmap/data/sync/viewport_pins_manager.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
@@ -77,6 +78,7 @@ MAPTILER_API_KEY=test_key
       userIdProvider: () => null,
     );
     final lastSyncedAtStore = await LastSyncedAtStore.create();
+    final reportedPinsStore = await ReportedPinsStore.create();
 
     await tester.pumpWidget(
       CCWMapApp(
@@ -87,6 +89,7 @@ MAPTILER_API_KEY=test_key
         moderationRepository: moderationRepo,
         viewportPinsManager: viewportPinsManager,
         lastSyncedAtStore: lastSyncedAtStore,
+        reportedPinsStore: reportedPinsStore,
       ),
     );
     await tester.pumpAndSettle();
@@ -144,6 +147,7 @@ MAPTILER_API_KEY=test_key
         userIdProvider: () => 'test-user-id',
       );
       final lastSyncedAtStore = await LastSyncedAtStore.create();
+      final reportedPinsStore = await ReportedPinsStore.create();
 
       await tester.pumpWidget(
         CCWMapApp(
@@ -154,6 +158,7 @@ MAPTILER_API_KEY=test_key
           moderationRepository: moderationRepo,
           viewportPinsManager: viewportPinsManager,
           lastSyncedAtStore: lastSyncedAtStore,
+          reportedPinsStore: reportedPinsStore,
         ),
       );
       await tester.pumpAndSettle();

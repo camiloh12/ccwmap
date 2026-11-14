@@ -5,7 +5,7 @@ from importer.restriction_tag import RestrictionTag
 from importer.stages.apply_state_law import ClassifiedCandidate
 from importer.stages.dedup import _matches, _meters_between, dedup
 from importer.state_laws import StateLawCell
-from importer.supabase_client import ExistingPinRow
+from importer.supabase_client import ExistingPinRow, SuppressionRow
 
 
 def test_meters_between_is_zero_for_same_point():
@@ -178,3 +178,81 @@ def test_cluster_confidence_never_exceeds_the_survivors_cell():
     b = _gsa("47-00-B", lat=39.7201)   # high cell
     (pin,) = dedup([a, b], existing_user_pins=[]).survivors
     assert (pin.candidate.source_external_id, pin.confidence) == ("47-00-A", "medium")
+
+
+# --- do-not-import list (suppressions) ---------------------------------------
+
+def _sup(source="gsa", eid="A-B-1", name="Office — Tampa, FL", lat=27.95, lng=-82.46):
+    return SuppressionRow(source=source, source_external_id=eid, name=name,
+                          latitude=lat, longitude=lng)
+
+
+_OFFICE = "Office — Tampa, FL"
+_M90 = 0.00081  # ~90 m of latitude
+
+
+def test_suppression_drops_candidate_with_the_entry_key():
+    cand = _cc("gsa", "A-B-1", "Whatever", 40.0, -100.0)
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()])
+    assert result.survivors == []
+    assert result.suppressed_by_source == {"gsa": 1}
+
+
+def test_suppression_drops_same_source_neighbour_matching_the_entry():
+    cand = _cc("gsa", "A-B-2", _OFFICE, 27.95 + 0.00036, -82.46)  # ~40 m
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()])
+    assert result.survivors == []
+    assert result.suppressed_by_source == {"gsa": 1}
+
+
+def test_suppression_keeps_other_sources_at_the_same_spot():
+    cand = _cc("faa", "F1", _OFFICE, 27.95, -82.46)
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()])
+    assert [cc.candidate.source_external_id for cc in result.survivors] == ["F1"]
+    assert result.suppressed_by_source == {}
+
+
+def test_suppression_never_drops_a_candidate_that_already_has_a_pin():
+    cand = _cc("gsa", "A-B-2", _OFFICE, 27.95 + 0.00036, -82.46)
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()],
+                   existing_keys={("gsa", "A-B-2")})
+    assert len(result.survivors) == 1
+    assert result.suppressed_by_source == {}
+
+
+def test_suppression_without_coordinates_matches_by_key_only():
+    entry = _sup(name=None, lat=None, lng=None)
+    near = _cc("gsa", "A-B-2", _OFFICE, 27.95 + 0.00009, -82.46)  # ~10 m
+    assert len(dedup([near], existing_user_pins=[], suppressions=[entry]).survivors) == 1
+    same = _cc("gsa", "A-B-1", _OFFICE, 27.95, -82.46)
+    assert dedup([same], existing_user_pins=[], suppressions=[entry]).survivors == []
+
+
+def test_suppression_does_not_chain_through_neighbours():
+    a = _cc("gsa", "A", _OFFICE, 27.95 + _M90, -82.46)
+    b = _cc("gsa", "B", _OFFICE, 27.95 + 2 * _M90, -82.46)
+    result = dedup([a, b], existing_user_pins=[], suppressions=[_sup()])
+    assert [cc.candidate.source_external_id for cc in result.survivors] == ["B"]
+    assert result.suppressed_by_source == {"gsa": 1}
+
+
+def test_suppression_runs_before_user_pin_and_cross_source_steps():
+    cand = _cc("gsa", "A-B-1", _OFFICE, 27.95, -82.46)
+    user = ExistingPinRow(
+        id="u", source="user", source_external_id=None, name=_OFFICE,
+        latitude=27.95, longitude=-82.46, status=2, restriction_tag=None,
+        user_modified=False, source_dataset_version=None)
+    result = dedup([cand], existing_user_pins=[user], suppressions=[_sup()])
+    assert result.suppressed_by_source == {"gsa": 1}
+    assert result.dropped_total == 0
+    assert ("user", "gsa") not in result.drops_by_pair
+
+
+def test_suppression_never_drops_a_candidate_whose_legacy_key_has_a_pin():
+    cand = _cc("gsa", "A-B-2", _OFFICE, 27.95 + 0.00036, -82.46)
+    cand = cand.model_copy(update={"candidate": cand.candidate.model_copy(
+        update={"legacy_external_id": "OLD-KEY"})})
+    result = dedup([cand], existing_user_pins=[], suppressions=[_sup()],
+                   existing_keys={("gsa", "OLD-KEY")})
+    assert len(result.survivors) == 1
+    assert result.suppressed_by_source == {}

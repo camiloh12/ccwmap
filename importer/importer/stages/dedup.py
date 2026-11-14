@@ -15,7 +15,7 @@ Two rules decide the rest:
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 
 from rapidfuzz import fuzz
@@ -25,7 +25,7 @@ from shapely.strtree import STRtree
 from importer.geo.distance import DEG_LAT_M as _DEG_LAT_M
 from importer.geo.distance import meters_between as _meters_between
 from importer.stages.apply_state_law import CONFIDENCE_RANK, ClassifiedCandidate
-from importer.supabase_client import ExistingPinRow
+from importer.supabase_client import ExistingPinRow, SuppressionRow
 
 # Highest priority = lowest number = wins a match. HIFLD sub-sources share a tier.
 SOURCE_PRIORITY: dict[str, int] = {
@@ -76,6 +76,8 @@ class DedupResult:
     within_source_dups: int = 0
     # (winner_source, loser_source) -> count
     drops_by_pair: dict[tuple[str, str], int] = field(default_factory=dict)
+    # Candidates dropped by the do-not-import list, by their source.
+    suppressed_by_source: dict[str, int] = field(default_factory=dict)
 
 
 def _record_drop(result: DedupResult, winner: str, loser: str) -> None:
@@ -84,11 +86,21 @@ def _record_drop(result: DedupResult, winner: str, loser: str) -> None:
     result.drops_by_pair[key] = result.drops_by_pair.get(key, 0) + 1
 
 
+def _suppresses(entry: SuppressionRow, cand) -> bool:
+    if entry.source_external_id == cand.source_external_id:
+        return True
+    if entry.latitude is None or entry.longitude is None or not entry.name:
+        return False
+    return _matches(entry.name, entry.latitude, entry.longitude,
+                    cand.name, cand.latitude, cand.longitude)
+
+
 def dedup(
     classified: list[ClassifiedCandidate],
     *,
     existing_user_pins: list[ExistingPinRow],
     existing_keys: Collection[tuple[str, str]] = frozenset(),
+    suppressions: Sequence[SuppressionRow] = (),
 ) -> DedupResult:
     result = DedupResult(survivors=[])
     existing_keys = frozenset(existing_keys)
@@ -103,6 +115,33 @@ def dedup(
             continue
         seen_keys.add(key)
         unique.append(cc)
+
+    # 1b. Drop candidates on the do-not-import list: the entry's own key, or a
+    # same-source neighbour matching the entry's name and spot (the source
+    # re-keyed the record). Direct neighbours only, so it never chains, and a
+    # candidate whose key already has a pin is never dropped here.
+    if suppressions:
+        by_source: dict[str, list[SuppressionRow]] = {}
+        for entry in suppressions:
+            by_source.setdefault(entry.source, []).append(entry)
+        kept: list[ClassifiedCandidate] = []
+        for cc in unique:
+            cand = cc.candidate
+            key = (cand.source, cand.source_external_id)
+            entries = by_source.get(cand.source, ())
+            has_pin = key in existing_keys or (
+                cand.legacy_external_id is not None
+                and (cand.source, cand.legacy_external_id) in existing_keys
+            )
+            if not has_pin and any(
+                _suppresses(e, cand) for e in entries
+            ):
+                result.suppressed_by_source[cand.source] = (
+                    result.suppressed_by_source.get(cand.source, 0) + 1
+                )
+                continue
+            kept.append(cc)
+        unique = kept
 
     if not unique:
         return result

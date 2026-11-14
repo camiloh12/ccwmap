@@ -219,6 +219,122 @@ void main() {
     });
   });
 
+  group('deleteCachedNonMineInBox', () {
+    test('treats null user as everyone', () async {
+      await database.pinDao.upsertCachedPins([
+        PinEntity(
+          id: 'x1',
+          name: 'x',
+          latitude: 30,
+          longitude: -95,
+          status: 0,
+          restrictionTag: null,
+          hasSecurityScreening: false,
+          hasPostedSignage: false,
+          createdBy: 'x',
+          createdAt: 1,
+          lastModified: 1,
+          photoUri: null,
+          notes: null,
+          votes: 0,
+          source: 'user',
+          userModified: false,
+          cachedAt: 5,
+        ),
+      ]);
+      final n = await database.pinDao.deleteCachedNonMineInBox(
+        myUserId: null,
+        swLat: 29,
+        swLng: -96,
+        neLat: 31,
+        neLng: -94,
+        keepIds: {},
+      );
+      expect(n, 1);
+      expect(await database.pinDao.getPinById('x1'), isNull);
+    });
+    PinEntity cached(String id, {String? createdBy = 'x', int? cachedAt = 5}) =>
+        PinEntity(
+          id: id,
+          name: id,
+          latitude: 30,
+          longitude: -95,
+          status: 0,
+          restrictionTag: null,
+          hasSecurityScreening: false,
+          hasPostedSignage: false,
+          createdBy: createdBy,
+          createdAt: 1,
+          lastModified: 1,
+          photoUri: null,
+          notes: null,
+          votes: 0,
+          source: 'user',
+          userModified: false,
+          cachedAt: cachedAt,
+        );
+
+    Future<int> sweep() => database.pinDao.deleteCachedNonMineInBox(
+      myUserId: 'me',
+      swLat: 29,
+      swLng: -96,
+      neLat: 31,
+      neLng: -94,
+      keepIds: {},
+    );
+
+    test('an uncached row in the box survives', () async {
+      await database.pinDao.insertPin(cached('local', cachedAt: null));
+      expect(await sweep(), 0);
+      expect(await database.pinDao.getPinById('local'), isNotNull);
+    });
+
+    test('a NULL created_by row is deleted when not kept', () async {
+      await database.pinDao.upsertCachedPins([cached('n', createdBy: null)]);
+      expect(await sweep(), 1);
+      expect(await database.pinDao.getPinById('n'), isNull);
+    });
+
+    test('a concurrent upsert is not lost to the sweep', () async {
+      await database.pinDao.upsertCachedPins([cached('a')]);
+      // The sweep's select + deletes hold one transaction; the upsert issued
+      // meanwhile runs after it, so the freshly written row survives.
+      final sweeping = sweep();
+      final upserting = database.pinDao.upsertCachedPins([cached('a')]);
+      await Future.wait([sweeping, upserting]);
+      expect(await database.pinDao.getPinById('a'), isNotNull);
+    });
+
+    test('the DELETE itself protects own, uncached and queued pins', () async {
+      await database.pinDao.upsertCachedPins([
+        cached('mine', createdBy: 'me'),
+        cached('queued'),
+        cached('plain'),
+      ]);
+      await database.pinDao.insertPin(cached('uncached', cachedAt: null));
+      await database.syncQueueDao.enqueue(
+        SyncQueueEntity(
+          id: 'q',
+          pinId: 'queued',
+          operationType: 'UPDATE',
+          timestamp: 1,
+          retryCount: 0,
+          lastError: null,
+        ),
+      );
+      // A stale victim list naming every pin must still only remove 'plain'.
+      final n = await database.pinDao.deleteGuardedCachedByIds(
+        myUserId: 'me',
+        ids: ['mine', 'queued', 'plain', 'uncached'],
+      );
+      expect(n, 1);
+      expect(await database.pinDao.getPinById('plain'), isNull);
+      for (final id in ['mine', 'queued', 'uncached']) {
+        expect(await database.pinDao.getPinById(id), isNotNull, reason: id);
+      }
+    });
+  });
+
   group('SyncQueueDao', () {
     test('enqueue and retrieve operations', () async {
       final operation = SyncQueueEntity(

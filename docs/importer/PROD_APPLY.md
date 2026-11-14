@@ -137,6 +137,10 @@ Go/no-go:
   change). Re-pin URLs / re-validate on staging first; do not apply.
 - The dry-run also proves `config.yaml` prod target (B0.1), the
   `PROD_SUPABASE_SERVICE_ROLE_KEY`, and end-to-end connectivity without writing.
+- Each source's report has a `Suppressed (do-not-import list)` row: candidates
+  dropped because the owner removed them via a report. It is normally 0 or
+  small and stable between runs; it never deletes anything. To undo one, see
+  `docs/dev/MODERATION.md`.
 
 ---
 
