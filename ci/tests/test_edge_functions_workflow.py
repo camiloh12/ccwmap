@@ -195,9 +195,7 @@ def test_smoke_check_after_prod_deploy(jobs):
     assert "ACCESS_TOKEN" not in _text(smoke)
 
 
-def test_smoke_check_names_brevo_on_failure(jobs):
-    run = jobs["prod"]["steps"][-1]["run"]
-    error_lines = [l for l in run.splitlines() if "::error::" in l]
-    assert error_lines
-    assert any("BREVO_API_KEY" in l and "brevo-keepalive.yml" in l for l in error_lines)
-    assert "sleep 10" in run and ("for " in run or "while " in run)
+def test_smoke_check_uses_the_diagnosing_script(jobs):
+    # Retries and the cause-specific error (anon key vs Brevo vs the function)
+    # live in ci/functions_smoke.py, unit-tested in test_functions_smoke.py.
+    assert jobs["prod"]["steps"][-1]["run"].strip() == "python3 ci/functions_smoke.py"

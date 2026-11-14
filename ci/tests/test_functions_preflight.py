@@ -1,4 +1,5 @@
 import json
+import urllib.error
 
 import pytest
 
@@ -70,6 +71,47 @@ def test_list_deployed_403_names_target_not_token():
     message = str(exc.value)
     assert "prod" in message and "HTTP 403" in message
     assert "sbp_fc" not in message
+
+
+def test_list_deployed_401_says_expired_or_revoked():
+    # Every scoped token expires within a year, so this is the error the owner
+    # will certainly see; it must point at rotation, not at scopes.
+    with pytest.raises(fp.PreflightError) as exc:
+        fp.list_deployed("prod", "sbp_fcTOKEN", get=FakeGet(401, b'{"message":"Unauthorized"}'))
+    message = str(exc.value)
+    assert "HTTP 401" in message and "expired or revoked" in message
+    assert "PROD_SUPABASE_ACCESS_TOKEN" in message and "docs/dev/DEPLOY.md" in message
+    assert "sbp_fc" not in message
+
+
+def test_list_deployed_server_error_is_not_blamed_on_scope():
+    with pytest.raises(fp.PreflightError) as exc:
+        fp.list_deployed("staging", "sbp_fcTOKEN", get=FakeGet(502, b"bad gateway"))
+    message = str(exc.value)
+    assert "HTTP 502" in message and "scoped" not in message
+
+
+def test_list_deployed_network_error_is_a_preflight_error():
+    def unreachable(url, headers):
+        raise urllib.error.URLError("dns failure")
+
+    with pytest.raises(fp.PreflightError) as exc:
+        fp.list_deployed("staging", "sbp_fcTOKEN", get=unreachable)
+    assert "could not reach" in str(exc.value)
+
+
+def test_list_deployed_unexpected_body_is_a_preflight_error():
+    for body in (b'"oops"', b"not json", b'["x"]'):
+        with pytest.raises(fp.PreflightError) as exc:
+            fp.list_deployed("staging", "sbp_fcTOKEN", get=FakeGet(200, body))
+        assert "unexpected response" in str(exc.value)
+
+
+def test_main_names_the_github_secret(ci_env, monkeypatch, capsys):
+    monkeypatch.setenv("SUPABASE_ACCESS_TOKEN", "")
+    monkeypatch.setattr(fp, "_http_get", FakeGet(200, []))
+    assert fp.main(["prod"]) == 1
+    assert "PROD_SUPABASE_ACCESS_TOKEN" in capsys.readouterr().out
 
 
 def test_jwt_off_only_checks_functions_about_to_deploy():

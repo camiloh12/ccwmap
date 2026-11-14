@@ -25,6 +25,7 @@ import urllib.request
 from pathlib import Path
 
 PROJECT_REFS = {"staging": "miihmfhnsfmwgrvgayns", "prod": "gqbxloaqamokbolcvesg"}
+SECRET_NAMES = {"staging": "STAGING_SUPABASE_ACCESS_TOKEN", "prod": "PROD_SUPABASE_ACCESS_TOKEN"}
 API_URL = "https://api.supabase.com/v1/projects/{ref}/functions"
 HTTP_TIMEOUT_S = 30
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,14 +77,35 @@ def list_deployed(target: str, token: str, get=None) -> list[dict]:
     get = get or _http_get
     url = API_URL.format(ref=PROJECT_REFS[target])
     headers = {"Authorization": f"Bearer {token}", "User-Agent": "ccwmap-ci"}
-    status, body = get(url, headers)
-    if status != 200:
-        # The body is never shown: it is server text we don't control.
+    try:
+        status, body = get(url, headers)
+    except (urllib.error.URLError, OSError) as e:
+        # Only the exception's class: its text is not ours to print.
         raise PreflightError(
-            f"cannot list {target} functions (HTTP {status}): the token must be "
+            f"could not reach the Supabase Management API ({type(e).__name__}); re-run the job"
+        ) from None
+    # The body is never shown: it is server text we don't control.
+    if status == 401:
+        raise PreflightError(
+            f"the {target} token was refused (HTTP 401): it is expired or revoked. Rotate "
+            f"{SECRET_NAMES[target]} (docs/dev/DEPLOY.md, Access tokens)"
+        )
+    if status == 403:
+        raise PreflightError(
+            f"cannot list {target} functions (HTTP 403): the token must be "
             f"scoped to the {target} project with Edge Functions read-write"
         )
-    return json.loads(body)
+    if status != 200:
+        raise PreflightError(
+            f"the Supabase Management API answered HTTP {status} for {target}; re-run the job later"
+        )
+    try:
+        deployed = json.loads(body)
+    except ValueError:
+        deployed = None
+    if not isinstance(deployed, list) or not all(isinstance(f, dict) for f in deployed):
+        raise PreflightError("unexpected response from the Management API (not a list of functions)")
+    return deployed
 
 
 def jwt_off(deployed: list[dict], names: list[str]) -> list[str]:
@@ -128,7 +150,7 @@ def main(argv: list[str] | None = None) -> int:
     token = os.environ.get("SUPABASE_ACCESS_TOKEN", "")
     found = token_problems(token)
     if found:
-        return _fail("SUPABASE_ACCESS_TOKEN", [f"{p}. Fix the secret; its value is never printed." for p in found])
+        return _fail(SECRET_NAMES[target], [f"{p}. Fix the secret; its value is never printed." for p in found])
     names = local_functions(ROOT / "supabase" / "functions")
     if not names:
         return _fail("supabase/functions", ["has no function folders with an index.ts"])

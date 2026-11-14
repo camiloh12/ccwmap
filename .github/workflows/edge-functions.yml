@@ -145,21 +145,6 @@ jobs:
         env:
           HEALTH_URL: https://gqbxloaqamokbolcvesg.supabase.co/functions/v1/send-moderation-email/health
           ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          set -uo pipefail
-          code=000
-          for attempt in 1 2 3; do
-            code=$(curl -sS --max-time 30 -o response.json -w '%{http_code}' \
-              -H "Authorization: Bearer ${ANON_KEY}" "$HEALTH_URL" || echo '000')
-            echo "attempt ${attempt}: HTTP ${code}"
-            if [ "$code" = "200" ]; then
-              echo "send-moderation-email is healthy."
-              exit 0
-            fi
-            if [ "$attempt" -lt 3 ]; then sleep 10; fi
-          done
-          # Only dumped on failure: Brevo's error text is useful for triage and
-          # carries no secret (same rule as brevo-keepalive.yml).
-          echo "response: $(cat response.json 2>/dev/null)"
-          echo "::error::send-moderation-email deployed, but /health returned ${code}. A 401 from Brevo means the BREVO_API_KEY function secret, not this deploy: see brevo-keepalive.yml."
-          exit 1
+        # Retries 3x and names the cause on failure: anon-key secret (401),
+        # Brevo key (500 from the Brevo check), or the function itself.
+        run: python3 ci/functions_smoke.py

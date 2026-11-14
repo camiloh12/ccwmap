@@ -28,9 +28,14 @@ Each deploy job runs three steps:
 2. **Deploy.** The pinned CLI (2.118.0, `--use-api`, so Supabase bundles it
    and there's no Docker) deploys every folder under `supabase/functions/`
    that has an `index.ts`. All output goes through `ci/redact.py`.
-3. **Smoke check (prod only).** It calls `send-moderation-email/health` with
-   the anon key, and needs a 200 within 3 tries. A Brevo `401` there points
-   at the `BREVO_API_KEY` function secret, not at the deploy.
+3. **Smoke check (prod only).** `ci/functions_smoke.py` calls
+   `send-moderation-email/health` with the anon key, and needs a 200 within
+   3 tries. On a failure it names one of three causes, which need different
+   fixes:
+   - **HTTP 401:** the gateway refused the `SUPABASE_ANON_KEY` repo secret.
+   - **HTTP 500 from the Brevo check:** Brevo refused `BREVO_API_KEY`, or the
+     key is unset. The deploy is fine; rotate the key (below).
+   - **Anything else:** the function itself is failing. Read its logs.
 
 **Approving prod.** The run pauses at `Deploy to prod`. Read the `Deploy to
 staging` job's summary (the functions and the commit), then approve the
@@ -81,7 +86,8 @@ rotate one before it expires:
 
 Use this only when prod is broken and the workflow can't run. Afterwards,
 merge exactly the deployed code to `master` straight away, so the next
-pipeline run deploys what's already live.
+pipeline run deploys what's already live. Run it in Git Bash from the repo
+root (PowerShell doesn't understand the `\` line continuation):
 
 ```
 npx supabase@2.118.0 login
