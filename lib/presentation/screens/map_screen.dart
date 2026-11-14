@@ -19,6 +19,7 @@ import 'package:ccwmap/presentation/widgets/pin_report_rules.dart';
 import 'package:ccwmap/domain/repositories/moderation_repository.dart';
 import 'package:ccwmap/presentation/map/cluster_label.dart';
 import 'package:ccwmap/presentation/map/pin_visibility.dart';
+import 'package:ccwmap/presentation/map/tap_distance.dart';
 import 'package:ccwmap/presentation/viewmodels/map_viewmodel.dart';
 import 'package:ccwmap/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:ccwmap/presentation/widgets/pin_dialog.dart';
@@ -138,15 +139,24 @@ class _MapScreenState extends State<MapScreen> {
   static const double _initialLongitude = -98.5795;
   static const double _initialZoom = 4.0;
 
-  // Pin tap/near-miss thresholds in screen pixels. Pixel-based thresholds are
-  // zoom-agnostic and avoid relying on cameraPosition.zoom, which can be stale
-  // on iOS and lead to the nearest-pin fallback picking a pin hundreds of
-  // meters away.
-  //
-  // Circle radius is 12 px; 30 px gives a small forgiveness zone around the
-  // visible pin without catching unrelated taps in empty space.
-  static const double _pinHitPixelThreshold = 30.0;
-  static const double _nearPinPixelThreshold = 30.0;
+  // Pin tap/near-miss thresholds in logical screen pixels (see
+  // kPinTapRadius). Pixel-based thresholds are zoom-agnostic and avoid
+  // relying on cameraPosition.zoom, which can be stale on iOS and lead to the
+  // nearest-pin fallback picking a pin hundreds of meters away. Distances are
+  // converted to logical pixels by _pixelDistanceToPin, because Android
+  // reports map pixels as physical pixels (see mapPixelsArePhysical).
+  static const double _pinHitPixelThreshold = kPinTapRadius;
+  static const double _nearPinPixelThreshold = kPinTapRadius;
+
+  /// Logical-to-physical pixel ratio, cached so the async tap handlers never
+  /// read [context] after an await.
+  double _devicePixelRatio = 1.0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+  }
 
   @override
   void initState() {
@@ -474,9 +484,9 @@ class _MapScreenState extends State<MapScreen> {
         'pins-source',
         'mine-pins-layer',
         CircleLayerProperties(
-          circleRadius: 12.0,
+          circleRadius: kPinCircleRadius,
           circleColor: circleColorByStatus,
-          circleStrokeWidth: 2.0,
+          circleStrokeWidth: kPinCircleStrokeWidth,
           circleStrokeColor: '#FFFFFF',
           circleOpacity: 0.8,
         ),
@@ -491,9 +501,9 @@ class _MapScreenState extends State<MapScreen> {
         'pins-source',
         'cached-pins-layer',
         CircleLayerProperties(
-          circleRadius: 12.0,
+          circleRadius: kPinCircleRadius,
           circleColor: circleColorByStatus,
-          circleStrokeWidth: 2.0,
+          circleStrokeWidth: kPinCircleStrokeWidth,
           circleStrokeColor: '#FFFFFF',
           circleOpacity: 0.8,
         ),
@@ -2022,17 +2032,23 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  /// Return the screen pixel distance from [tapPoint] to [pin], or null if
-  /// the projection fails.
+  /// Return the distance from [tapPoint] to [pin] in logical screen pixels,
+  /// or null if the projection fails.
   Future<double?> _pixelDistanceToPin(Pin pin, Point<double> tapPoint) async {
     if (_mapController == null) return null;
     try {
       final pinScreen = await _mapController!.toScreenLocation(
         LatLng(pin.location.latitude, pin.location.longitude),
       );
-      final dx = pinScreen.x - tapPoint.x;
-      final dy = pinScreen.y - tapPoint.y;
-      return math.sqrt(dx * dx + dy * dy);
+      return logicalPixelDistance(
+        pinScreen,
+        tapPoint,
+        physicalPixels: mapPixelsArePhysical(
+          isWeb: kIsWeb,
+          platform: defaultTargetPlatform,
+        ),
+        devicePixelRatio: _devicePixelRatio,
+      );
     } catch (e) {
       debugPrint('_pixelDistanceToPin: toScreenLocation failed: $e');
       return null;
