@@ -43,6 +43,12 @@ prod's pending list still equals the approved one and refuses otherwise.
 migration's `RAISE NOTICE` output, so confirm what a migration did with a
 query, not from its notices.
 
+**Edge Functions** follow the same pattern through `edge-functions.yml`:
+- A PR touching `supabase/functions/**` deploys its functions to staging.
+- A merge deploys staging, then prod after approval.
+
+Details: `docs/dev/DEPLOY.md`.
+
 **What's applied where:**
 - `supabase_migrations.schema_migrations` in each database (dashboard →
   Database → Migrations);
@@ -153,6 +159,8 @@ table definition for whichever piece is missing.
 |---|---|---|
 | `STAGING_DB_URL` | **Repo** secret. Postgres connection string via the **Session mode pooler** (port 5432, NOT the direct-connect host), password percent-encoded. Format: `postgresql://postgres.miihmfhnsfmwgrvgayns:<DB_PASSWORD>@aws-<n>-<region>.pooler.supabase.com:5432/postgres`. Copy the exact host from the dashboard's **Connect** modal; the `aws-<n>` cluster differs between projects. | `db-migrations.yml` (`staging-pr`, `staging`), `db-repair.yml` (`repair-staging`) |
 | `PROD_DB_URL` | **Environment** secret, set in **both** `production-plan` and `production` (both limited to `master`; `production` requires owner approval). Same pooler format with user `postgres.gqbxloaqamokbolcvesg`; prod's host is `aws-1-us-east-1.pooler.supabase.com`. Never a repo secret. | `db-migrations.yml` (`plan`, `apply`), `db-repair.yml` (`repair-prod`) |
+| `STAGING_SUPABASE_ACCESS_TOKEN` | **Repo** secret. A scoped personal access token (`sbp_fc…`): the staging project only, Edge Functions read-write. Rotation: `docs/dev/DEPLOY.md` → "Access tokens". | `edge-functions.yml` (`staging-pr`, `staging`) |
+| `PROD_SUPABASE_ACCESS_TOKEN` | **Environment** secret of `production` only. A scoped token for the prod project only, Edge Functions read-write. Never a repo secret. | `edge-functions.yml` (`prod`) |
 
 **Set DB URL secrets from a file, never by retyping them.** A mis-pasted value (for
 example a trailing space) makes the Supabase CLI echo the whole URL in its error, and
