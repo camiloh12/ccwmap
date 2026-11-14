@@ -55,9 +55,15 @@ jobs:
         # populates it, and bash cannot start in a missing cwd. This step needs
         # no repo files (pure string comparison); the workspace root always exists.
         working-directory: ${{ github.workspace }}
+        # Inputs reach every run: script through env, never as ${{ }} inside
+        # it: GitHub pastes an expression into the script text before bash
+        # parses it, so a typed value could run as shell code.
+        env:
+          TARGET: ${{ inputs.target }}
+          CONFIRM: ${{ inputs.confirm }}
         run: |
-          expected="I-KNOW-THIS-WRITES-TO-$(echo '${{ inputs.target }}' | tr a-z A-Z)"
-          if [ "${{ inputs.confirm }}" != "$expected" ]; then
+          expected="I-KNOW-THIS-WRITES-TO-$(echo "$TARGET" | tr a-z A-Z)"
+          if [ "$CONFIRM" != "$expected" ]; then
             echo "::error::Confirmation phrase must be: $expected"
             exit 1
           fi
@@ -77,6 +83,9 @@ jobs:
 
       - name: Apply to ${{ inputs.target }}
         env:
+          TARGET: ${{ inputs.target }}
+          STATES: ${{ inputs.states }}
+          SOURCES: ${{ inputs.sources }}
           DELETE_ORPHANS: ${{ inputs.delete_orphans }}
           ORPHAN_DELETE_CAP: ${{ inputs.orphan_delete_cap }}
         run: |
@@ -95,10 +104,10 @@ jobs:
           fi
           uv run --no-sync python -m importer.cli \
             --apply \
-            --states "${{ inputs.states }}" \
-            --sources "${{ inputs.sources }}" \
-            --project-ref ${{ inputs.target }} \
-            --i-know-this-writes-to-${{ inputs.target }} \
+            --states "$STATES" \
+            --sources "$SOURCES" \
+            --project-ref "$TARGET" \
+            "--i-know-this-writes-to-$TARGET" \
             "${orphan_flags[@]}" \
             --report-out "$GITHUB_WORKSPACE/importer-report.md"
 
