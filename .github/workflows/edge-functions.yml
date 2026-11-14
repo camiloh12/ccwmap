@@ -1,0 +1,165 @@
+name: Edge Functions
+
+# Deploys supabase/functions/* with the pinned Supabase CLI.
+#   PR     → staging-pr: deploys this PR's functions to staging.
+#   merge  → staging → prod (waits for owner approval in the `production`
+#   or Run   environment), then a /health smoke check on prod.
+# Tokens are scoped personal access tokens (sbp_fc...), each limited to one
+# project's Edge Functions (read-write). STAGING_SUPABASE_ACCESS_TOKEN is a
+# repo secret; PROD_SUPABASE_ACCESS_TOKEN exists only as a secret of the
+# master-only `production` environment, so PR code can never read it. Tokens
+# reach only the steps that run the preflight or the CLI (never job-level env),
+# and nothing relies on GitHub's masking: ci/functions_preflight.py never
+# prints the token, and all CLI output goes through ci/redact.py.
+# Function secrets (BREVO_API_KEY, ...) and database webhooks stay in the
+# dashboard; this workflow never reads or sets them.
+# Design: docs/superpowers/specs/2026-11-13-edge-functions-pipeline-design.md
+# Operator guide: docs/dev/DEPLOY.md "Edge Functions".
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'supabase/functions/**'
+      - '.github/workflows/edge-functions.yml'
+      - 'ci/**'
+  push:
+    branches: [master]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # = bash -eo pipefail: a failing deploy piped through ci/redact.py still fails the step
+
+env:
+  SUPABASE_CLI_VERSION: '2.118.0'
+
+jobs:
+  workflow-tests:
+    name: Workflow structure tests
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+      - name: Run ci/tests
+        run: uv run --no-project --with pytest --with pyyaml pytest ci/tests -q
+
+  staging-pr:
+    name: Deploy to staging (PR)
+    if: github.event_name == 'pull_request'
+    needs: workflow-tests
+    runs-on: ubuntu-latest
+    concurrency:
+      group: functions-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Preflight
+        id: preflight
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+        run: python3 ci/functions_preflight.py staging
+      - name: Deploy to staging
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: miihmfhnsfmwgrvgayns
+          FUNCTIONS: ${{ steps.preflight.outputs.functions }}
+        run: |
+          set -euo pipefail
+          for fn in $FUNCTIONS; do
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --use-api 2>&1 | python3 ci/redact.py
+          done
+
+  staging:
+    name: Deploy to staging
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Deploy-chain groups are used by no other job: GitHub cancels a PENDING job
+    # when a newer one joins its group, so only a newer deploy run can
+    # supersede this one — never a PR push.
+    concurrency:
+      group: functions-staging-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Preflight
+        id: preflight
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+        run: python3 ci/functions_preflight.py staging
+      - name: Deploy to staging
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: miihmfhnsfmwgrvgayns
+          FUNCTIONS: ${{ steps.preflight.outputs.functions }}
+        run: |
+          set -euo pipefail
+          for fn in $FUNCTIONS; do
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --use-api 2>&1 | python3 ci/redact.py
+          done
+
+  prod:
+    name: Deploy to prod
+    if: github.event_name != 'pull_request'
+    needs: staging
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: functions-prod-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - name: Preflight
+        id: preflight
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.PROD_SUPABASE_ACCESS_TOKEN }}
+        run: python3 ci/functions_preflight.py prod
+      - name: Deploy to prod
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.PROD_SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: gqbxloaqamokbolcvesg
+          FUNCTIONS: ${{ steps.preflight.outputs.functions }}
+        run: |
+          set -euo pipefail
+          for fn in $FUNCTIONS; do
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" --use-api 2>&1 | python3 ci/redact.py
+          done
+      - name: Smoke check (send-moderation-email /health)
+        env:
+          HEALTH_URL: https://gqbxloaqamokbolcvesg.supabase.co/functions/v1/send-moderation-email/health
+          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -uo pipefail
+          code=000
+          for attempt in 1 2 3; do
+            code=$(curl -sS --max-time 30 -o response.json -w '%{http_code}' \
+              -H "Authorization: Bearer ${ANON_KEY}" "$HEALTH_URL" || echo '000')
+            echo "attempt ${attempt}: HTTP ${code}"
+            if [ "$code" = "200" ]; then
+              echo "send-moderation-email is healthy."
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+          # Only dumped on failure: Brevo's error text is useful for triage and
+          # carries no secret (same rule as brevo-keepalive.yml).
+          echo "response: $(cat response.json 2>/dev/null)"
+          echo "::error::send-moderation-email deployed, but /health returned ${code}. A 401 from Brevo means the BREVO_API_KEY function secret, not this deploy: see brevo-keepalive.yml."
+          exit 1
